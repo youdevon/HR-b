@@ -1,14 +1,63 @@
-const rows = [
-  { id: "gr_2", employee: "Mark Dela Cruz", amount: "18000.00", reviewer: "Pending" },
-];
+import { listApprovedUnpaidGratuityCalculations } from "@/lib/queries/gratuity";
 
-export default function GratuityPendingReviewPage() {
+export default async function GratuityApprovedUnpaidPage() {
+  const rows = await listApprovedUnpaidGratuityCalculations();
+
   return (
-    <main className="min-h-screen bg-neutral-100 p-6"><div className="mx-auto max-w-7xl space-y-6">
-      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200"><h1 className="text-2xl font-semibold">Pending Review</h1></section>
-      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 overflow-x-auto">
-        <table className="min-w-full text-sm"><thead><tr><th className="p-2 text-left">Employee</th><th className="p-2 text-left">Amount</th><th className="p-2 text-left">Reviewer</th></tr></thead><tbody>{rows.map((r) => <tr key={r.id}><td className="p-2">{r.employee}</td><td className="p-2">{r.amount}</td><td className="p-2">{r.reviewer}</td></tr>)}</tbody></table>
-      </section>
-    </div></main>
+    <main className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-neutral-900">
+          Approved Unpaid Gratuity
+        </h1>
+        <p className="mt-1 text-sm text-neutral-600">
+          Approved gratuity calculations pending payment.
+        </p>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-neutral-600">
+            No approved unpaid gratuity records.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-left text-neutral-500">
+                  <th className="px-3 py-3 font-medium">Employee</th>
+                  <th className="px-3 py-3 font-medium">Contract</th>
+                  <th className="px-3 py-3 font-medium">Approved Amount</th>
+                  <th className="px-3 py-3 font-medium">Status</th>
+                  <th className="px-3 py-3 font-medium">Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id} className="border-b border-neutral-100">
+                    <td className="px-3 py-3">
+                      {row.employee_id ?? "—"}
+                    </td>
+                    <td className="px-3 py-3">
+                      {row.contract_id ?? "—"}
+                    </td>
+                    <td className="px-3 py-3">
+                      {row.approved_amount ?? "—"}
+                    </td>
+                    <td className="px-3 py-3">
+                      {row.calculation_status ?? "—"}
+                    </td>
+                    <td className="px-3 py-3">
+                      {row.created_at ?? "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </main>
   );
 }

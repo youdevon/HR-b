@@ -1,15 +1,50 @@
-const rules = [
-  { id: "rule_1", name: "Standard UAE Rule", formula: "21 days per year first 5 years" },
-  { id: "rule_2", name: "Long Service Rule", formula: "30 days per year after 5 years" },
-];
+import Link from "next/link";
+import { listGratuityRules } from "@/lib/queries/gratuity";
 
-export default function GratuityRulesPage() {
+export default async function GratuityRulesPage() {
+  const rules = await listGratuityRules();
+
   return (
-    <main className="min-h-screen bg-neutral-100 p-6"><div className="mx-auto max-w-7xl space-y-6">
-      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200"><h1 className="text-2xl font-semibold">Gratuity Rules</h1></section>
-      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 overflow-x-auto">
-        <table className="min-w-full text-sm"><thead><tr><th className="p-2 text-left">Rule</th><th className="p-2 text-left">Formula</th></tr></thead><tbody>{rules.map((r) => <tr key={r.id}><td className="p-2">{r.name}</td><td className="p-2">{r.formula}</td></tr>)}</tbody></table>
-      </section>
-    </div></main>
+    <main className="min-h-screen bg-neutral-100 p-6">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <section className="flex flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Gratuity rules</h1>
+            <p className="mt-1 text-sm text-neutral-600">Configured calculation rules from the database.</p>
+          </div>
+          <Link
+            href="/gratuity/calculations"
+            className="inline-flex shrink-0 items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
+          >
+            Calculations
+          </Link>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-neutral-200">
+              <thead className="bg-neutral-50">
+                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
+                  <th className="px-4 py-3">Rule</th>
+                  <th className="px-4 py-3">Formula</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100 bg-white text-sm text-neutral-700">
+                {rules.map((r) => (
+                  <tr key={r.id} className="transition hover:bg-neutral-50">
+                    <td className="px-4 py-3 font-medium text-neutral-900">{r.rule_name ?? "—"}</td>
+                    <td className="max-w-xl px-4 py-3 text-neutral-700">{r.formula ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {!rules.length ? (
+            <div className="px-4 py-10 text-center text-sm text-neutral-600">No gratuity rules configured yet.</div>
+          ) : null}
+        </section>
+      </div>
+    </main>
   );
 }
