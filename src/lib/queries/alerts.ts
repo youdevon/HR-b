@@ -99,7 +99,10 @@ export async function acknowledgeAlert(id: string): Promise<AlertRecord> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("alerts")
-    .update({ status: "acknowledged" })
+    .update({
+      status: "acknowledged",
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", id)
     .select(ALERT_SELECT)
     .single();
@@ -123,6 +126,7 @@ export async function resolveAlert(
       status: "resolved",
       resolved_at: new Date().toISOString(),
       resolution_notes: resolutionNotes?.trim() || null,
+      updated_at: new Date().toISOString(),
     })
     .eq("id", id)
     .select(ALERT_SELECT)

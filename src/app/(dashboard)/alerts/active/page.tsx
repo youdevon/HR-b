@@ -1,6 +1,12 @@
 import Link from "next/link";
-import { generateContractExpiryAlerts, listActiveAlerts } from "@/lib/queries/alerts";
+import {
+  acknowledgeAlert,
+  generateContractExpiryAlerts,
+  listActiveAlerts,
+  resolveAlert,
+} from "@/lib/queries/alerts";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 function formatDate(value: string | null): string {
   if (!value) return "—";
@@ -28,6 +34,24 @@ export default async function ActiveAlertsPage() {
     "use server";
     await generateContractExpiryAlerts();
     revalidatePath("/alerts/active");
+  }
+
+  async function acknowledgeAction(formData: FormData) {
+    "use server";
+    const id = String(formData.get("id") ?? "").trim();
+    if (!id) return;
+    await acknowledgeAlert(id);
+    revalidatePath("/alerts/active");
+    redirect("/alerts/active");
+  }
+
+  async function resolveAction(formData: FormData) {
+    "use server";
+    const id = String(formData.get("id") ?? "").trim();
+    if (!id) return;
+    await resolveAlert(id);
+    revalidatePath("/alerts/active");
+    redirect("/alerts/active");
   }
 
   const alerts = await listActiveAlerts();
@@ -66,6 +90,7 @@ export default async function ActiveAlertsPage() {
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Triggered</th>
                     <th className="px-4 py-3">Employee</th>
+                    <th className="px-4 py-3">Actions</th>
                     <th className="px-4 py-3">Open</th>
                   </tr>
                 </thead>
@@ -93,6 +118,28 @@ export default async function ActiveAlertsPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">{formatDate(alert.triggered_at)}</td>
                       <td className="whitespace-nowrap px-4 py-3">{alert.employee_id ?? "—"}</td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <div className="flex gap-2">
+                          <form action={acknowledgeAction}>
+                            <input type="hidden" name="id" value={alert.id} />
+                            <button
+                              type="submit"
+                              className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                            >
+                              Acknowledge
+                            </button>
+                          </form>
+                          <form action={resolveAction}>
+                            <input type="hidden" name="id" value={alert.id} />
+                            <button
+                              type="submit"
+                              className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+                            >
+                              Resolve
+                            </button>
+                          </form>
+                        </div>
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <Link
                           href={`/alerts/${alert.id}`}

@@ -39,13 +39,13 @@ export default async function AlertDetailPage({
   async function acknowledgeAction() {
     "use server";
     await acknowledgeAlert(id);
-    redirect(`/alerts/${id}`);
+    redirect("/alerts/active");
   }
 
   async function resolveAction() {
     "use server";
     await resolveAlert(id);
-    redirect(`/alerts/${id}`);
+    redirect("/alerts/active");
   }
 
   return (
