@@ -1,23 +1,54 @@
-import { listLeaveTransactions } from "@/lib/queries/leave";
+import Link from "next/link";
+import {
+  listLeaveTransactions,
+  listLeaveTransactionsByEmployeeId,
+} from "@/lib/queries/leave";
 
 function formatDays(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "-";
   return String(value);
 }
 
-export default async function LeaveTransactionsPage() {
-  const rows = await listLeaveTransactions();
+type LeaveTransactionsPageProps = {
+  searchParams: Promise<{
+    employeeId?: string;
+  }>;
+};
+
+export default async function LeaveTransactionsPage({
+  searchParams,
+}: LeaveTransactionsPageProps) {
+  const params = await searchParams;
+  const employeeId = params.employeeId?.trim() ?? "";
+  const rows = employeeId
+    ? await listLeaveTransactionsByEmployeeId(employeeId)
+    : await listLeaveTransactions();
 
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-            Leave Transactions
-          </h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Track leave debits, credits, and adjustments.
-          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
+                Leave Transactions
+              </h1>
+              <p className="mt-1 text-sm text-neutral-600">
+                Track leave debits, credits, and adjustments.
+              </p>
+              {employeeId ? (
+                <p className="mt-1 text-xs text-neutral-500">
+                  Filtered by employee: {employeeId}
+                </p>
+              ) : null}
+            </div>
+            <Link
+              href={employeeId ? `/leave/new?employeeId=${employeeId}` : "/leave/new"}
+              className="inline-flex w-fit items-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+            >
+              New Leave
+            </Link>
+          </div>
         </section>
 
         <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">

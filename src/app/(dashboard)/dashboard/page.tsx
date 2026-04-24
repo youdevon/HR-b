@@ -1,5 +1,10 @@
 import { getDashboardMetrics } from "@/lib/queries/dashboard";
 import { listPriorityAlerts } from "@/lib/queries/alerts";
+import {
+  countOverdueRenewals,
+  countPendingConfirmations,
+  generateContractLifecycleAlerts,
+} from "@/lib/queries/contracts";
 import Link from "next/link";
 
 type MetricCard = {
@@ -33,6 +38,11 @@ function formatTriggered(value: string | null): string {
 export default async function DashboardPage() {
   let metricsError = "";
   let cards: MetricCard[] = [];
+  const [overdueRenewalsCount, pendingConfirmationsCount] = await Promise.all([
+    countOverdueRenewals().catch(() => 0),
+    countPendingConfirmations().catch(() => 0),
+  ]);
+  await generateContractLifecycleAlerts().catch(() => 0);
   let priorityAlertsError = "";
   const priorityAlerts = await listPriorityAlerts(5).catch((error: unknown) => {
     priorityAlertsError =
@@ -62,6 +72,18 @@ export default async function DashboardPage() {
         value: metrics.contractsExpiringIn30DaysCount,
         hint: "Contracts ending within the next 30 days",
         href: "/contracts/expiring",
+      },
+      {
+        label: "Overdue Renewals",
+        value: overdueRenewalsCount,
+        hint: "Contracts past renewal due date",
+        href: "/contracts/expiring?window=overdue",
+      },
+      {
+        label: "Pending Confirmations",
+        value: pendingConfirmationsCount,
+        hint: "Employees awaiting confirmation",
+        href: "/contracts",
       },
       {
         label: "Expired Contracts",

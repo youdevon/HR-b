@@ -1,19 +1,45 @@
 import Link from "next/link";
-import { listContracts } from "@/lib/queries/contracts";
+import { listContracts, listContractsByEmployeeId } from "@/lib/queries/contracts";
 
 type ContractsPageProps = {
   searchParams: Promise<{
     q?: string;
+    employeeId?: string;
   }>;
 };
+
+function lifecycleStatus(contract: {
+  renewal_status: string | null;
+  confirmation_status: string | null;
+  renewal_due_date: string | null;
+  probation_end_date: string | null;
+}): string {
+  if (contract.renewal_status?.toLowerCase() === "renewed") return "Renewed";
+  if (contract.confirmation_status?.toLowerCase() === "confirmed") return "Confirmed";
+  if (contract.renewal_due_date && contract.renewal_status?.toLowerCase() !== "renewed") {
+    const due = new Date(contract.renewal_due_date).getTime();
+    if (!Number.isNaN(due) && due < Date.now()) return "Overdue Renewal";
+    return "Renewal Due";
+  }
+  if (
+    contract.probation_end_date &&
+    contract.confirmation_status?.toLowerCase() !== "confirmed"
+  ) {
+    return "In Probation";
+  }
+  return "Active Lifecycle";
+}
 
 export default async function ContractsPage({
   searchParams,
 }: ContractsPageProps) {
   const params = await searchParams;
   const query = params?.q?.trim() ?? "";
+  const employeeId = params?.employeeId?.trim() ?? "";
 
-  const contracts = await listContracts({ query });
+  const contracts = employeeId
+    ? await listContractsByEmployeeId(employeeId)
+    : await listContracts({ query });
 
   return (
     <main className="space-y-6">
@@ -23,10 +49,13 @@ export default async function ContractsPage({
           <p className="mt-1 text-sm text-neutral-600">
             Manage employee contracts and contract status.
           </p>
+          {employeeId ? (
+            <p className="mt-1 text-xs text-neutral-500">Filtered by employee: {employeeId}</p>
+          ) : null}
         </div>
 
         <Link
-          href="/contracts/new"
+          href={employeeId ? `/contracts/new?employeeId=${employeeId}` : "/contracts/new"}
           className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white"
         >
           New Contract
@@ -39,7 +68,7 @@ export default async function ContractsPage({
             type="text"
             name="q"
             defaultValue={query}
-            placeholder="Search contracts..."
+            placeholder="Search contract or employee name..."
             className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none ring-0 placeholder:text-neutral-400 focus:border-neutral-400"
           />
           <button
@@ -65,6 +94,8 @@ export default async function ContractsPage({
                   <th className="px-3 py-3 font-medium">Title</th>
                   <th className="px-3 py-3 font-medium">Type</th>
                   <th className="px-3 py-3 font-medium">Status</th>
+                  <th className="px-3 py-3 font-medium">Lifecycle</th>
+                  <th className="px-3 py-3 font-medium">Employee</th>
                   <th className="px-3 py-3 font-medium">Start</th>
                   <th className="px-3 py-3 font-medium">End</th>
                   <th className="px-3 py-3 font-medium">Department</th>
@@ -81,6 +112,12 @@ export default async function ContractsPage({
                     <td className="px-3 py-3">{contract.contract_title ?? "—"}</td>
                     <td className="px-3 py-3">{contract.contract_type ?? "—"}</td>
                     <td className="px-3 py-3">{contract.contract_status ?? "—"}</td>
+                    <td className="px-3 py-3">{lifecycleStatus(contract)}</td>
+                    <td className="px-3 py-3">
+                      {[contract.employee_first_name, contract.employee_last_name]
+                        .filter(Boolean)
+                        .join(" ") || "—"}
+                    </td>
                     <td className="px-3 py-3">{contract.start_date ?? "—"}</td>
                     <td className="px-3 py-3">{contract.end_date ?? "—"}</td>
                     <td className="px-3 py-3">{contract.department ?? "—"}</td>

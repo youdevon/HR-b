@@ -1,14 +1,17 @@
 import Link from "next/link";
-import { listDocuments } from "@/lib/queries/documents";
+import { listDocuments, listDocumentsByEmployeeId } from "@/lib/queries/documents";
 
 type DocumentsPageProps = {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; employeeId?: string }>;
 };
 
 export default async function DocumentsPage({ searchParams }: DocumentsPageProps) {
   const resolved = await searchParams;
   const query = resolved.q?.trim() ?? "";
-  const documents = await listDocuments({ query });
+  const employeeId = resolved.employeeId?.trim() ?? "";
+  const documents = employeeId
+    ? await listDocumentsByEmployeeId(employeeId)
+    : await listDocuments({ query });
 
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
@@ -17,18 +20,23 @@ export default async function DocumentsPage({ searchParams }: DocumentsPageProps
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Documents</h1>
             <p className="mt-1 text-sm text-neutral-600">Search and manage document records.</p>
+            {employeeId ? (
+              <p className="mt-1 text-xs text-neutral-500">Filtered by employee: {employeeId}</p>
+            ) : null}
           </div>
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-            <form className="w-full sm:w-80" method="get">
-              <input
-                name="q"
-                defaultValue={query}
-                placeholder="Search title, category, status..."
-                className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-              />
-            </form>
+            {!employeeId ? (
+              <form className="w-full sm:w-80" method="get">
+                <input
+                  name="q"
+                  defaultValue={query}
+                  placeholder="Search document or employee..."
+                  className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                />
+              </form>
+            ) : null}
             <Link
-              href="/documents/new"
+              href={employeeId ? `/documents/new?employeeId=${employeeId}` : "/documents/new"}
               className="inline-flex shrink-0 items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
             >
               New Document
@@ -44,7 +52,9 @@ export default async function DocumentsPage({ searchParams }: DocumentsPageProps
                   <th className="px-4 py-3">Title</th>
                   <th className="px-4 py-3">Category</th>
                   <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Employee</th>
+                  <th className="px-4 py-3">Employee Name</th>
+                  <th className="px-4 py-3">Employee #</th>
+                  <th className="px-4 py-3">File #</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Expiry</th>
                 </tr>
@@ -59,7 +69,13 @@ export default async function DocumentsPage({ searchParams }: DocumentsPageProps
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">{row.document_category ?? "-"}</td>
                     <td className="whitespace-nowrap px-4 py-3">{row.document_type ?? "-"}</td>
-                    <td className="whitespace-nowrap px-4 py-3">{row.employee_id ?? "-"}</td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {[row.employee_first_name, row.employee_last_name]
+                        .filter(Boolean)
+                        .join(" ") || "-"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">{row.employee_number ?? "-"}</td>
+                    <td className="whitespace-nowrap px-4 py-3">{row.file_number ?? "-"}</td>
                     <td className="whitespace-nowrap px-4 py-3">{row.document_status ?? "-"}</td>
                     <td className="whitespace-nowrap px-4 py-3">{row.expiry_date ?? "-"}</td>
                   </tr>

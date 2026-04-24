@@ -1,5 +1,15 @@
 import Link from "next/link";
-import { listExpiringContracts } from "@/lib/queries/contracts";
+import {
+  generateContractLifecycleAlerts,
+  listExpiringContracts,
+  listOverdueRenewals,
+} from "@/lib/queries/contracts";
+
+type ExpiringContractsPageProps = {
+  searchParams: Promise<{
+    window?: string;
+  }>;
+};
 
 function formatDate(dateText: string | null): string {
   if (!dateText) return "—";
@@ -22,16 +32,33 @@ function expiryBadge(daysToExpiry: number) {
   return "bg-orange-100 text-orange-700 ring-1 ring-orange-200";
 }
 
-export default async function ExpiringContractsPage() {
-  const contracts = await listExpiringContracts(30);
+export default async function ExpiringContractsPage({
+  searchParams,
+}: ExpiringContractsPageProps) {
+  const sp = await searchParams;
+  const windowFilter = sp.window === "60" ? 60 : sp.window === "overdue" ? -1 : 30;
+  await generateContractLifecycleAlerts();
+
+  const contracts =
+    windowFilter === -1
+      ? (await listOverdueRenewals()).map((contract) => ({
+          ...contract,
+          days_to_expiry: 0,
+        }))
+      : await listExpiringContracts(windowFilter);
 
   return (
     <main className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-neutral-900">Expiring contracts</h1>
         <p className="mt-1 text-sm text-neutral-600">
-          Contracts ending within the next 30 days.
+          Contracts ending in 30/60 days, plus overdue renewals.
         </p>
+        <div className="mt-3 flex gap-2 text-sm">
+          <Link href="/contracts/expiring?window=30" className="rounded-lg border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50">Next 30 days</Link>
+          <Link href="/contracts/expiring?window=60" className="rounded-lg border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50">Next 60 days</Link>
+          <Link href="/contracts/expiring?window=overdue" className="rounded-lg border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50">Overdue renewals</Link>
+        </div>
       </div>
 
       <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
@@ -47,7 +74,9 @@ export default async function ExpiringContractsPage() {
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Start</th>
                   <th className="px-4 py-3">End</th>
-                  <th className="px-4 py-3">Days to expiry</th>
+                  <th className="px-4 py-3">
+                    {windowFilter === -1 ? "Renewal due date" : "Days to expiry"}
+                  </th>
                   <th className="px-4 py-3">Department</th>
                   <th className="px-4 py-3">Job title</th>
                 </tr>
@@ -62,7 +91,11 @@ export default async function ExpiringContractsPage() {
                         : "hover:bg-neutral-50"
                     }
                   >
-                    <td className="whitespace-nowrap px-4 py-3">{contract.employee_id ?? "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {[contract.employee_first_name, contract.employee_last_name]
+                        .filter(Boolean)
+                        .join(" ") || contract.employee_id || "—"}
+                    </td>
                     <td className="whitespace-nowrap px-4 py-3">{contract.contract_number ?? "—"}</td>
                     <td className="max-w-[220px] truncate px-4 py-3 font-medium text-neutral-900">
                       <Link href={`/contracts/${contract.id}`} className="hover:underline">
@@ -74,14 +107,20 @@ export default async function ExpiringContractsPage() {
                     <td className="whitespace-nowrap px-4 py-3">{formatDate(contract.start_date)}</td>
                     <td className="whitespace-nowrap px-4 py-3">{formatDate(contract.end_date)}</td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${expiryBadge(
-                          contract.days_to_expiry
-                        )}`}
-                      >
-                        {contract.days_to_expiry}d
-                      </span>
-                      <span className="ml-2 text-xs text-neutral-500">remaining</span>
+                      {windowFilter === -1 ? (
+                        contract.renewal_due_date ?? "—"
+                      ) : (
+                        <>
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${expiryBadge(
+                              contract.days_to_expiry
+                            )}`}
+                          >
+                            {contract.days_to_expiry}d
+                          </span>
+                          <span className="ml-2 text-xs text-neutral-500">remaining</span>
+                        </>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">{contract.department ?? "—"}</td>
                     <td className="whitespace-nowrap px-4 py-3">{contract.job_title ?? "—"}</td>
@@ -92,7 +131,7 @@ export default async function ExpiringContractsPage() {
           </div>
         ) : (
           <div className="px-6 py-12 text-center text-sm text-neutral-600">
-            No contracts are expiring in the next 30 days.
+            No contracts found for this lifecycle filter.
           </div>
         )}
       </section>

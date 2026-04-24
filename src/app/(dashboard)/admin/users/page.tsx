@@ -1,4 +1,12 @@
-import { createAdminUser, listLoginActivity, listRoles, listUsers } from "@/lib/queries/admin";
+import {
+  createAdminUser,
+  listLoginActivity,
+  listRoles,
+  listUsers,
+  type AdminRoleRecord,
+  type AdminUserRecord,
+  type LoginActivityRecord,
+} from "@/lib/queries/admin";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -96,10 +104,11 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
             <select
               name="role_id"
               required
+              disabled={roles.length === 0}
               className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
             >
-              <option value="">Select role</option>
-              {roles.map((role) => (
+              <option value="">{roles.length ? "Select role" : "No roles available"}</option>
+              {roles.map((role: AdminRoleRecord) => (
                 <option key={role.id} value={role.id}>
                   {role.role_name ?? role.role_code ?? "Role"}
                 </option>
@@ -140,7 +149,8 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
               <tr>
                 <th className="p-2 text-left">Full Name</th>
                 <th className="p-2 text-left">Email</th>
-                <th className="p-2 text-left">Role</th>
+                <th className="p-2 text-left">Role Name</th>
+                <th className="p-2 text-left">Role Code</th>
                 <th className="p-2 text-left">Account Status</th>
                 <th className="p-2 text-left">Active</th>
                 <th className="p-2 text-left">Created At</th>
@@ -148,25 +158,40 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
             </thead>
             <tbody>
               {users.length ? (
-                users.map((user) => (
+                users.map((user: AdminUserRecord) => (
                   <tr key={user.id} className="border-t border-neutral-100">
                     <td className="p-2 font-medium text-neutral-900">{user.full_name ?? "—"}</td>
                     <td className="p-2 text-neutral-700">{user.email ?? "—"}</td>
                     <td className="p-2">
-                      {user.role_name ?? user.role_code ?? (
-                        <span className="text-neutral-400">Unassigned</span>
-                      )}
+                      {user.role_name ?? <span className="text-neutral-400">Unassigned</span>}
                     </td>
-                    <td className="p-2">{user.account_status ?? "—"}</td>
+                    <td className="p-2 font-mono text-xs text-neutral-700">
+                      {user.role_code ?? "—"}
+                    </td>
                     <td className="p-2">
-                      {user.is_active === null ? "—" : user.is_active ? "Yes" : "No"}
+                      <span className="inline-flex rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
+                        {user.account_status ?? "Unknown"}
+                      </span>
+                    </td>
+                    <td className="p-2">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                          user.is_active === true
+                            ? "bg-emerald-100 text-emerald-700"
+                            : user.is_active === false
+                            ? "bg-rose-100 text-rose-700"
+                            : "bg-neutral-100 text-neutral-600"
+                        }`}
+                      >
+                        {user.is_active === null ? "Unknown" : user.is_active ? "Active" : "Inactive"}
+                      </span>
                     </td>
                     <td className="p-2">{formatDate(user.created_at)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="p-6 text-center text-sm text-neutral-500">
+                  <td colSpan={7} className="p-8 text-center text-sm text-neutral-500">
                     No users found in <code>public.users</code>.
                   </td>
                 </tr>
@@ -189,7 +214,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
             </thead>
             <tbody>
               {loginActivity.length ? (
-                loginActivity.map((entry) => (
+                loginActivity.map((entry: LoginActivityRecord) => (
                   <tr key={entry.id} className="border-t border-neutral-100">
                     <td className="p-2 font-mono text-xs text-neutral-800">{entry.user_id ?? "—"}</td>
                     <td className="p-2 text-neutral-700">{entry.user_email ?? "—"}</td>

@@ -18,6 +18,7 @@ const navItems: NavItem[] = [
   { label: "Compensation", href: "/compensation/current", roles: ["SUPER_USER", "ADMIN", "OFFICER"] },
   { label: "Gratuity", href: "/gratuity/calculations", roles: ["SUPER_USER", "ADMIN", "OFFICER"] },
   { label: "Documents", href: "/documents", roles: ["SUPER_USER", "ADMIN", "OFFICER", "INTAKE"] },
+  { label: "Records", href: "/records", roles: ["SUPER_USER", "ADMIN", "OFFICER", "INTAKE"] },
   { label: "Physical Files", href: "/files/movements", roles: ["SUPER_USER", "ADMIN", "OFFICER"] },
   { label: "Alerts", href: "/alerts/active", roles: ["SUPER_USER", "ADMIN", "OFFICER"] },
   { label: "Reports", href: "/reports", roles: ["SUPER_USER", "ADMIN", "OFFICER"] },

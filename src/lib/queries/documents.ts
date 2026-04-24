@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 export type DocumentRecord = {
   id: string;
   employee_id: string | null;
+  employee_first_name: string | null;
+  employee_last_name: string | null;
+  employee_number: string | null;
+  file_number: string | null;
   document_category: string | null;
   document_type: string | null;
   document_title: string | null;
@@ -28,36 +32,109 @@ const DOCUMENT_LIST_SELECT = `
   uploaded_at
 `;
 
+type EmployeeDocRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  employee_number: string | null;
+  file_number: string | null;
+};
+
+function includesText(value: string | null | undefined, query: string): boolean {
+  if (!value) return false;
+  return value.toLowerCase().includes(query);
+}
+
+async function enrichDocumentsWithEmployee(
+  documents: Omit<
+    DocumentRecord,
+    "employee_first_name" | "employee_last_name" | "employee_number" | "file_number"
+  >[]
+): Promise<DocumentRecord[]> {
+  const employeeIds = [
+    ...new Set(
+      documents
+        .map((document) => document.employee_id)
+        .filter((employeeId): employeeId is string => Boolean(employeeId))
+    ),
+  ];
+
+  if (!employeeIds.length) {
+    return documents.map((document) => ({
+      ...document,
+      employee_first_name: null,
+      employee_last_name: null,
+      employee_number: null,
+      file_number: null,
+    }));
+  }
+
+  const supabase = await createClient();
+  const { data: employees, error: employeesError } = await supabase
+    .from("employees")
+    .select("id, first_name, last_name, employee_number, file_number")
+    .in("id", employeeIds);
+
+  if (employeesError) {
+    throw new Error(`Failed to load employee data for documents: ${employeesError.message}`);
+  }
+
+  const employeeById = new Map(
+    (employees ?? []).map((employee) => [employee.id, employee as EmployeeDocRow])
+  );
+
+  return documents.map((document) => {
+    const employee = document.employee_id
+      ? employeeById.get(document.employee_id)
+      : undefined;
+    return {
+      ...document,
+      employee_first_name: employee?.first_name ?? null,
+      employee_last_name: employee?.last_name ?? null,
+      employee_number: employee?.employee_number ?? null,
+      file_number: employee?.file_number ?? null,
+    };
+  });
+}
+
 export async function listDocuments(
   params?: DocumentSearchParams
 ): Promise<DocumentRecord[]> {
   const supabase = await createClient();
   const queryText = params?.query?.trim();
 
-  let query = supabase
+  const { data, error } = await supabase
     .from("documents")
     .select(DOCUMENT_LIST_SELECT)
     .order("uploaded_at", { ascending: false });
-
-  if (queryText) {
-    query = query.or(
-      [
-        `document_title.ilike.%${queryText}%`,
-        `document_type.ilike.%${queryText}%`,
-        `document_category.ilike.%${queryText}%`,
-        `document_status.ilike.%${queryText}%`,
-      ].join(",")
-    );
-  }
-
-  const { data, error } = await query;
 
   if (error) {
     console.error("listDocuments error:", error);
     throw new Error(`Failed to load documents: ${error.message}`);
   }
 
-  return data ?? [];
+  const documents = await enrichDocumentsWithEmployee((data ?? []) as Omit<
+    DocumentRecord,
+    "employee_first_name" | "employee_last_name" | "employee_number" | "file_number"
+  >[]);
+
+  if (!queryText) {
+    return documents;
+  }
+
+  const normalizedQuery = queryText.toLowerCase();
+  return documents.filter((document) => {
+    return (
+      includesText(document.document_title, normalizedQuery) ||
+      includesText(document.document_type, normalizedQuery) ||
+      includesText(document.document_category, normalizedQuery) ||
+      includesText(document.document_status, normalizedQuery) ||
+      includesText(document.employee_first_name, normalizedQuery) ||
+      includesText(document.employee_last_name, normalizedQuery) ||
+      includesText(document.employee_number, normalizedQuery) ||
+      includesText(document.file_number, normalizedQuery)
+    );
+  });
 }
 
 export async function listDocumentsByEmployeeId(
@@ -76,7 +153,10 @@ export async function listDocumentsByEmployeeId(
     throw new Error(`Failed to load employee documents: ${error.message}`);
   }
 
-  return data ?? [];
+  return enrichDocumentsWithEmployee((data ?? []) as Omit<
+    DocumentRecord,
+    "employee_first_name" | "employee_last_name" | "employee_number" | "file_number"
+  >[]);
 }
 
 export async function getDocumentById(
@@ -95,7 +175,14 @@ export async function getDocumentById(
     throw new Error(`Failed to load document: ${error.message}`);
   }
 
-  return data ?? null;
+  if (!data) return null;
+  const [enriched] = await enrichDocumentsWithEmployee([
+    data as Omit<
+      DocumentRecord,
+      "employee_first_name" | "employee_last_name" | "employee_number" | "file_number"
+    >,
+  ]);
+  return enriched ?? null;
 }
 
 export async function listExpiringDocuments(): Promise<DocumentRecord[]> {
@@ -117,7 +204,10 @@ export async function listExpiringDocuments(): Promise<DocumentRecord[]> {
     throw new Error(`Failed to load expiring documents: ${error.message}`);
   }
 
-  return data ?? [];
+  return enrichDocumentsWithEmployee((data ?? []) as Omit<
+    DocumentRecord,
+    "employee_first_name" | "employee_last_name" | "employee_number" | "file_number"
+  >[]);
 }
 
 export async function listExpiredDocuments(): Promise<DocumentRecord[]> {
@@ -136,5 +226,8 @@ export async function listExpiredDocuments(): Promise<DocumentRecord[]> {
     throw new Error(`Failed to load expired documents: ${error.message}`);
   }
 
-  return data ?? [];
+  return enrichDocumentsWithEmployee((data ?? []) as Omit<
+    DocumentRecord,
+    "employee_first_name" | "employee_last_name" | "employee_number" | "file_number"
+  >[]);
 }

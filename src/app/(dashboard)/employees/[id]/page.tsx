@@ -3,8 +3,12 @@ import { notFound } from "next/navigation";
 import { getEmployeeById } from "@/lib/queries/employees";
 import { listLeaveBalancesByEmployeeId } from "@/lib/queries/leave";
 import { listDocumentsByEmployeeId } from "@/lib/queries/documents";
+import { listRecordsByEmployeeId } from "@/lib/queries/records";
 import { listContractsByEmployeeId } from "@/lib/queries/contracts";
-import { listFileMovementsByEmployeeId } from "@/lib/queries/files";
+import {
+  getCurrentFileMovementByEmployeeId,
+  listFileMovements,
+} from "@/lib/queries/file-movements";
 import { listAuditLogsByEmployeeId } from "@/lib/queries/audit";
 
 type EmployeeDetailPageProps = {
@@ -28,13 +32,24 @@ export default async function EmployeeDetailPage({
   params,
 }: EmployeeDetailPageProps) {
   const { id } = await params;
-  const [employee, contracts, leaveBalances, documents, fileMovements, employeeAudits] =
+  const [
+    employee,
+    contracts,
+    leaveBalances,
+    documents,
+    records,
+    fileMovements,
+    currentFileMovement,
+    employeeAudits,
+  ] =
     await Promise.all([
     getEmployeeById(id),
     listContractsByEmployeeId(id),
     listLeaveBalancesByEmployeeId(id),
     listDocumentsByEmployeeId(id),
-    listFileMovementsByEmployeeId(id),
+    listRecordsByEmployeeId(id),
+    listFileMovements(id),
+    getCurrentFileMovementByEmployeeId(id),
     listAuditLogsByEmployeeId(id),
   ]);
 
@@ -86,25 +101,31 @@ export default async function EmployeeDetailPage({
             Edit Employee
           </Link>
           <Link
-            href="/contracts/new"
+            href={`/contracts/new?employeeId=${employee.id}`}
             className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
           >
             Add Contract
           </Link>
           <Link
-            href="/leave/new"
+            href={`/leave/new?employeeId=${employee.id}`}
             className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
           >
             Add Leave Record
           </Link>
           <Link
-            href="/documents/new"
+            href={`/documents/new?employeeId=${employee.id}`}
             className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
           >
             Upload Document
           </Link>
           <Link
-            href="/files/movements"
+            href={`/records/new?employeeId=${employee.id}`}
+            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
+          >
+            Add Record
+          </Link>
+          <Link
+            href={`/files/movements/new?employeeId=${employee.id}`}
             className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
           >
             Move Physical File
@@ -123,6 +144,10 @@ export default async function EmployeeDetailPage({
           <SummaryCard label="Employee Number" value={employee.employee_number} />
           <SummaryCard label="File Number" value={employee.file_number} />
           <SummaryCard label="Status" value={employee.employment_status} />
+          <SummaryCard
+            label="Current File Location"
+            value={currentFileMovement?.current_location ?? employee.file_location}
+          />
         </div>
       </section>
 
@@ -165,7 +190,7 @@ export default async function EmployeeDetailPage({
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-neutral-900">Contracts</h2>
           <Link
-            href="/contracts"
+            href={`/contracts?employeeId=${employee.id}`}
             className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
           >
             View all
@@ -226,7 +251,7 @@ export default async function EmployeeDetailPage({
             Leave Balances
           </h2>
           <Link
-            href="/leave/balances"
+            href={`/leave/transactions?employeeId=${employee.id}`}
             className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
           >
             View all
@@ -283,7 +308,7 @@ export default async function EmployeeDetailPage({
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-neutral-900">Documents</h2>
           <Link
-            href="/documents"
+            href={`/documents?employeeId=${employee.id}`}
             className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
           >
             View all
@@ -336,11 +361,70 @@ export default async function EmployeeDetailPage({
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-neutral-900">Record Keeping</h2>
+          <Link
+            href={`/records?employeeId=${employee.id}`}
+            className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
+          >
+            View all
+          </Link>
+        </div>
+
+        {records.length ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full divide-y divide-neutral-200 text-sm">
+              <thead className="bg-neutral-50">
+                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
+                  <th className="px-4 py-3">Title</th>
+                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">Category</th>
+                  <th className="px-4 py-3">Date</th>
+                  <th className="px-4 py-3">Reference</th>
+                  <th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
+                {records.map((record) => (
+                  <tr key={record.id} className="hover:bg-neutral-50">
+                    <td className="max-w-[260px] truncate px-4 py-3 font-medium text-neutral-900">
+                      <Link href={`/records/${record.id}`} className="hover:underline">
+                        {display(record.record_title)}
+                      </Link>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(record.record_type)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(record.record_category)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(record.record_date)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(record.reference_number)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(record.status)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-neutral-600">
+            No records found for this employee.
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-neutral-900">
             Physical File Movements
           </h2>
           <Link
-            href="/files/movements"
+            href={`/file-movements?employeeId=${employee.id}`}
             className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
           >
             View all
@@ -352,36 +436,44 @@ export default async function EmployeeDetailPage({
             <table className="min-w-full divide-y divide-neutral-200 text-sm">
               <thead className="bg-neutral-50">
                 <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
-                  <th className="px-4 py-3">File Number</th>
-                  <th className="px-4 py-3">From</th>
-                  <th className="px-4 py-3">To</th>
+                  <th className="px-4 py-3">Current Holder</th>
+                  <th className="px-4 py-3">Current Location</th>
+                  <th className="px-4 py-3">Moved By</th>
+                  <th className="px-4 py-3">Movement Type</th>
+                  <th className="px-4 py-3">Reason</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Date Sent</th>
-                  <th className="px-4 py-3">Date Received</th>
+                  <th className="px-4 py-3">Expected Return</th>
+                  <th className="px-4 py-3">Returned At</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
                 {fileMovements.map((movement) => (
                   <tr key={movement.id} className="hover:bg-neutral-50">
                     <td className="whitespace-nowrap px-4 py-3 font-medium text-neutral-900">
-                      <Link href={`/files/${movement.id}`} className="hover:underline">
-                        {display(movement.file_number)}
+                      <Link href={`/file-movements`} className="hover:underline">
+                        {display(movement.current_holder)}
                       </Link>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {display(movement.from_department)}
+                      {display(movement.current_location)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {display(movement.to_department)}
+                      {display(movement.moved_by)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {display(movement.movement_status)}
+                      {display(movement.movement_type)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {display(movement.date_sent)}
+                      {display(movement.movement_reason)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {display(movement.date_received)}
+                      {display(movement.status)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(movement.expected_return_date)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(movement.returned_at)}
                     </td>
                   </tr>
                 ))}

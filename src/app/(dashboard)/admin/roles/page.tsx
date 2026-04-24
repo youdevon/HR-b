@@ -14,8 +14,13 @@ export default async function AdminRolesPage() {
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-6xl space-y-6">
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <h1 className="text-2xl font-semibold text-neutral-900">Roles</h1>
-          <p className="mt-1 text-sm text-neutral-600">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-2xl font-semibold text-neutral-900">Roles</h1>
+            <span className="inline-flex rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-700">
+              {roles.length} total
+            </span>
+          </div>
+          <p className="mt-2 text-sm text-neutral-600">
             Roles loaded from <code>public.roles</code>.
           </p>
         </section>
@@ -41,8 +46,9 @@ export default async function AdminRolesPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4} className="p-6 text-center text-sm text-neutral-500">
-                    No roles found in <code>public.roles</code>.
+                  <td colSpan={4} className="p-8 text-center text-sm text-neutral-500">
+                    No roles found in <code>public.roles</code>. Add role seed data to enable assignment
+                    in admin user creation.
                   </td>
                 </tr>
               )}

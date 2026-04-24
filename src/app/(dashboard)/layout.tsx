@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
 import AppShell from "@/components/layout/app-shell";
+import { requireUser } from "@/lib/auth/guards";
 
 type DashboardLayoutProps = {
   children: ReactNode;
 };
 
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
+export default async function DashboardLayout({ children }: DashboardLayoutProps) {
+  await requireUser({ redirectTo: "/login" });
   return <AppShell>{children}</AppShell>;
 }

@@ -72,7 +72,7 @@ export default async function Topbar() {
               </Link>
 
               <Link
-                href="/login"
+                href="/logout"
                 className="block rounded-xl px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
               >
                 Logout

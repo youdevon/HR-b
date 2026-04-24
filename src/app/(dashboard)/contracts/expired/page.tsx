@@ -64,7 +64,11 @@ export default async function ExpiredContractsPage() {
                         : "hover:bg-neutral-50"
                     }
                   >
-                    <td className="whitespace-nowrap px-4 py-3">{contract.employee_id ?? "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {[contract.employee_first_name, contract.employee_last_name]
+                        .filter(Boolean)
+                        .join(" ") || contract.employee_id || "—"}
+                    </td>
                     <td className="whitespace-nowrap px-4 py-3">{contract.contract_number ?? "—"}</td>
                     <td className="max-w-[220px] truncate px-4 py-3 font-medium text-neutral-900">
                       <Link href={`/contracts/${contract.id}`} className="hover:underline">

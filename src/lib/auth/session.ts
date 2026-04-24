@@ -1,7 +1,8 @@
 import { cache } from "react";
+import type { Session, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
-export const getSession = cache(async () => {
+export const getSession = cache(async (): Promise<Session | null> => {
   const supabase = await createClient();
   const {
     data: { session },
@@ -9,13 +10,14 @@ export const getSession = cache(async () => {
   } = await supabase.auth.getSession();
 
   if (error) {
-    throw new Error(`Failed to load session: ${error.message}`);
+    console.error(`Failed to load session: ${error.message}`);
+    return null;
   }
 
-  return session;
+  return session ?? null;
 });
 
-export const getUser = cache(async () => {
+export const getUser = cache(async (): Promise<User | null> => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -23,18 +25,18 @@ export const getUser = cache(async () => {
   } = await supabase.auth.getUser();
 
   if (error) {
-    throw new Error(`Failed to load user: ${error.message}`);
+    console.error(`Failed to load user: ${error.message}`);
+    return null;
   }
 
-  return user;
+  return user ?? null;
 });
 
-export const getCurrentUser = cache(async () => {
-  const session = await getSession();
-  return session?.user ?? null;
+export const getCurrentUser = cache(async (): Promise<User | null> => {
+  return getUser();
 });
 
-export async function isAuthenticated() {
+export async function isAuthenticated(): Promise<boolean> {
   const user = await getCurrentUser();
-  return !!user;
+  return Boolean(user);
 }

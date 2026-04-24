@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
 import { getCurrentUser } from "@/lib/auth/session";
 
 type RequireUserOptions = {
@@ -7,7 +8,7 @@ type RequireUserOptions = {
 
 export async function requireUser(
   options: RequireUserOptions = {}
-) {
+): Promise<User> {
   const { redirectTo = "/login" } = options;
   const user = await getCurrentUser();
 
@@ -24,7 +25,7 @@ type RequireGuestOptions = {
 
 export async function requireGuest(
   options: RequireGuestOptions = {}
-) {
+): Promise<void> {
   const { redirectTo = "/dashboard" } = options;
   const user = await getCurrentUser();
 

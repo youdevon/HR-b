@@ -46,6 +46,8 @@ export type WriteAuditLogInput = {
   action_type:
     | "employee_created"
     | "employee_updated"
+    | "file_movement_created"
+    | "file_movement_updated"
     | "alert_acknowledged"
     | "alert_resolved";
   action_summary: string;
