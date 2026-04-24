@@ -12,6 +12,7 @@ export type AdminRoleRecord = {
   role_name: string | null;
   role_code: string | null;
   description: string | null;
+  created_at: string | null;
 };
 
 export type LoginActivityRecord = {
@@ -19,6 +20,18 @@ export type LoginActivityRecord = {
   user_email: string | null;
   activity_type: string | null;
   created_at: string | null;
+};
+
+export type CreateAdminUserInput = {
+  full_name?: string;
+  email?: string;
+  role_id?: string;
+  account_status?: string;
+};
+
+export type AssignUserRoleInput = {
+  user_id?: string;
+  role_id?: string;
 };
 
 export async function listUsers(): Promise<AdminUserRecord[]> {
@@ -33,10 +46,20 @@ export async function listLoginActivity(): Promise<LoginActivityRecord[]> {
   return [];
 }
 
-export async function createUser(): Promise<{ success: true }> {
+export async function createUser(
+  _input?: CreateAdminUserInput
+): Promise<{ success: true }> {
   return { success: true };
 }
 
-export async function assignUserRole(): Promise<{ success: true }> {
+export async function createAdminUser(
+  _input?: CreateAdminUserInput
+): Promise<{ success: true }> {
+  return { success: true };
+}
+
+export async function assignUserRole(
+  _input?: AssignUserRoleInput
+): Promise<{ success: true }> {
   return { success: true };
 }
