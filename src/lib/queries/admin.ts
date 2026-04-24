@@ -58,76 +58,37 @@ export type AssignUserRoleInput = {
 export async function listUsers(): Promise<AdminUserRecord[]> {
   const supabase = createAdminClient();
 
-  const { data: users, error: usersError } = await supabase
+  const { data, error } = await supabase
     .from("users")
     .select(
-      `
-      id,
-      full_name,
-      first_name,
-      last_name,
-      email,
-      phone_number,
-      role_id,
-      account_status,
-      is_active,
-      last_login_at,
-      password_reset_required,
-      failed_login_attempts,
-      locked_at,
-      deactivated_at,
-      created_at
-    `
+      "id, full_name, first_name, last_name, email, phone_number, role_id, account_status, is_active, last_login_at, password_reset_required, failed_login_attempts, locked_at, deactivated_at, created_at"
     )
-    .order("created_at", { ascending: false });
+    .limit(100);
 
-  if (usersError) {
-    console.error("listUsers usersError:", JSON.stringify(usersError, null, 2));
-    throw new Error(`Failed to load users: ${usersError.message}`);
+  if (error) {
+    console.error("listUsers error:", JSON.stringify(error, null, 2));
+    throw new Error(`Failed to load users: ${error.message}`);
   }
 
-  const { data: roles, error: rolesError } = await supabase
-    .from("roles")
-    .select("id, role_name, role_code");
-
-  if (rolesError) {
-    console.error("listUsers rolesError:", JSON.stringify(rolesError, null, 2));
-    throw new Error(`Failed to load user roles: ${rolesError.message}`);
-  }
-
-  const roleMap = new Map(
-    (roles ?? []).map((role) => [
-      role.id,
-      {
-        role_name: role.role_name,
-        role_code: role.role_code,
-      },
-    ])
-  );
-
-  return (users ?? []).map((user) => {
-    const role = user.role_id ? roleMap.get(user.role_id) : null;
-
-    return {
-      id: user.id,
-      full_name: user.full_name,
-      first_name: user.first_name,
-      last_name: user.last_name,
-      email: user.email,
-      phone_number: user.phone_number,
-      role_id: user.role_id,
-      role_name: role?.role_name ?? null,
-      role_code: role?.role_code ?? null,
-      account_status: user.account_status,
-      is_active: user.is_active,
-      last_login_at: user.last_login_at,
-      password_reset_required: user.password_reset_required,
-      failed_login_attempts: user.failed_login_attempts,
-      locked_at: user.locked_at,
-      deactivated_at: user.deactivated_at,
-      created_at: user.created_at,
-    };
-  });
+  return (data ?? []).map((user) => ({
+    id: user.id,
+    full_name: user.full_name,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    email: user.email,
+    phone_number: user.phone_number,
+    role_id: user.role_id,
+    role_name: null,
+    role_code: null,
+    account_status: user.account_status,
+    is_active: user.is_active,
+    last_login_at: user.last_login_at,
+    password_reset_required: user.password_reset_required,
+    failed_login_attempts: user.failed_login_attempts,
+    locked_at: user.locked_at,
+    deactivated_at: user.deactivated_at,
+    created_at: user.created_at,
+  }));
 }
 
 export async function listRoles(): Promise<AdminRoleRecord[]> {
@@ -136,17 +97,9 @@ export async function listRoles(): Promise<AdminRoleRecord[]> {
   const { data, error } = await supabase
     .from("roles")
     .select(
-      `
-      id,
-      role_name,
-      role_code,
-      description,
-      is_system_role,
-      is_active,
-      created_at
-    `
+      "id, role_name, role_code, description, is_system_role, is_active, created_at"
     )
-    .order("role_name", { ascending: true });
+    .limit(100);
 
   if (error) {
     console.error("listRoles error:", JSON.stringify(error, null, 2));
