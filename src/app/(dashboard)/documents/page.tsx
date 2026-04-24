@@ -1,60 +1,14 @@
-"use client";
-
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { listDocuments } from "@/lib/queries/documents";
 
-type DocumentRow = {
-  id: string;
-  document_title: string;
-  document_category: string;
-  document_type: string;
-  employee_id: string;
-  document_status: string;
-  expiry_date: string;
+type DocumentsPageProps = {
+  searchParams: Promise<{ q?: string }>;
 };
 
-const mockDocuments: DocumentRow[] = [
-  {
-    id: "doc_1",
-    document_title: "Standard Employment Contract 2026",
-    document_category: "Contract",
-    document_type: "Employment Agreement",
-    employee_id: "emp_001",
-    document_status: "Active",
-    expiry_date: "2027-12-31",
-  },
-  {
-    id: "doc_2",
-    document_title: "Passport Copy",
-    document_category: "Employee",
-    document_type: "Identification",
-    employee_id: "emp_003",
-    document_status: "Expiring",
-    expiry_date: "2026-05-10",
-  },
-  {
-    id: "doc_3",
-    document_title: "Medical Certificate",
-    document_category: "Leave",
-    document_type: "Sick Leave Support",
-    employee_id: "emp_002",
-    document_status: "Expired",
-    expiry_date: "2026-03-01",
-  },
-];
-
-export default function DocumentsPage() {
-  const [query, setQuery] = useState("");
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return mockDocuments;
-    return mockDocuments.filter((row) =>
-      [row.document_title, row.document_category, row.document_type, row.employee_id, row.document_status, row.expiry_date]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle),
-    );
-  }, [query]);
+export default async function DocumentsPage({ searchParams }: DocumentsPageProps) {
+  const resolved = await searchParams;
+  const query = resolved.q?.trim() ?? "";
+  const documents = await listDocuments({ query });
 
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
@@ -64,14 +18,19 @@ export default function DocumentsPage() {
             <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Documents</h1>
             <p className="mt-1 text-sm text-neutral-600">Search and manage document records.</p>
           </div>
-          <div className="flex w-full gap-3 sm:w-auto">
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search title, category, status..."
-              className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 sm:w-80"
-            />
-            <Link href="/documents/new" className="shrink-0 rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800">
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+            <form className="w-full sm:w-80" method="get">
+              <input
+                name="q"
+                defaultValue={query}
+                placeholder="Search title, category, status..."
+                className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              />
+            </form>
+            <Link
+              href="/documents/new"
+              className="inline-flex shrink-0 items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+            >
               New Document
             </Link>
           </div>
@@ -91,21 +50,29 @@ export default function DocumentsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100 bg-white text-sm text-neutral-700">
-                {filtered.map((row) => (
+                {documents.map((row) => (
                   <tr key={row.id} className="transition hover:bg-neutral-50">
-                    <td className="whitespace-nowrap px-4 py-3 font-medium text-neutral-900">
-                      <Link href={`/documents/${row.id}`} className="hover:underline">{row.document_title}</Link>
+                    <td className="max-w-[220px] truncate px-4 py-3 font-medium text-neutral-900" title={row.document_title ?? undefined}>
+                      <Link href={`/documents/${row.id}`} className="hover:underline">
+                        {row.document_title ?? "-"}
+                      </Link>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3">{row.document_category}</td>
-                    <td className="whitespace-nowrap px-4 py-3">{row.document_type}</td>
-                    <td className="whitespace-nowrap px-4 py-3">{row.employee_id}</td>
-                    <td className="whitespace-nowrap px-4 py-3">{row.document_status}</td>
-                    <td className="whitespace-nowrap px-4 py-3">{row.expiry_date}</td>
+                    <td className="whitespace-nowrap px-4 py-3">{row.document_category ?? "-"}</td>
+                    <td className="whitespace-nowrap px-4 py-3">{row.document_type ?? "-"}</td>
+                    <td className="whitespace-nowrap px-4 py-3">{row.employee_id ?? "-"}</td>
+                    <td className="whitespace-nowrap px-4 py-3">{row.document_status ?? "-"}</td>
+                    <td className="whitespace-nowrap px-4 py-3">{row.expiry_date ?? "-"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {!documents.length ? (
+            <div className="px-4 py-10 text-center text-sm text-neutral-600">
+              {query ? "No documents match your search." : "No documents found."}
+            </div>
+          ) : null}
         </section>
       </div>
     </main>

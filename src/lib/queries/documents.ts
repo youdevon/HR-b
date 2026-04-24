@@ -1,103 +1,121 @@
-import { documentSchema, type Document, type DocumentInput } from "@/lib/validators/document";
+import { createClient } from "@/lib/supabase/server";
 
-export type DocumentRecord = Document & {
+export type DocumentRecord = {
   id: string;
-  created_at: string;
-  updated_at: string;
+  employee_id: string | null;
+  document_category: string | null;
+  document_type: string | null;
+  document_title: string | null;
+  document_status: string | null;
+  expiry_date: string | null;
+  visibility_level: string | null;
+  uploaded_at: string | null;
 };
 
 export type DocumentSearchParams = {
   query?: string;
-  category?: Document["document_category"];
-  status?: string;
 };
 
-const mockDocuments: DocumentRecord[] = [
-  {
-    id: "doc_1",
-    employee_id: "emp_001",
-    contract_id: "ctr_1",
-    leave_transaction_id: "",
-    gratuity_calculation_id: "",
-    file_movement_id: "",
-    document_category: "Contract",
-    document_type: "Employment Agreement",
-    document_title: "Standard Employment Contract 2026",
-    document_description: "Signed contract for annual term.",
-    file_name: "employment-contract-2026.pdf",
-    document_status: "Active",
-    document_date: "2026-01-01",
-    issued_date: "2025-12-20",
-    expiry_date: "2027-12-31",
-    visibility_level: "HR_ONLY",
-    notes: "Original copy in records room.",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: "doc_2",
-    employee_id: "emp_002",
-    contract_id: "",
-    leave_transaction_id: "",
-    gratuity_calculation_id: "",
-    file_movement_id: "mov_2",
-    document_category: "Physical File",
-    document_type: "Transfer Acknowledgment",
-    document_title: "File Transfer to Finance",
-    document_description: "",
-    file_name: "transfer-finance.pdf",
-    document_status: "Expiring",
-    document_date: "2026-03-15",
-    issued_date: "2026-03-15",
-    expiry_date: "2026-05-01",
-    visibility_level: "INTERNAL",
-    notes: "",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];
+const DOCUMENT_LIST_SELECT = `
+  id,
+  employee_id,
+  document_category,
+  document_type,
+  document_title,
+  document_status,
+  expiry_date,
+  visibility_level,
+  uploaded_at
+`;
 
-export async function listDocuments(_params?: DocumentSearchParams): Promise<DocumentRecord[]> {
-  // Placeholder for future Supabase select query.
-  return Promise.resolve(mockDocuments);
-}
+export async function listDocuments(
+  params?: DocumentSearchParams
+): Promise<DocumentRecord[]> {
+  const supabase = await createClient();
+  const queryText = params?.query?.trim();
 
-export async function getDocumentById(id: string): Promise<DocumentRecord | null> {
-  // Placeholder for future Supabase select query.
-  return Promise.resolve(mockDocuments.find((doc) => doc.id === id) ?? null);
-}
+  let query = supabase
+    .from("documents")
+    .select(DOCUMENT_LIST_SELECT)
+    .order("uploaded_at", { ascending: false });
 
-export async function createDocument(input: DocumentInput): Promise<DocumentRecord> {
-  const parsed = documentSchema.parse(input);
-  const now = new Date().toISOString();
-  return Promise.resolve({
-    id: `doc_${Date.now()}`,
-    ...parsed,
-    created_at: now,
-    updated_at: now,
-  });
-}
-
-export async function updateDocument(id: string, input: Partial<DocumentInput>): Promise<DocumentRecord> {
-  const existing = await getDocumentById(id);
-  if (!existing) {
-    throw new Error("Document not found.");
+  if (queryText) {
+    query = query.or(
+      [
+        `document_title.ilike.%${queryText}%`,
+        `document_type.ilike.%${queryText}%`,
+        `document_category.ilike.%${queryText}%`,
+        `document_status.ilike.%${queryText}%`,
+      ].join(",")
+    );
   }
 
-  const parsed = documentSchema.parse({ ...existing, ...input });
-  return Promise.resolve({
-    ...existing,
-    ...parsed,
-    updated_at: new Date().toISOString(),
-  });
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("listDocuments error:", error);
+    throw new Error(`Failed to load documents: ${error.message}`);
+  }
+
+  return data ?? [];
+}
+
+export async function getDocumentById(
+  id: string
+): Promise<DocumentRecord | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("documents")
+    .select(DOCUMENT_LIST_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("getDocumentById error:", error);
+    throw new Error(`Failed to load document: ${error.message}`);
+  }
+
+  return data ?? null;
 }
 
 export async function listExpiringDocuments(): Promise<DocumentRecord[]> {
-  const all = await listDocuments();
-  return Promise.resolve(all.filter((doc) => doc.document_status.toLowerCase() === "expiring"));
+  const supabase = await createClient();
+
+  const today = new Date();
+  const in30Days = new Date();
+  in30Days.setDate(today.getDate() + 30);
+
+  const { data, error } = await supabase
+    .from("documents")
+    .select(DOCUMENT_LIST_SELECT)
+    .gte("expiry_date", today.toISOString().split("T")[0])
+    .lte("expiry_date", in30Days.toISOString().split("T")[0])
+    .order("expiry_date", { ascending: true });
+
+  if (error) {
+    console.error("listExpiringDocuments error:", error);
+    throw new Error(`Failed to load expiring documents: ${error.message}`);
+  }
+
+  return data ?? [];
 }
 
 export async function listExpiredDocuments(): Promise<DocumentRecord[]> {
-  const all = await listDocuments();
-  return Promise.resolve(all.filter((doc) => doc.document_status.toLowerCase() === "expired"));
+  const supabase = await createClient();
+
+  const today = new Date();
+
+  const { data, error } = await supabase
+    .from("documents")
+    .select(DOCUMENT_LIST_SELECT)
+    .lt("expiry_date", today.toISOString().split("T")[0])
+    .order("expiry_date", { ascending: false });
+
+  if (error) {
+    console.error("listExpiredDocuments error:", error);
+    throw new Error(`Failed to load expired documents: ${error.message}`);
+  }
+
+  return data ?? [];
 }
