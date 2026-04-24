@@ -6,6 +6,7 @@ export type AdminUserRecord = {
   role_code: string | null;
   account_status: string | null;
   created_at: string | null;
+  is_active: boolean | null;
 };
 
 export type AdminRoleRecord = {
