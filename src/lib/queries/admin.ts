@@ -27,6 +27,7 @@ export type CreateAdminUserInput = {
   email?: string;
   role_id?: string;
   account_status?: string;
+  is_active?: boolean;
 };
 
 export type AssignUserRoleInput = {
