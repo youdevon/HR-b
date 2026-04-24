@@ -3,6 +3,7 @@ export type AdminUserRecord = {
   full_name: string | null;
   email: string | null;
   role_name: string | null;
+  role_code: string | null;
   account_status: string | null;
   created_at: string | null;
 };
