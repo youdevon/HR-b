@@ -1,16 +1,28 @@
-type Props = { params: { id: string } };
+type AlertDetailPageProps = {
+  params: Promise<{
+    id: string;
+  }>;
+};
 
-export default function AlertDetailPage({ params }: Props) {
-  const alert = { title: "Low Sick Leave Balance", severity: "High", status: "Active", employee_id: "emp_001", description: "Sick leave is below configured threshold." };
+export default async function AlertDetailPage({
+  params,
+}: AlertDetailPageProps) {
+  const { id } = await params;
+
   return (
-    <main className="min-h-screen bg-neutral-100 p-6"><div className="mx-auto max-w-7xl space-y-6">
-      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200"><h1 className="text-2xl font-semibold">Alert {params.id}</h1><p className="text-sm text-neutral-600">{alert.title}</p></section>
-      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 grid gap-3 text-sm">
-        <p><strong>Employee:</strong> {alert.employee_id}</p>
-        <p><strong>Severity:</strong> {alert.severity}</p>
-        <p><strong>Status:</strong> {alert.status}</p>
-        <p><strong>Description:</strong> {alert.description}</p>
+    <main className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-neutral-900">
+          Alert Details
+        </h1>
+        <p className="mt-1 text-sm text-neutral-600">Alert ID: {id}</p>
+      </div>
+
+      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <p className="text-sm text-neutral-600">
+          Alert detail data will be connected here.
+        </p>
       </section>
-    </div></main>
+    </main>
   );
 }
