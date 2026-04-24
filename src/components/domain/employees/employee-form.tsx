@@ -1,17 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { employeeSchema, type EmployeeInput } from "@/lib/validators/employee";
+import { useState, useTransition } from "react";
+import type { EmployeeInput } from "@/lib/validators/employee";
 
 type EmployeeFormProps = {
-  initialValues?: Partial<EmployeeInput>;
-  submitLabel?: string;
-  onSuccessRedirect?: string;
+  onSubmitAction: (data: EmployeeInput) => Promise<void>;
 };
-
-type FieldErrorMap = Partial<Record<keyof EmployeeInput, string>>;
 
 const defaultValues: EmployeeInput = {
   employee_number: "",
@@ -24,217 +18,350 @@ const defaultValues: EmployeeInput = {
   department: "",
   division: "",
   job_title: "",
-  employment_status: "",
-  employment_type: "",
+  employment_status: "active",
+  employment_type: "contract",
   hire_date: "",
-  id_type: "",
+  id_type: "national_id",
   id_number: "",
   other_id_description: "",
   bir_number: "",
   work_email: "",
   personal_email: "",
   mobile_number: "",
-  file_status: "",
+  file_status: "active",
   file_location: "",
   file_notes: "",
 };
 
-function InputField({
-  label,
-  name,
-  value,
-  onChange,
-  error,
-  type = "text",
-  placeholder,
-}: {
-  label: string;
-  name: keyof EmployeeInput;
-  value: string | undefined;
-  onChange: (name: keyof EmployeeInput, value: string) => void;
-  error?: string;
-  type?: "text" | "email" | "date";
-  placeholder?: string;
-}) {
+export default function EmployeeForm({ onSubmitAction }: EmployeeFormProps) {
+  const [formData, setFormData] = useState<EmployeeInput>(defaultValues);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function updateField<K extends keyof EmployeeInput>(
+    key: K,
+    value: EmployeeInput[K]
+  ) {
+    setFormData((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+
+    startTransition(async () => {
+      try {
+        await onSubmitAction(formData);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to create employee. Please try again."
+        );
+      }
+    });
+  }
+
   return (
-    <label className="space-y-2">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-6 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
+    >
+      {error ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-neutral-900">
+            Employee Details
+          </h2>
+          <p className="text-sm text-neutral-500">
+            Basic identifying information for the employee record.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field
+            label="Employee Number"
+            value={formData.employee_number}
+            onChange={(value) => updateField("employee_number", value)}
+            required
+          />
+          <Field
+            label="File Number"
+            value={formData.file_number}
+            onChange={(value) => updateField("file_number", value)}
+            required
+          />
+          <Field
+            label="First Name"
+            value={formData.first_name}
+            onChange={(value) => updateField("first_name", value)}
+            required
+          />
+          <Field
+            label="Middle Name"
+            value={formData.middle_name ?? ""}
+            onChange={(value) => updateField("middle_name", value)}
+          />
+          <Field
+            label="Last Name"
+            value={formData.last_name}
+            onChange={(value) => updateField("last_name", value)}
+            required
+          />
+          <Field
+            label="Preferred Name"
+            value={formData.preferred_name ?? ""}
+            onChange={(value) => updateField("preferred_name", value)}
+          />
+          <Field
+            label="Date of Birth"
+            type="date"
+            value={formData.date_of_birth}
+            onChange={(value) => updateField("date_of_birth", value)}
+            required
+          />
+          <Field
+            label="Hire Date"
+            type="date"
+            value={formData.hire_date}
+            onChange={(value) => updateField("hire_date", value)}
+            required
+          />
+        </div>
+      </section>
+
+      <section className="space-y-4 border-t border-neutral-200 pt-6">
+        <div>
+          <h2 className="text-lg font-semibold text-neutral-900">
+            Work Information
+          </h2>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field
+            label="Department"
+            value={formData.department}
+            onChange={(value) => updateField("department", value)}
+            required
+          />
+          <Field
+            label="Division"
+            value={formData.division ?? ""}
+            onChange={(value) => updateField("division", value)}
+          />
+          <Field
+            label="Job Title"
+            value={formData.job_title}
+            onChange={(value) => updateField("job_title", value)}
+            required
+          />
+
+          <SelectField
+            label="Employment Status"
+            value={formData.employment_status}
+            onChange={(value) => updateField("employment_status", value)}
+            options={[
+              ["active", "Active"],
+              ["inactive", "Inactive"],
+              ["archived", "Archived"],
+            ]}
+          />
+
+          <SelectField
+            label="Employment Type"
+            value={formData.employment_type}
+            onChange={(value) => updateField("employment_type", value)}
+            options={[
+              ["contract", "Contract"],
+              ["permanent", "Permanent"],
+              ["temporary", "Temporary"],
+              ["consultant", "Consultant"],
+              ["other", "Other"],
+            ]}
+          />
+        </div>
+      </section>
+
+      <section className="space-y-4 border-t border-neutral-200 pt-6">
+        <div>
+          <h2 className="text-lg font-semibold text-neutral-900">
+            Identification
+          </h2>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <SelectField
+            label="ID Type"
+            value={formData.id_type}
+            onChange={(value) => updateField("id_type", value)}
+            options={[
+              ["national_id", "National ID"],
+              ["drivers_permit", "Driver's Permit"],
+              ["other", "Other"],
+            ]}
+          />
+          <Field
+            label="ID Number"
+            value={formData.id_number}
+            onChange={(value) => updateField("id_number", value)}
+            required
+          />
+          <Field
+            label="Other ID Description"
+            value={formData.other_id_description ?? ""}
+            onChange={(value) => updateField("other_id_description", value)}
+          />
+          <Field
+            label="BIR Number"
+            value={formData.bir_number}
+            onChange={(value) => updateField("bir_number", value)}
+            required
+          />
+        </div>
+      </section>
+
+      <section className="space-y-4 border-t border-neutral-200 pt-6">
+        <div>
+          <h2 className="text-lg font-semibold text-neutral-900">
+            Contact and File
+          </h2>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field
+            label="Work Email"
+            type="email"
+            value={formData.work_email ?? ""}
+            onChange={(value) => updateField("work_email", value)}
+          />
+          <Field
+            label="Personal Email"
+            type="email"
+            value={formData.personal_email ?? ""}
+            onChange={(value) => updateField("personal_email", value)}
+          />
+          <Field
+            label="Mobile Number"
+            value={formData.mobile_number ?? ""}
+            onChange={(value) => updateField("mobile_number", value)}
+          />
+          <SelectField
+            label="File Status"
+            value={formData.file_status}
+            onChange={(value) => updateField("file_status", value)}
+            options={[
+              ["active", "Active"],
+              ["archived", "Archived"],
+              ["missing", "Missing"],
+              ["transferred", "Transferred"],
+            ]}
+          />
+          <Field
+            label="File Location"
+            value={formData.file_location ?? ""}
+            onChange={(value) => updateField("file_location", value)}
+          />
+          <div className="md:col-span-2">
+            <TextArea
+              label="File Notes"
+              value={formData.file_notes ?? ""}
+              onChange={(value) => updateField("file_notes", value)}
+            />
+          </div>
+        </div>
+      </section>
+
+      <div className="flex justify-end gap-3 border-t border-neutral-200 pt-6">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="rounded-xl bg-neutral-900 px-5 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isPending ? "Saving..." : "Create Employee"}
+        </button>
+      </div>
+    </form>
+  );
+}
+type FieldProps = {
+  label: string;
+  value: string | undefined;
+  type?: string;
+  required?: boolean;
+  onChange: (value: string) => void;
+};
+
+function Field({
+  label,
+  value,
+  type = "text",
+  required = false,
+  onChange,
+}: FieldProps) {
+  return (
+    <label className="block space-y-1">
       <span className="text-sm font-medium text-neutral-700">{label}</span>
       <input
-        name={name}
         type={type}
         value={value ?? ""}
-        onChange={(event) => onChange(name, event.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+        required={required}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
       />
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </label>
   );
 }
 
-export default function EmployeeForm({
-  initialValues,
-  submitLabel = "Save Employee",
-  onSuccessRedirect = "/employees",
-}: EmployeeFormProps) {
-  const router = useRouter();
-  const [values, setValues] = useState<EmployeeInput>({ ...defaultValues, ...initialValues });
-  const [errors, setErrors] = useState<FieldErrorMap>({});
-  const [submitError, setSubmitError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+type SelectFieldProps = {
+  label: string;
+  value: string | undefined;
+  options: Array<[string, string]>;
+  onChange: (value: string) => void;
+};
 
-  const sectionClassName = useMemo(
-    () => "rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6",
-    [],
-  );
-
-  const handleChange = (name: keyof EmployeeInput, value: string) => {
-    setValues((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({ ...prev, [name]: undefined }));
-    if (submitError) {
-      setSubmitError("");
-    }
-    if (successMessage) {
-      setSuccessMessage("");
-    }
-  };
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const parsed = employeeSchema.safeParse(values);
-
-    if (!parsed.success) {
-      const nextErrors: FieldErrorMap = {};
-      for (const issue of parsed.error.issues) {
-        const key = issue.path[0] as keyof EmployeeInput | undefined;
-        if (key && !nextErrors[key]) {
-          nextErrors[key] = issue.message;
-        }
-      }
-      setErrors(nextErrors);
-      return;
-    }
-
-    // Client-side placeholder until API wiring is introduced.
-    setErrors({});
-    setSubmitError("");
-    setIsSubmitting(true);
-
-    try {
-      const supabase = createClient();
-      const payload = Object.fromEntries(
-        Object.entries(parsed.data).map(([key, value]) => [key, value === "" ? null : value]),
-      );
-
-      const { error } = await supabase.from("employees").insert(payload);
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      setSuccessMessage("Employee record created successfully.");
-      router.push(onSuccessRedirect);
-      router.refresh();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create employee.";
-      setSubmitError(message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
+function SelectField({ label, value, options, onChange }: SelectFieldProps) {
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <section className={sectionClassName}>
-        <h2 className="text-lg font-semibold text-neutral-900">Identity</h2>
-        <p className="mt-1 text-sm text-neutral-600">Core employee identifiers and personal details.</p>
-        <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <InputField label="Employee Number" name="employee_number" value={values.employee_number} onChange={handleChange} error={errors.employee_number} placeholder="EMP-0001" />
-          <InputField label="File Number" name="file_number" value={values.file_number} onChange={handleChange} error={errors.file_number} placeholder="FILE-1001" />
-          <InputField label="First Name" name="first_name" value={values.first_name} onChange={handleChange} error={errors.first_name} />
-          <InputField label="Middle Name" name="middle_name" value={values.middle_name} onChange={handleChange} error={errors.middle_name} />
-          <InputField label="Last Name" name="last_name" value={values.last_name} onChange={handleChange} error={errors.last_name} />
-          <InputField label="Preferred Name" name="preferred_name" value={values.preferred_name} onChange={handleChange} error={errors.preferred_name} />
-          <InputField label="Date of Birth" name="date_of_birth" type="date" value={values.date_of_birth} onChange={handleChange} error={errors.date_of_birth} />
-        </div>
-      </section>
+    <label className="block space-y-1">
+      <span className="text-sm font-medium text-neutral-700">{label}</span>
+      <select
+        value={value ?? ""}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+      >
+        {options.map(([optionValue, optionLabel]) => (
+          <option key={optionValue} value={optionValue}>
+            {optionLabel}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
-      <section className={sectionClassName}>
-        <h2 className="text-lg font-semibold text-neutral-900">Employment</h2>
-        <p className="mt-1 text-sm text-neutral-600">Organization and status information.</p>
-        <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <InputField label="Department" name="department" value={values.department} onChange={handleChange} error={errors.department} />
-          <InputField label="Division" name="division" value={values.division} onChange={handleChange} error={errors.division} />
-          <InputField label="Job Title" name="job_title" value={values.job_title} onChange={handleChange} error={errors.job_title} />
-          <InputField label="Employment Status" name="employment_status" value={values.employment_status} onChange={handleChange} error={errors.employment_status} placeholder="Active" />
-          <InputField label="Employment Type" name="employment_type" value={values.employment_type} onChange={handleChange} error={errors.employment_type} placeholder="Full-time" />
-          <InputField label="Hire Date" name="hire_date" type="date" value={values.hire_date} onChange={handleChange} error={errors.hire_date} />
-        </div>
-      </section>
+type TextAreaProps = {
+  label: string;
+  value: string | undefined;
+  onChange: (value: string) => void;
+};
 
-      <section className={sectionClassName}>
-        <h2 className="text-lg font-semibold text-neutral-900">Identification & Tax</h2>
-        <p className="mt-1 text-sm text-neutral-600">Government-issued ID and tax details.</p>
-        <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <InputField label="ID Type" name="id_type" value={values.id_type} onChange={handleChange} error={errors.id_type} placeholder="Passport / National ID / Other" />
-          <InputField label="ID Number" name="id_number" value={values.id_number} onChange={handleChange} error={errors.id_number} />
-          <InputField label="Other ID Description" name="other_id_description" value={values.other_id_description} onChange={handleChange} error={errors.other_id_description} />
-          <InputField label="BIR Number" name="bir_number" value={values.bir_number} onChange={handleChange} error={errors.bir_number} />
-        </div>
-      </section>
-
-      <section className={sectionClassName}>
-        <h2 className="text-lg font-semibold text-neutral-900">Contact</h2>
-        <p className="mt-1 text-sm text-neutral-600">Corporate and personal communication channels.</p>
-        <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <InputField label="Work Email" name="work_email" type="email" value={values.work_email} onChange={handleChange} error={errors.work_email} />
-          <InputField label="Personal Email" name="personal_email" type="email" value={values.personal_email} onChange={handleChange} error={errors.personal_email} />
-          <InputField label="Mobile Number" name="mobile_number" value={values.mobile_number} onChange={handleChange} error={errors.mobile_number} />
-        </div>
-      </section>
-
-      <section className={sectionClassName}>
-        <h2 className="text-lg font-semibold text-neutral-900">Physical File</h2>
-        <p className="mt-1 text-sm text-neutral-600">Track status and storage of the physical employee file.</p>
-        <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <InputField label="File Status" name="file_status" value={values.file_status} onChange={handleChange} error={errors.file_status} />
-          <InputField label="File Location" name="file_location" value={values.file_location} onChange={handleChange} error={errors.file_location} />
-        </div>
-        <label className="mt-4 block space-y-2">
-          <span className="text-sm font-medium text-neutral-700">File Notes</span>
-          <textarea
-            name="file_notes"
-            rows={4}
-            value={values.file_notes ?? ""}
-            onChange={(event) => handleChange("file_notes", event.target.value)}
-            className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-          />
-          {errors.file_notes ? <p className="text-xs text-red-600">{errors.file_notes}</p> : null}
-        </label>
-      </section>
-
-      <div className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200">
-        <p className="text-sm text-neutral-600">All required fields are validated before submission.</p>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
-        >
-          {isSubmitting ? "Saving..." : submitLabel}
-        </button>
-      </div>
-
-      {submitError ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {submitError}
-        </div>
-      ) : null}
-
-      {successMessage ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {successMessage}
-        </div>
-      ) : null}
-    </form>
+function TextArea({ label, value, onChange }: TextAreaProps) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-sm font-medium text-neutral-700">{label}</span>
+      <textarea
+        value={value ?? ""}
+        rows={4}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+      />
+    </label>
   );
 }
