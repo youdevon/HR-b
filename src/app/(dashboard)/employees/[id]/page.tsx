@@ -1,168 +1,395 @@
 import Link from "next/link";
-import { getEmployeeById } from "@/lib/queries/employees";
 import { notFound } from "next/navigation";
+import { getEmployeeById } from "@/lib/queries/employees";
+import { listLeaveBalancesByEmployeeId } from "@/lib/queries/leave";
+import { listDocumentsByEmployeeId } from "@/lib/queries/documents";
+import { listContractsByEmployeeId } from "@/lib/queries/contracts";
+import { listFileMovementsByEmployeeId } from "@/lib/queries/files";
 
-type PageProps = {
-  params: Promise<{ id: string }>;
+type EmployeeDetailPageProps = {
+  params: Promise<{
+    id: string;
+  }>;
 };
 
-export default async function Page({ params }: PageProps) {
+function display(value: string | null | undefined) {
+  return value && value.trim() ? value : "—";
+}
+
+export default async function EmployeeDetailPage({
+  params,
+}: EmployeeDetailPageProps) {
   const { id } = await params;
-  const employee = await getEmployeeById(id);
+  const [employee, contracts, leaveBalances, documents, fileMovements] =
+    await Promise.all([
+    getEmployeeById(id),
+    listContractsByEmployeeId(id),
+    listLeaveBalancesByEmployeeId(id),
+    listDocumentsByEmployeeId(id),
+    listFileMovementsByEmployeeId(id),
+  ]);
 
   if (!employee) {
     notFound();
   }
 
-  const displayName =
-    [employee.first_name, employee.middle_name, employee.last_name]
-      .filter(Boolean)
-      .join(" ")
-      .trim() || "Employee";
-
-  const displayValue = (value: string | null): string => value?.trim() || "—";
+  const fullName = `${employee.first_name ?? ""} ${
+    employee.last_name ?? ""
+  }`.trim();
 
   return (
     <main className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">{displayName}</h1>
+          <h1 className="text-2xl font-semibold text-neutral-900">
+            {fullName || "Employee Profile"}
+          </h1>
           <p className="mt-1 text-sm text-neutral-600">
-            Employee profile and identifiers for HR records.
+            Employee #{display(employee.employee_number)} • File #
+            {display(employee.file_number)}
           </p>
-          <p className="mt-2 font-mono text-xs text-neutral-500">{id}</p>
         </div>
-        <Link
-          href="/employees"
-          className="inline-flex shrink-0 items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
-        >
-          All employees
-        </Link>
+
+        <div className="flex gap-3">
+          <Link
+            href="/employees"
+            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
+          >
+            Back
+          </Link>
+
+          <Link
+            href={`/employees/${employee.id}/edit`}
+            className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+          >
+            Edit Employee
+          </Link>
+        </div>
       </div>
 
+      <section className="grid gap-4 md:grid-cols-3">
+        <SummaryCard label="Employee Number" value={employee.employee_number} />
+        <SummaryCard label="File Number" value={employee.file_number} />
+        <SummaryCard label="Status" value={employee.employment_status} />
+      </section>
+
       <section className="grid gap-6 lg:grid-cols-2">
-        <article className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-neutral-900">Personal Info</h2>
-          <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="text-neutral-500">First name</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.first_name)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Middle name</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.middle_name)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Last name</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.last_name)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Preferred name</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.preferred_name)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Date of birth</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.date_of_birth)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Mobile number</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.mobile_number)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Work email</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.work_email)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Personal email</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.personal_email)}</dd>
-            </div>
-          </dl>
-        </article>
+        <InfoCard title="Personal Info">
+          <InfoRow label="First Name" value={employee.first_name} />
+          <InfoRow label="Last Name" value={employee.last_name} />
+          <InfoRow label="Date of Birth" value={employee.date_of_birth} />
+          <InfoRow label="Personal Email" value={employee.personal_email} />
+          <InfoRow label="Mobile Number" value={employee.mobile_number} />
+        </InfoCard>
 
-        <article className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-neutral-900">Work Info</h2>
-          <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="text-neutral-500">Employee number</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.employee_number)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Department</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.department)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Division</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.division)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Job title</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.job_title)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Employment status</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.employment_status)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Employment type</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.employment_type)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Hire date</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.hire_date)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Created at</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.created_at)}</dd>
-            </div>
-          </dl>
-        </article>
+        <InfoCard title="Work Info">
+          <InfoRow label="Department" value={employee.department} />
+          <InfoRow label="Division" value={employee.division} />
+          <InfoRow label="Job Title" value={employee.job_title} />
+          <InfoRow label="Employment Type" value={employee.employment_type} />
+          <InfoRow label="Hire Date" value={employee.hire_date} />
+          <InfoRow label="Work Email" value={employee.work_email} />
+        </InfoCard>
 
-        <article className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-neutral-900">Identification</h2>
-          <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="text-neutral-500">ID type</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.id_type)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">ID number</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.id_number)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Other ID description</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.other_id_description)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">BIR number</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.bir_number)}</dd>
-            </div>
-          </dl>
-        </article>
+        <InfoCard title="Identification">
+          <InfoRow label="ID Type" value={employee.id_type} />
+          <InfoRow label="ID Number" value={employee.id_number} />
+          <InfoRow
+            label="Other ID Description"
+            value={employee.other_id_description}
+          />
+          <InfoRow label="BIR Number" value={employee.bir_number} />
+        </InfoCard>
 
-        <article className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-neutral-900">File Info</h2>
-          <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="text-neutral-500">File number</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.file_number)}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">File status</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.file_status)}</dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="text-neutral-500">File location</dt>
-              <dd className="mt-1 font-medium text-neutral-900">{displayValue(employee.file_location)}</dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="text-neutral-500">File notes</dt>
-              <dd className="mt-1 whitespace-pre-wrap font-medium text-neutral-900">
-                {displayValue(employee.file_notes)}
-              </dd>
-            </div>
-          </dl>
-        </article>
+        <InfoCard title="Physical File Info">
+          <InfoRow label="File Status" value={employee.file_status} />
+          <InfoRow label="File Location" value={employee.file_location} />
+          <InfoRow label="File Notes" value={employee.file_notes} />
+        </InfoCard>
+      </section>
+
+      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-neutral-900">Contracts</h2>
+          <Link
+            href="/contracts"
+            className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
+          >
+            View all
+          </Link>
+        </div>
+
+        {contracts.length ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full divide-y divide-neutral-200 text-sm">
+              <thead className="bg-neutral-50">
+                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
+                  <th className="px-4 py-3">Title</th>
+                  <th className="px-4 py-3">Number</th>
+                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Start</th>
+                  <th className="px-4 py-3">End</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
+                {contracts.map((contract) => (
+                  <tr key={contract.id} className="hover:bg-neutral-50">
+                    <td className="max-w-[240px] truncate px-4 py-3 font-medium text-neutral-900">
+                      <Link href={`/contracts/${contract.id}`} className="hover:underline">
+                        {display(contract.contract_title)}
+                      </Link>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(contract.contract_number)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(contract.contract_type)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(contract.contract_status)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(contract.start_date)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(contract.end_date)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-neutral-600">
+            No contracts found for this employee.
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-neutral-900">
+            Leave Balances
+          </h2>
+          <Link
+            href="/leave/balances"
+            className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
+          >
+            View all
+          </Link>
+        </div>
+
+        {leaveBalances.length ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full divide-y divide-neutral-200 text-sm">
+              <thead className="bg-neutral-50">
+                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
+                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">Year</th>
+                  <th className="px-4 py-3">Entitlement</th>
+                  <th className="px-4 py-3">Used</th>
+                  <th className="px-4 py-3">Remaining</th>
+                  <th className="px-4 py-3">Effective</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
+                {leaveBalances.map((balance) => (
+                  <tr key={balance.id} className="hover:bg-neutral-50">
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(balance.leave_type)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {balance.balance_year ?? "—"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {balance.entitlement_days ?? "—"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {balance.used_days ?? "—"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 font-medium text-neutral-900">
+                      {balance.remaining_days ?? "—"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(balance.effective_from)} - {display(balance.effective_to)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-neutral-600">
+            No leave balances found for this employee.
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-neutral-900">Documents</h2>
+          <Link
+            href="/documents"
+            className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
+          >
+            View all
+          </Link>
+        </div>
+
+        {documents.length ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full divide-y divide-neutral-200 text-sm">
+              <thead className="bg-neutral-50">
+                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
+                  <th className="px-4 py-3">Title</th>
+                  <th className="px-4 py-3">Category</th>
+                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Expiry</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
+                {documents.map((document) => (
+                  <tr key={document.id} className="hover:bg-neutral-50">
+                    <td className="max-w-[260px] truncate px-4 py-3 font-medium text-neutral-900">
+                      <Link href={`/documents/${document.id}`} className="hover:underline">
+                        {display(document.document_title)}
+                      </Link>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(document.document_category)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(document.document_type)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(document.document_status)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(document.expiry_date)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-neutral-600">
+            No documents found for this employee.
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-neutral-900">
+            Physical File Movements
+          </h2>
+          <Link
+            href="/files/movements"
+            className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
+          >
+            View all
+          </Link>
+        </div>
+
+        {fileMovements.length ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full divide-y divide-neutral-200 text-sm">
+              <thead className="bg-neutral-50">
+                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
+                  <th className="px-4 py-3">File Number</th>
+                  <th className="px-4 py-3">From</th>
+                  <th className="px-4 py-3">To</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Date Sent</th>
+                  <th className="px-4 py-3">Date Received</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
+                {fileMovements.map((movement) => (
+                  <tr key={movement.id} className="hover:bg-neutral-50">
+                    <td className="whitespace-nowrap px-4 py-3 font-medium text-neutral-900">
+                      <Link href={`/files/${movement.id}`} className="hover:underline">
+                        {display(movement.file_number)}
+                      </Link>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(movement.from_department)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(movement.to_department)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(movement.movement_status)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(movement.date_sent)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(movement.date_received)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-neutral-600">
+            No physical file movements found for this employee.
+          </p>
+        )}
       </section>
     </main>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | null;
+}) {
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+      <p className="text-sm text-neutral-500">{label}</p>
+      <p className="mt-2 text-lg font-semibold text-neutral-900">
+        {display(value)}
+      </p>
+    </div>
+  );
+}
+
+function InfoCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+      <h2 className="text-lg font-semibold text-neutral-900">{title}</h2>
+      <dl className="mt-4 divide-y divide-neutral-100">{children}</dl>
+    </section>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | null;
+}) {
+  return (
+    <div className="grid gap-1 py-3 sm:grid-cols-3 sm:gap-4">
+      <dt className="text-sm font-medium text-neutral-500">{label}</dt>
+      <dd className="text-sm text-neutral-900 sm:col-span-2">
+        {display(value)}
+      </dd>
+    </div>
   );
 }

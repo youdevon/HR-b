@@ -91,6 +91,29 @@ export async function listLeaveBalances(): Promise<LeaveBalanceRecord[]> {
   return data ?? [];
 }
 
+export async function listLeaveBalancesByEmployeeId(
+  employeeId: string
+): Promise<LeaveBalanceRecord[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("leave_balances")
+    .select(LEAVE_BALANCE_SELECT)
+    .eq("employee_id", employeeId)
+    .order("balance_year", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error(
+      "listLeaveBalancesByEmployeeId error:",
+      JSON.stringify(error, null, 2)
+    );
+    throw new Error(`Failed to load employee leave balances: ${error.message}`);
+  }
+
+  return data ?? [];
+}
+
 export async function listLeaveTransactions(): Promise<LeaveTransactionRecord[]> {
   const supabase = await createClient();
 

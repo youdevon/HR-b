@@ -115,3 +115,20 @@ export async function listMissingFiles(): Promise<FileMovementRecord[]> {
 
   return (data ?? []) as FileMovementRecord[];
 }
+
+export async function listFileMovementsByEmployeeId(
+  employeeId: string
+): Promise<FileMovementRecord[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("file_movements")
+    .select(FILE_MOVEMENT_SELECT)
+    .eq("employee_id", employeeId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to load employee file movements: ${error.message}`);
+  }
+
+  return (data ?? []) as FileMovementRecord[];
+}

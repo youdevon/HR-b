@@ -4,7 +4,9 @@ import { useState, useTransition } from "react";
 import type { EmployeeInput } from "@/lib/validators/employee";
 
 type EmployeeFormProps = {
+  initialValues?: Partial<EmployeeInput>;
   onSubmitAction: (data: EmployeeInput) => Promise<void>;
+  submitLabel?: string;
 };
 
 const defaultValues: EmployeeInput = {
@@ -33,8 +35,15 @@ const defaultValues: EmployeeInput = {
   file_notes: "",
 };
 
-export default function EmployeeForm({ onSubmitAction }: EmployeeFormProps) {
-  const [formData, setFormData] = useState<EmployeeInput>(defaultValues);
+export default function EmployeeForm({
+  initialValues,
+  onSubmitAction,
+  submitLabel = "Create Employee",
+}: EmployeeFormProps) {
+  const [formData, setFormData] = useState<EmployeeInput>({
+    ...defaultValues,
+    ...initialValues,
+  });
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -59,7 +68,7 @@ export default function EmployeeForm({ onSubmitAction }: EmployeeFormProps) {
         setError(
           err instanceof Error
             ? err.message
-            : "Failed to create employee. Please try again."
+            : "Failed to save employee. Please try again."
         );
       }
     });
@@ -285,7 +294,7 @@ export default function EmployeeForm({ onSubmitAction }: EmployeeFormProps) {
           disabled={isPending}
           className="rounded-xl bg-neutral-900 px-5 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isPending ? "Saving..." : "Create Employee"}
+          {isPending ? "Saving..." : submitLabel}
         </button>
       </div>
     </form>

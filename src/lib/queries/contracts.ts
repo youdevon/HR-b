@@ -91,3 +91,22 @@ export async function getContractById(
 
   return data ?? null;
 }
+
+export async function listContractsByEmployeeId(
+  employeeId: string
+): Promise<ContractRecord[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("contracts")
+    .select(CONTRACT_LIST_SELECT)
+    .eq("employee_id", employeeId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("listContractsByEmployeeId error:", error);
+    throw new Error(`Failed to load employee contracts: ${error.message}`);
+  }
+
+  return data ?? [];
+}

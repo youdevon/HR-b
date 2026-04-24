@@ -60,6 +60,25 @@ export async function listDocuments(
   return data ?? [];
 }
 
+export async function listDocumentsByEmployeeId(
+  employeeId: string
+): Promise<DocumentRecord[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("documents")
+    .select(DOCUMENT_LIST_SELECT)
+    .eq("employee_id", employeeId)
+    .order("uploaded_at", { ascending: false });
+
+  if (error) {
+    console.error("listDocumentsByEmployeeId error:", error);
+    throw new Error(`Failed to load employee documents: ${error.message}`);
+  }
+
+  return data ?? [];
+}
+
 export async function getDocumentById(
   id: string
 ): Promise<DocumentRecord | null> {

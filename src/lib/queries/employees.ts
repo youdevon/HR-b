@@ -96,6 +96,12 @@ function normalizeEmployeeInput(input: EmployeeInput): EmployeeInput {
   };
 }
 
+function emptyStringsToNull<T extends Record<string, unknown>>(input: T) {
+  return Object.fromEntries(
+    Object.entries(input).map(([key, value]) => [key, value === "" ? null : value])
+  );
+}
+
 export async function listEmployees(
   params?: EmployeeSearchParams
 ): Promise<EmployeeListRecord[]> {
@@ -156,12 +162,13 @@ export async function createEmployee(
 ): Promise<EmployeeListRecord> {
   const parsed = employeeSchema.parse(input);
   const normalized = normalizeEmployeeInput(parsed);
+  const payload = emptyStringsToNull(normalized);
 
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("employees")
-    .insert(normalized)
+    .insert(payload)
     .select(EMPLOYEE_LIST_SELECT)
     .single();
 
@@ -185,12 +192,13 @@ export async function updateEmployee(
     id_type: parsed.id_type?.toLowerCase(),
     employment_status: parsed.employment_status?.toLowerCase(),
   };
+  const payload = emptyStringsToNull(normalized);
 
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("employees")
-    .update(normalized)
+    .update(payload)
     .eq("id", id)
     .select(EMPLOYEE_LIST_SELECT)
     .single();
