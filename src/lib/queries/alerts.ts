@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/queries/audit";
 
 export type AlertRecord = {
@@ -14,7 +14,6 @@ export type AlertRecord = {
   resolution_notes: string | null;
 };
 
-/** Full row for alert detail (includes entity + audit fields). */
 export type AlertDetailRecord = AlertRecord & {
   correlation_id: string | null;
   entity_type: string | null;
@@ -83,7 +82,7 @@ const ALERT_RULE_SELECT = `
 export async function listActiveAlerts(
   filters?: ActiveAlertFilters
 ): Promise<AlertRecord[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   let query = supabase
     .from("alerts")
@@ -123,9 +122,8 @@ function severitySortRank(level: string | null): number {
   return 2;
 }
 
-/** Top priority open alerts: critical first, then newest by `triggered_at`. */
 export async function listPriorityAlerts(limit = 5): Promise<AlertRecord[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("alerts")
     .select(ALERT_SELECT)
@@ -152,7 +150,7 @@ export async function listPriorityAlerts(limit = 5): Promise<AlertRecord[]> {
 }
 
 export async function listResolvedAlerts(): Promise<AlertRecord[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("alerts")
     .select(ALERT_SELECT)
@@ -169,7 +167,7 @@ export async function listResolvedAlerts(): Promise<AlertRecord[]> {
 }
 
 export async function getAlertById(id: string): Promise<AlertDetailRecord | null> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("alerts")
     .select(ALERT_DETAIL_SELECT)
@@ -185,7 +183,7 @@ export async function getAlertById(id: string): Promise<AlertDetailRecord | null
 }
 
 export async function acknowledgeAlert(id: string): Promise<AlertRecord> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const before = await getAlertById(id);
   const { data, error } = await supabase
     .from("alerts")
@@ -232,7 +230,7 @@ export async function resolveAlert(
   id: string,
   resolutionNotes?: string
 ): Promise<AlertRecord> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const before = await getAlertById(id);
   const { data, error } = await supabase
     .from("alerts")
@@ -278,7 +276,7 @@ export async function resolveAlert(
 }
 
 export async function listAlertRules(): Promise<AlertRuleRecord[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("alert_rules")
     .select(ALERT_RULE_SELECT)
@@ -340,7 +338,7 @@ export async function generateContractExpiryAlerts(): Promise<{
   scannedContracts: number;
   upsertedAlerts: number;
 }> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const today = localDateAtMidnight();
   const within30Days = dateStringInDays(30);
 
