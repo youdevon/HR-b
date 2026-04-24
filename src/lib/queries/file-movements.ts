@@ -4,6 +4,10 @@ export type FileMovementRecord = {
   id: string;
   employee_id: string | null;
   file_number: string | null;
+  current_holder: string | null;
+  current_location: string | null;
+  moved_by: string | null;
+  movement_type: string | null;
   from_department: string | null;
   to_department: string | null;
   from_location: string | null;
@@ -12,8 +16,11 @@ export type FileMovementRecord = {
   to_custodian: string | null;
   date_sent: string | null;
   date_received: string | null;
+  status: string | null;
   movement_status: string | null;
   movement_reason: string | null;
+  expected_return_date: string | null;
+  returned_at: string | null;
   remarks: string | null;
   created_at: string | null;
 };
@@ -22,6 +29,10 @@ const FILE_MOVEMENT_SELECT = `
   id,
   employee_id,
   file_number,
+  current_holder,
+  current_location,
+  moved_by,
+  movement_type,
   from_department,
   to_department,
   from_location,
@@ -30,8 +41,11 @@ const FILE_MOVEMENT_SELECT = `
   to_custodian,
   date_sent,
   date_received,
+  status,
   movement_status,
   movement_reason,
+  expected_return_date,
+  returned_at,
   remarks,
   created_at
 `;
@@ -118,10 +132,55 @@ export async function getFileMovementById(
 
   return data ?? null;
 }
+
 export async function getCurrentFileMovementByEmployeeId(
   employeeId: string
 ): Promise<FileMovementRecord | null> {
   const movements = await listFileMovementsByEmployeeId(employeeId);
 
   return movements[0] ?? null;
+}
+
+export type FileMovementAction =
+  | "check_out"
+  | "transfer"
+  | "return"
+  | "archive"
+  | "mark_missing";
+
+export type CreateFileMovementInput = {
+  employee_id: string;
+  movement_type: FileMovementAction;
+  current_holder?: string;
+  current_location?: string;
+  moved_by?: string;
+  movement_reason?: string;
+  expected_return_date?: string;
+};
+
+export async function createFileMovement(
+  input: CreateFileMovementInput
+): Promise<FileMovementRecord> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("file_movements")
+    .insert({
+      employee_id: input.employee_id,
+      movement_type: input.movement_type,
+      current_holder: input.current_holder || null,
+      current_location: input.current_location || null,
+      moved_by: input.moved_by || null,
+      movement_reason: input.movement_reason || null,
+      expected_return_date: input.expected_return_date || null,
+      status: "active",
+    })
+    .select(FILE_MOVEMENT_SELECT)
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to create file movement: ${error.message}`);
+  }
+
+  return data;
 }

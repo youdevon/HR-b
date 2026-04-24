@@ -7,7 +7,7 @@ import { listRecordsByEmployeeId } from "@/lib/queries/records";
 import { listContractsByEmployeeId } from "@/lib/queries/contracts";
 import {
   getCurrentFileMovementByEmployeeId,
-  listFileMovements,
+  listFileMovementsByEmployeeId,
 } from "@/lib/queries/file-movements";
 import { listAuditLogsByEmployeeId } from "@/lib/queries/audit";
 
@@ -48,7 +48,7 @@ export default async function EmployeeDetailPage({
     listLeaveBalancesByEmployeeId(id),
     listDocumentsByEmployeeId(id),
     listRecordsByEmployeeId(id),
-    listFileMovements(id),
+    listFileMovementsByEmployeeId(id),
     getCurrentFileMovementByEmployeeId(id),
     listAuditLogsByEmployeeId(id),
   ]);
@@ -450,9 +450,7 @@ export default async function EmployeeDetailPage({
                 {fileMovements.map((movement) => (
                   <tr key={movement.id} className="hover:bg-neutral-50">
                     <td className="whitespace-nowrap px-4 py-3 font-medium text-neutral-900">
-                      <Link href={`/file-movements`} className="hover:underline">
-                        {display(movement.current_holder)}
-                      </Link>
+                      {display(movement.current_holder)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       {display(movement.current_location)}
