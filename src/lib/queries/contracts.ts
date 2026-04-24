@@ -17,6 +17,14 @@ export type ContractRecord = {
   created_at: string | null;
 };
 
+export type ExpiringContractAlertRecord = ContractRecord & {
+  days_to_expiry: number;
+};
+
+export type ExpiredContractAlertRecord = ContractRecord & {
+  days_expired: number;
+};
+
 export type ContractSearchParams = {
   query?: string;
 };
@@ -37,6 +45,38 @@ const CONTRACT_LIST_SELECT = `
   is_gratuity_eligible,
   created_at
 `;
+
+function todayDateString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function plusDaysDateString(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseLocalDate(dateText: string | null): Date | null {
+  if (!dateText) return null;
+  const [yearText, monthText, dayText] = dateText.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function currentLocalDateAtMidnight(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
 
 export async function listContracts(
   params?: ContractSearchParams
@@ -109,4 +149,84 @@ export async function listContractsByEmployeeId(
   }
 
   return data ?? [];
+}
+
+export async function listExpiringContracts(
+  days = 30
+): Promise<ExpiringContractAlertRecord[]> {
+  const supabase = await createClient();
+  const todayText = todayDateString();
+  const withinDays = plusDaysDateString(days);
+
+  const { data, error } = await supabase
+    .from("contracts")
+    .select(CONTRACT_LIST_SELECT)
+    .not("end_date", "is", null)
+    .gte("end_date", todayText)
+    .lte("end_date", withinDays)
+    .order("end_date", { ascending: true });
+
+  if (error) {
+    console.error("listExpiringContracts error:", error);
+    throw new Error(`Failed to load expiring contracts: ${error.message}`);
+  }
+
+  const today = currentLocalDateAtMidnight();
+  const rows = (data ?? []).map((contract) => {
+    const endDate = parseLocalDate(contract.end_date);
+    const daysToExpiry = endDate
+      ? Math.max(
+          0,
+          Math.ceil(
+            (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+          )
+        )
+      : 0;
+
+    return {
+      ...contract,
+      days_to_expiry: daysToExpiry,
+    };
+  });
+
+  rows.sort((a, b) => a.days_to_expiry - b.days_to_expiry);
+  return rows;
+}
+
+export async function listExpiredContracts(): Promise<ExpiredContractAlertRecord[]> {
+  const supabase = await createClient();
+  const todayText = todayDateString();
+
+  const { data, error } = await supabase
+    .from("contracts")
+    .select(CONTRACT_LIST_SELECT)
+    .not("end_date", "is", null)
+    .lt("end_date", todayText)
+    .order("end_date", { ascending: false });
+
+  if (error) {
+    console.error("listExpiredContracts error:", error);
+    throw new Error(`Failed to load expired contracts: ${error.message}`);
+  }
+
+  const today = currentLocalDateAtMidnight();
+  const rows = (data ?? []).map((contract) => {
+    const endDate = parseLocalDate(contract.end_date);
+    const daysExpired = endDate
+      ? Math.max(
+          0,
+          Math.floor(
+            (today.getTime() - endDate.getTime()) / (1000 * 60 * 60 * 24)
+          )
+        )
+      : 0;
+
+    return {
+      ...contract,
+      days_expired: daysExpired,
+    };
+  });
+
+  rows.sort((a, b) => b.days_expired - a.days_expired);
+  return rows;
 }
