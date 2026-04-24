@@ -4,6 +4,7 @@ import {
   generateContractExpiryAlerts,
   listActiveAlerts,
   resolveAlert,
+  type ActiveAlertFilters,
 } from "@/lib/queries/alerts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -29,32 +30,82 @@ function statusBadgeClass(status: string | null): string {
   return "bg-neutral-100 text-neutral-700 ring-neutral-200";
 }
 
-export default async function ActiveAlertsPage() {
+function firstString(value: string | string[] | undefined): string | undefined {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+  return undefined;
+}
+
+function buildActiveAlertsPath(filters: ActiveAlertFilters): string {
+  const qs = new URLSearchParams();
+  const sev = filters.severity_level?.trim();
+  const st = filters.status?.trim();
+  const mod = filters.module_name?.trim();
+  if (sev) qs.set("severity_level", sev);
+  if (st) qs.set("status", st);
+  if (mod) qs.set("module_name", mod);
+  const q = qs.toString();
+  return q ? `/alerts/active?${q}` : "/alerts/active";
+}
+
+function isSafeActiveAlertsReturn(path: string): boolean {
+  return path === "/alerts/active" || path.startsWith("/alerts/active?");
+}
+
+type ActiveAlertsPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPageProps) {
+  const sp = await searchParams;
+  const filters: ActiveAlertFilters = {
+    severity_level: firstString(sp.severity_level),
+    status: firstString(sp.status),
+    module_name: firstString(sp.module_name),
+  };
+
+  const returnTo = buildActiveAlertsPath(filters);
+
   async function refreshContractAlertsAction() {
     "use server";
     await generateContractExpiryAlerts();
     revalidatePath("/alerts/active");
+    revalidatePath("/dashboard");
   }
 
   async function acknowledgeAction(formData: FormData) {
     "use server";
     const id = String(formData.get("id") ?? "").trim();
     if (!id) return;
+    const next = String(formData.get("returnTo") ?? "/alerts/active");
     await acknowledgeAlert(id);
     revalidatePath("/alerts/active");
-    redirect("/alerts/active");
+    revalidatePath("/dashboard");
+    redirect(isSafeActiveAlertsReturn(next) ? next : "/alerts/active");
   }
 
   async function resolveAction(formData: FormData) {
     "use server";
     const id = String(formData.get("id") ?? "").trim();
     if (!id) return;
+    const next = String(formData.get("returnTo") ?? "/alerts/active");
     await resolveAlert(id);
     revalidatePath("/alerts/active");
-    redirect("/alerts/active");
+    revalidatePath("/dashboard");
+    redirect(isSafeActiveAlertsReturn(next) ? next : "/alerts/active");
   }
 
-  const alerts = await listActiveAlerts();
+  const alerts = await listActiveAlerts(filters);
+
+  const hasActiveFilters = Boolean(
+    filters.severity_level?.trim() ||
+      filters.status?.trim() ||
+      filters.module_name?.trim()
+  );
+
+  const severityValue = filters.severity_level ?? "";
+  const statusValue = filters.status ?? "";
+  const moduleValue = filters.module_name ?? "";
 
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
@@ -76,6 +127,66 @@ export default async function ActiveAlertsPage() {
               </button>
             </form>
           </div>
+        </section>
+
+        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200">
+          <h2 className="text-sm font-semibold text-neutral-900">Filters</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            Uses URL query params: <code className="rounded bg-neutral-100 px-1">severity_level</code>,{" "}
+            <code className="rounded bg-neutral-100 px-1">status</code>,{" "}
+            <code className="rounded bg-neutral-100 px-1">module_name</code>.
+          </p>
+          <form method="get" className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <label className="flex min-w-[140px] flex-1 flex-col gap-1 text-xs font-medium text-neutral-600">
+              Severity
+              <select
+                name="severity_level"
+                defaultValue={severityValue}
+                className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900"
+              >
+                <option value="">Any</option>
+                <option value="critical">critical</option>
+                <option value="warning">warning</option>
+                <option value="info">info</option>
+              </select>
+            </label>
+            <label className="flex min-w-[140px] flex-1 flex-col gap-1 text-xs font-medium text-neutral-600">
+              Status
+              <select
+                name="status"
+                defaultValue={statusValue}
+                className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900"
+              >
+                <option value="">Any</option>
+                <option value="active">active</option>
+                <option value="acknowledged">acknowledged</option>
+              </select>
+            </label>
+            <label className="flex min-w-[180px] flex-[2] flex-col gap-1 text-xs font-medium text-neutral-600">
+              Module name
+              <input
+                type="text"
+                name="module_name"
+                defaultValue={moduleValue}
+                placeholder="e.g. Contracts"
+                className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400"
+              />
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+              >
+                Apply
+              </button>
+              <Link
+                href="/alerts/active"
+                className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 transition hover:bg-neutral-50"
+              >
+                Clear
+              </Link>
+            </div>
+          </form>
         </section>
 
         <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
@@ -122,6 +233,7 @@ export default async function ActiveAlertsPage() {
                         <div className="flex gap-2">
                           <form action={acknowledgeAction}>
                             <input type="hidden" name="id" value={alert.id} />
+                            <input type="hidden" name="returnTo" value={returnTo} />
                             <button
                               type="submit"
                               className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
@@ -131,6 +243,7 @@ export default async function ActiveAlertsPage() {
                           </form>
                           <form action={resolveAction}>
                             <input type="hidden" name="id" value={alert.id} />
+                            <input type="hidden" name="returnTo" value={returnTo} />
                             <button
                               type="submit"
                               className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
@@ -155,7 +268,9 @@ export default async function ActiveAlertsPage() {
             </div>
           ) : (
             <div className="px-6 py-12 text-center text-sm text-neutral-600">
-              No active or acknowledged alerts in the queue.
+              {hasActiveFilters
+                ? "No alerts match these filters."
+                : "No active or acknowledged alerts in the queue."}
             </div>
           )}
         </section>

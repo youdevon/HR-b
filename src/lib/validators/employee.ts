@@ -23,7 +23,7 @@ const optionalDate = z
 
 export const employeeSchema = z
   .object({
-    employee_number: z.string().trim().min(1, "Employee number is required.").max(50),
+    employee_number: z.string().trim().max(50).optional().or(z.literal("")),
     file_number: z.string().trim().min(1, "File number is required.").max(50),
     first_name: z.string().trim().min(1, "First name is required.").max(120),
     middle_name: optionalTrimmedString,

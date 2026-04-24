@@ -100,13 +100,15 @@ export default function EmployeeForm({
             label="Employee Number"
             value={formData.employee_number}
             onChange={(value) => updateField("employee_number", value)}
-            required
+            placeholder="Leave blank to auto-generate (EMP-0001)"
+            hint="Optional. If empty, the system assigns the next employee number."
           />
           <Field
             label="File Number"
             value={formData.file_number}
             onChange={(value) => updateField("file_number", value)}
-            required
+            placeholder="Leave blank to auto-generate (FILE-0001)"
+            hint="Optional. If empty, the system assigns the next file number."
           />
           <Field
             label="First Name"
@@ -305,6 +307,8 @@ type FieldProps = {
   value: string | undefined;
   type?: string;
   required?: boolean;
+  placeholder?: string;
+  hint?: string;
   onChange: (value: string) => void;
 };
 
@@ -313,6 +317,8 @@ function Field({
   value,
   type = "text",
   required = false,
+  placeholder,
+  hint,
   onChange,
 }: FieldProps) {
   return (
@@ -322,9 +328,11 @@ function Field({
         type={type}
         value={value ?? ""}
         required={required}
+        placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
         className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
       />
+      {hint ? <span className="text-xs text-neutral-500">{hint}</span> : null}
     </label>
   );
 }

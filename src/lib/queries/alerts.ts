@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { writeAuditLog } from "@/lib/queries/audit";
 
 export type AlertRecord = {
   id: string;
@@ -11,6 +12,21 @@ export type AlertRecord = {
   employee_id: string | null;
   resolved_at: string | null;
   resolution_notes: string | null;
+};
+
+/** Full row for alert detail (includes entity + audit fields). */
+export type AlertDetailRecord = AlertRecord & {
+  correlation_id: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ActiveAlertFilters = {
+  severity_level?: string;
+  status?: string;
+  module_name?: string;
 };
 
 export type AlertRuleRecord = {
@@ -36,6 +52,24 @@ const ALERT_SELECT = `
   resolution_notes
 `;
 
+const ALERT_DETAIL_SELECT = `
+  id,
+  alert_title,
+  alert_message,
+  module_name,
+  severity_level,
+  status,
+  triggered_at,
+  employee_id,
+  resolved_at,
+  resolution_notes,
+  correlation_id,
+  entity_type,
+  entity_id,
+  created_at,
+  updated_at
+`;
+
 const ALERT_RULE_SELECT = `
   id,
   rule_name,
@@ -46,13 +80,33 @@ const ALERT_RULE_SELECT = `
   created_at
 `;
 
-export async function listActiveAlerts(): Promise<AlertRecord[]> {
+export async function listActiveAlerts(
+  filters?: ActiveAlertFilters
+): Promise<AlertRecord[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+
+  let query = supabase
     .from("alerts")
     .select(ALERT_SELECT)
     .in("status", ["active", "acknowledged"])
     .order("triggered_at", { ascending: false });
+
+  const severity = filters?.severity_level?.trim();
+  if (severity) {
+    query = query.eq("severity_level", severity);
+  }
+
+  const status = filters?.status?.trim().toLowerCase();
+  if (status === "active" || status === "acknowledged") {
+    query = query.eq("status", status);
+  }
+
+  const moduleName = filters?.module_name?.trim();
+  if (moduleName) {
+    query = query.eq("module_name", moduleName);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("listActiveAlerts error:", error);
@@ -60,6 +114,41 @@ export async function listActiveAlerts(): Promise<AlertRecord[]> {
   }
 
   return data ?? [];
+}
+
+function severitySortRank(level: string | null): number {
+  const normalized = (level ?? "").toLowerCase();
+  if (normalized === "critical") return 0;
+  if (normalized === "warning") return 1;
+  return 2;
+}
+
+/** Top priority open alerts: critical first, then newest by `triggered_at`. */
+export async function listPriorityAlerts(limit = 5): Promise<AlertRecord[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("alerts")
+    .select(ALERT_SELECT)
+    .in("status", ["active", "acknowledged"])
+    .order("triggered_at", { ascending: false })
+    .limit(80);
+
+  if (error) {
+    console.error("listPriorityAlerts error:", error);
+    throw new Error(`Failed to load priority alerts: ${error.message}`);
+  }
+
+  const rows = [...(data ?? [])];
+  rows.sort((a, b) => {
+    const rankDiff =
+      severitySortRank(a.severity_level) - severitySortRank(b.severity_level);
+    if (rankDiff !== 0) return rankDiff;
+    const ta = new Date(a.triggered_at ?? 0).getTime();
+    const tb = new Date(b.triggered_at ?? 0).getTime();
+    return tb - ta;
+  });
+
+  return rows.slice(0, limit);
 }
 
 export async function listResolvedAlerts(): Promise<AlertRecord[]> {
@@ -79,11 +168,11 @@ export async function listResolvedAlerts(): Promise<AlertRecord[]> {
   return data ?? [];
 }
 
-export async function getAlertById(id: string): Promise<AlertRecord | null> {
+export async function getAlertById(id: string): Promise<AlertDetailRecord | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("alerts")
-    .select(ALERT_SELECT)
+    .select(ALERT_DETAIL_SELECT)
     .eq("id", id)
     .maybeSingle();
 
@@ -97,6 +186,7 @@ export async function getAlertById(id: string): Promise<AlertRecord | null> {
 
 export async function acknowledgeAlert(id: string): Promise<AlertRecord> {
   const supabase = await createClient();
+  const before = await getAlertById(id);
   const { data, error } = await supabase
     .from("alerts")
     .update({
@@ -112,6 +202,29 @@ export async function acknowledgeAlert(id: string): Promise<AlertRecord> {
     throw new Error(`Failed to acknowledge alert: ${error.message}`);
   }
 
+  await writeAuditLog({
+    module_name: "Alerts",
+    entity_type: "alert",
+    entity_id: data.id,
+    action_type: "alert_acknowledged",
+    action_summary: `Acknowledged alert ${data.alert_title ?? data.id}.`,
+    old_values: before
+      ? {
+          status: before.status,
+          resolved_at: before.resolved_at,
+          resolution_notes: before.resolution_notes,
+          severity_level: before.severity_level,
+        }
+      : null,
+    new_values: {
+      status: data.status,
+      resolved_at: data.resolved_at,
+      resolution_notes: data.resolution_notes,
+      severity_level: data.severity_level,
+    },
+    source_type: "application",
+  });
+
   return data;
 }
 
@@ -120,6 +233,7 @@ export async function resolveAlert(
   resolutionNotes?: string
 ): Promise<AlertRecord> {
   const supabase = await createClient();
+  const before = await getAlertById(id);
   const { data, error } = await supabase
     .from("alerts")
     .update({
@@ -136,6 +250,29 @@ export async function resolveAlert(
     console.error("resolveAlert error:", error);
     throw new Error(`Failed to resolve alert: ${error.message}`);
   }
+
+  await writeAuditLog({
+    module_name: "Alerts",
+    entity_type: "alert",
+    entity_id: data.id,
+    action_type: "alert_resolved",
+    action_summary: `Resolved alert ${data.alert_title ?? data.id}.`,
+    old_values: before
+      ? {
+          status: before.status,
+          resolved_at: before.resolved_at,
+          resolution_notes: before.resolution_notes,
+          severity_level: before.severity_level,
+        }
+      : null,
+    new_values: {
+      status: data.status,
+      resolved_at: data.resolved_at,
+      resolution_notes: data.resolution_notes,
+      severity_level: data.severity_level,
+    },
+    source_type: "application",
+  });
 
   return data;
 }

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { employeeSchema, type EmployeeInput } from "@/lib/validators/employee";
+import { writeAuditLog, type AuditJson } from "@/lib/queries/audit";
 
 export type EmployeeListRecord = {
   id: string;
@@ -102,6 +103,152 @@ function emptyStringsToNull<T extends Record<string, unknown>>(input: T) {
   );
 }
 
+function auditChangedFieldNames(
+  oldValues: Record<string, unknown> | null,
+  newValues: Record<string, unknown> | null
+): string[] | null {
+  const oldObj = oldValues ?? {};
+  const newObj = newValues ?? {};
+  const keys = new Set([...Object.keys(oldObj), ...Object.keys(newObj)]);
+  const changed = [...keys].filter(
+    (key) => JSON.stringify(oldObj[key]) !== JSON.stringify(newObj[key])
+  );
+  return changed.length ? changed : null;
+}
+
+const EMPLOYEE_NUMBER_PREFIX = "EMP-";
+const EMPLOYEE_NUMBER_MIN_DIGITS = 4;
+const FILE_NUMBER_PREFIX = "FILE-";
+const FILE_NUMBER_MIN_DIGITS = 4;
+
+function parseEmployeeNumberSequence(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const match = value.match(/^EMP-(\d+)$/i);
+  if (!match) return null;
+  const sequence = Number(match[1]);
+  if (!Number.isInteger(sequence) || sequence <= 0) return null;
+  return sequence;
+}
+
+function formatEmployeeNumber(sequence: number): string {
+  return `${EMPLOYEE_NUMBER_PREFIX}${String(sequence).padStart(EMPLOYEE_NUMBER_MIN_DIGITS, "0")}`;
+}
+
+function parseFileNumberSequence(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const match = value.match(/^FILE-(\d+)$/i);
+  if (!match) return null;
+  const sequence = Number(match[1]);
+  if (!Number.isInteger(sequence) || sequence <= 0) return null;
+  return sequence;
+}
+
+function formatFileNumber(sequence: number): string {
+  return `${FILE_NUMBER_PREFIX}${String(sequence).padStart(FILE_NUMBER_MIN_DIGITS, "0")}`;
+}
+
+async function getLatestEmployeeNumberSequence(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("employees")
+    .select("employee_number")
+    .ilike("employee_number", `${EMPLOYEE_NUMBER_PREFIX}%`)
+    .order("employee_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("getLatestEmployeeNumberSequence error:", JSON.stringify(error, null, 2));
+    throw new Error(`Failed to load latest employee number: ${error.message}`);
+  }
+
+  const parsed = parseEmployeeNumberSequence(data?.employee_number ?? null);
+  return parsed ?? 0;
+}
+
+async function getLatestFileNumberSequence(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("employees")
+    .select("file_number")
+    .ilike("file_number", `${FILE_NUMBER_PREFIX}%`)
+    .order("file_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("getLatestFileNumberSequence error:", JSON.stringify(error, null, 2));
+    throw new Error(`Failed to load latest file number: ${error.message}`);
+  }
+
+  const parsed = parseFileNumberSequence(data?.file_number ?? null);
+  return parsed ?? 0;
+}
+
+async function employeeNumberExists(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  employeeNumber: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("employees")
+    .select("id")
+    .eq("employee_number", employeeNumber)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("employeeNumberExists error:", JSON.stringify(error, null, 2));
+    throw new Error(`Failed to validate employee number uniqueness: ${error.message}`);
+  }
+
+  return Boolean(data?.id);
+}
+
+async function fileNumberExists(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  fileNumber: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("employees")
+    .select("id")
+    .eq("file_number", fileNumber)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("fileNumberExists error:", JSON.stringify(error, null, 2));
+    throw new Error(`Failed to validate file number uniqueness: ${error.message}`);
+  }
+
+  return Boolean(data?.id);
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = "code" in error ? String(error.code ?? "") : "";
+  return code === "23505";
+}
+
+function friendlyDuplicateError(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+
+  const constraint =
+    "constraint" in error ? String(error.constraint ?? "").toLowerCase() : "";
+  const details = "details" in error ? String(error.details ?? "").toLowerCase() : "";
+  const message = "message" in error ? String(error.message ?? "").toLowerCase() : "";
+  const haystack = `${constraint} ${details} ${message}`;
+
+  if (haystack.includes("employee_number")) {
+    return "Employee number already exists.";
+  }
+  if (haystack.includes("file_number")) {
+    return "File number already exists.";
+  }
+  return null;
+}
+
 export async function listEmployees(
   params?: EmployeeSearchParams
 ): Promise<EmployeeListRecord[]> {
@@ -160,22 +307,106 @@ export async function getEmployeeById(
 export async function createEmployee(
   input: EmployeeInput
 ): Promise<EmployeeListRecord> {
-  const parsed = employeeSchema.parse(input);
-  const normalized = normalizeEmployeeInput(parsed);
-  const payload = emptyStringsToNull(normalized);
-
   const supabase = await createClient();
+  const providedEmployeeNumber = input.employee_number?.trim() ?? "";
+  const providedFileNumber = input.file_number?.trim() ?? "";
 
-  const { data, error } = await supabase
-    .from("employees")
-    .insert(payload)
-    .select(EMPLOYEE_LIST_SELECT)
-    .single();
-
-  if (error) {
-    console.error("createEmployee error:", JSON.stringify(error, null, 2));
-    throw new Error(`Failed to create employee: ${error.message}`);
+  if (providedEmployeeNumber) {
+    const duplicate = await employeeNumberExists(supabase, providedEmployeeNumber);
+    if (duplicate) {
+      throw new Error("Employee number already exists.");
+    }
   }
+
+  if (providedFileNumber) {
+    const duplicate = await fileNumberExists(supabase, providedFileNumber);
+    if (duplicate) {
+      throw new Error("File number already exists.");
+    }
+  }
+
+  const baseEmployeeSequence = providedEmployeeNumber
+    ? parseEmployeeNumberSequence(providedEmployeeNumber) ?? 0
+    : await getLatestEmployeeNumberSequence(supabase);
+  const baseFileSequence = providedFileNumber
+    ? parseFileNumberSequence(providedFileNumber) ?? 0
+    : await getLatestFileNumberSequence(supabase);
+
+  const parsed = employeeSchema.parse({
+    ...input,
+    employee_number: providedEmployeeNumber || formatEmployeeNumber(baseEmployeeSequence + 1),
+    file_number: providedFileNumber || formatFileNumber(baseFileSequence + 1),
+  });
+  const normalized = normalizeEmployeeInput(parsed);
+
+  const maxAttempts = 8;
+  let data: EmployeeListRecord | null = null;
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const employeeNumber =
+      providedEmployeeNumber || formatEmployeeNumber(baseEmployeeSequence + attempt);
+    const fileNumber = providedFileNumber || formatFileNumber(baseFileSequence + attempt);
+
+    const payload = emptyStringsToNull({
+      ...normalized,
+      employee_number: employeeNumber,
+      file_number: fileNumber,
+    });
+
+    const response = await supabase
+      .from("employees")
+      .insert(payload)
+      .select(EMPLOYEE_LIST_SELECT)
+      .single();
+
+    if (!response.error) {
+      data = response.data;
+      break;
+    }
+
+    lastError = response.error;
+    const duplicateMessage = friendlyDuplicateError(response.error);
+    if (duplicateMessage) {
+      throw new Error(duplicateMessage);
+    }
+
+    if ((providedEmployeeNumber && providedFileNumber) || !isUniqueViolation(response.error)) {
+      console.error("createEmployee error:", JSON.stringify(response.error, null, 2));
+      throw new Error(`Failed to create employee: ${response.error.message}`);
+    }
+  }
+
+  if (!data) {
+    const message =
+      lastError && typeof lastError === "object" && "message" in lastError
+        ? String(lastError.message)
+        : "Could not generate a unique employee number.";
+    throw new Error(`Failed to create employee: ${message}`);
+  }
+
+  const createdSnapshot: Record<string, unknown> = {
+    employee_number: data.employee_number,
+    file_number: data.file_number,
+    first_name: data.first_name,
+    last_name: data.last_name,
+    department: data.department,
+    job_title: data.job_title,
+    employment_status: data.employment_status,
+    file_status: data.file_status,
+  };
+
+  await writeAuditLog({
+    module_name: "Employees",
+    entity_type: "employee",
+    entity_id: data.id,
+    action_type: "employee_created",
+    action_summary: `Created employee ${data.employee_number ?? data.id}.`,
+    old_values: null,
+    new_values: createdSnapshot as AuditJson,
+    changed_fields: Object.keys(createdSnapshot),
+    source_type: "application",
+  });
 
   return data;
 }
@@ -184,6 +415,7 @@ export async function updateEmployee(
   id: string,
   input: Partial<EmployeeInput>
 ): Promise<EmployeeListRecord> {
+  const previous = await getEmployeeById(id);
   const parsed = employeeSchema.partial().parse(input);
 
   const normalized = {
@@ -207,6 +439,43 @@ export async function updateEmployee(
     console.error("updateEmployee error:", JSON.stringify(error, null, 2));
     throw new Error(`Failed to update employee: ${error.message}`);
   }
+
+  const oldSnapshot = previous
+    ? {
+        employee_number: previous.employee_number,
+        file_number: previous.file_number,
+        first_name: previous.first_name,
+        last_name: previous.last_name,
+        department: previous.department,
+        job_title: previous.job_title,
+        employment_status: previous.employment_status,
+        file_status: previous.file_status,
+        file_location: previous.file_location,
+        file_notes: previous.file_notes,
+      }
+    : null;
+  const newSnapshot = {
+    employee_number: data.employee_number,
+    file_number: data.file_number,
+    first_name: data.first_name,
+    last_name: data.last_name,
+    department: data.department,
+    job_title: data.job_title,
+    employment_status: data.employment_status,
+    file_status: data.file_status,
+  };
+
+  await writeAuditLog({
+    module_name: "Employees",
+    entity_type: "employee",
+    entity_id: data.id,
+    action_type: "employee_updated",
+    action_summary: `Updated employee ${data.employee_number ?? data.id}.`,
+    old_values: oldSnapshot as AuditJson,
+    new_values: newSnapshot as AuditJson,
+    changed_fields: auditChangedFieldNames(oldSnapshot, newSnapshot),
+    source_type: "application",
+  });
 
   return data;
 }
