@@ -1,12 +1,4 @@
-import {
-  assignUserRole,
-  createUser,
-  listLoginActivity,
-  listRoles,
-  listUsers,
-  resetUserPassword,
-  setUserActive,
-} from "@/lib/queries/admin";
+import { createAdminUser, listLoginActivity, listRoles, listUsers } from "@/lib/queries/admin";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -47,15 +39,12 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   async function createUserAction(formData: FormData) {
     "use server";
     try {
-      await createUser({
+      await createAdminUser({
         full_name: String(formData.get("full_name") ?? ""),
-        first_name: String(formData.get("first_name") ?? ""),
-        last_name: String(formData.get("last_name") ?? ""),
         email: String(formData.get("email") ?? ""),
-        phone_number: String(formData.get("phone_number") ?? ""),
         role_id: String(formData.get("role_id") ?? ""),
-        account_status: "Active",
-        is_active: true,
+        account_status: String(formData.get("account_status") ?? "Active"),
+        is_active: String(formData.get("is_active") ?? "") === "true",
       });
       revalidatePath("/admin/users");
       redirectWithMessage("success", "User created successfully.");
@@ -66,57 +55,13 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
     }
   }
 
-  async function assignRoleAction(formData: FormData) {
-    "use server";
-    try {
-      const userId = String(formData.get("user_id") ?? "");
-      const roleId = String(formData.get("role_id") ?? "");
-      await assignUserRole(userId, roleId);
-      revalidatePath("/admin/users");
-      redirectWithMessage("success", "Role updated.");
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to update role.";
-      redirectWithMessage("error", errorMessage);
-    }
-  }
-
-  async function setActiveAction(formData: FormData) {
-    "use server";
-    try {
-      const userId = String(formData.get("user_id") ?? "");
-      const isActive = String(formData.get("is_active") ?? "") === "true";
-      await setUserActive(userId, isActive);
-      revalidatePath("/admin/users");
-      redirectWithMessage("success", isActive ? "Account enabled." : "Account disabled.");
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to update account status.";
-      redirectWithMessage("error", errorMessage);
-    }
-  }
-
-  async function resetPasswordAction(formData: FormData) {
-    "use server";
-    try {
-      const email = String(formData.get("email") ?? "");
-      const link = await resetUserPassword(email);
-      revalidatePath("/admin/users");
-      redirectWithMessage("success", `Password reset link: ${link}`);
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to reset password.";
-      redirectWithMessage("error", errorMessage);
-    }
-  }
-
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
           <h1 className="text-2xl font-semibold text-neutral-900">User Management</h1>
           <p className="mt-1 text-sm text-neutral-600">
-            Create users, assign roles, disable accounts, reset passwords, and review login activity.
+            Public user directory for HR/Admin with account state and login visibility.
           </p>
         </section>
 
@@ -133,23 +78,55 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
         ) : null}
 
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <h2 className="text-lg font-semibold text-neutral-900">Create User</h2>
-          <form action={createUserAction} className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <input name="full_name" placeholder="Full name" required className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-            <input name="first_name" placeholder="First name" required className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-            <input name="last_name" placeholder="Last name" required className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-            <input name="email" type="email" placeholder="Email" required className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-            <input name="phone_number" placeholder="Phone (optional)" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-            <select name="role_id" required className="rounded-xl border border-neutral-300 px-3 py-2 text-sm">
+          <h2 className="mb-4 text-lg font-semibold text-neutral-900">Create User</h2>
+          <form action={createUserAction} className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+            <input
+              name="full_name"
+              placeholder="Full name"
+              required
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            />
+            <input
+              name="email"
+              type="email"
+              placeholder="Email"
+              required
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            />
+            <select
+              name="role_id"
+              required
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            >
               <option value="">Select role</option>
               {roles.map((role) => (
                 <option key={role.id} value={role.id}>
-                  {role.name}
+                  {role.role_name ?? role.role_code ?? "Role"}
                 </option>
               ))}
             </select>
-            <div className="md:col-span-2 lg:col-span-2 flex items-center">
-              <button type="submit" className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
+            <select
+              name="account_status"
+              defaultValue="Active"
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            >
+              <option value="Active">Active</option>
+              <option value="Disabled">Disabled</option>
+              <option value="Pending">Pending</option>
+            </select>
+            <select
+              name="is_active"
+              defaultValue="true"
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            >
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+            <div className="lg:col-span-5">
+              <button
+                type="submit"
+                className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+              >
                 Create User
               </button>
             </div>
@@ -157,93 +134,77 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
         </section>
 
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 overflow-x-auto">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-4">Users</h2>
+          <h2 className="mb-4 text-lg font-semibold text-neutral-900">Users</h2>
           <table className="min-w-full text-sm">
             <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-600">
               <tr>
-                <th className="p-2 text-left">Name</th>
+                <th className="p-2 text-left">Full Name</th>
                 <th className="p-2 text-left">Email</th>
                 <th className="p-2 text-left">Role</th>
-                <th className="p-2 text-left">Status</th>
-                <th className="p-2 text-left">Last Login</th>
-                <th className="p-2 text-left">Actions</th>
+                <th className="p-2 text-left">Account Status</th>
+                <th className="p-2 text-left">Active</th>
+                <th className="p-2 text-left">Created At</th>
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
-                <tr key={user.id} className="border-t border-neutral-100">
-                  <td className="p-2 font-medium text-neutral-900">{user.full_name}</td>
-                  <td className="p-2 text-neutral-700">{user.email}</td>
-                  <td className="p-2">
-                    <form action={assignRoleAction} className="flex items-center gap-2">
-                      <input type="hidden" name="user_id" value={user.id} />
-                      <select
-                        name="role_id"
-                        defaultValue={user.role_id}
-                        className="rounded-lg border border-neutral-300 px-2 py-1 text-xs"
-                      >
-                        {roles.map((role) => (
-                          <option key={role.id} value={role.id}>
-                            {role.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button type="submit" className="rounded-lg border border-neutral-300 px-2 py-1 text-xs">
-                        Save
-                      </button>
-                    </form>
-                  </td>
-                  <td className="p-2">{user.is_active ? "Active" : "Disabled"}</td>
-                  <td className="p-2">{formatDate(user.last_sign_in_at)}</td>
-                  <td className="p-2">
-                    <div className="flex flex-wrap gap-2">
-                      <form action={setActiveAction}>
-                        <input type="hidden" name="user_id" value={user.id} />
-                        <input type="hidden" name="is_active" value={user.is_active ? "false" : "true"} />
-                        <button
-                          type="submit"
-                          className="rounded-lg border border-neutral-300 px-2 py-1 text-xs"
-                        >
-                          {user.is_active ? "Disable" : "Enable"}
-                        </button>
-                      </form>
-                      <form action={resetPasswordAction}>
-                        <input type="hidden" name="email" value={user.email} />
-                        <button
-                          type="submit"
-                          className="rounded-lg border border-neutral-300 px-2 py-1 text-xs"
-                        >
-                          Reset Password
-                        </button>
-                      </form>
-                    </div>
+              {users.length ? (
+                users.map((user) => (
+                  <tr key={user.id} className="border-t border-neutral-100">
+                    <td className="p-2 font-medium text-neutral-900">{user.full_name ?? "—"}</td>
+                    <td className="p-2 text-neutral-700">{user.email ?? "—"}</td>
+                    <td className="p-2">
+                      {user.role_name ?? user.role_code ?? (
+                        <span className="text-neutral-400">Unassigned</span>
+                      )}
+                    </td>
+                    <td className="p-2">{user.account_status ?? "—"}</td>
+                    <td className="p-2">
+                      {user.is_active === null ? "—" : user.is_active ? "Yes" : "No"}
+                    </td>
+                    <td className="p-2">{formatDate(user.created_at)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="p-6 text-center text-sm text-neutral-500">
+                    No users found in <code>public.users</code>.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </section>
 
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 overflow-x-auto">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-4">Login Activity</h2>
+          <h2 className="mb-4 text-lg font-semibold text-neutral-900">Login Activity</h2>
           <table className="min-w-full text-sm">
             <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-600">
               <tr>
-                <th className="p-2 text-left">User</th>
+                <th className="p-2 text-left">User ID</th>
                 <th className="p-2 text-left">Email</th>
-                <th className="p-2 text-left">Role</th>
-                <th className="p-2 text-left">Last Sign-in</th>
+                <th className="p-2 text-left">Activity</th>
+                <th className="p-2 text-left">IP Address</th>
+                <th className="p-2 text-left">Created At</th>
               </tr>
             </thead>
             <tbody>
-              {loginActivity.map((entry) => (
-                <tr key={entry.user_id} className="border-t border-neutral-100">
-                  <td className="p-2 font-medium text-neutral-900">{entry.full_name}</td>
-                  <td className="p-2 text-neutral-700">{entry.email}</td>
-                  <td className="p-2">{entry.role_id}</td>
-                  <td className="p-2">{formatDate(entry.last_sign_in_at)}</td>
+              {loginActivity.length ? (
+                loginActivity.map((entry) => (
+                  <tr key={entry.id} className="border-t border-neutral-100">
+                    <td className="p-2 font-mono text-xs text-neutral-800">{entry.user_id ?? "—"}</td>
+                    <td className="p-2 text-neutral-700">{entry.user_email ?? "—"}</td>
+                    <td className="p-2">{entry.activity_type ?? "login"}</td>
+                    <td className="p-2 font-mono text-xs text-neutral-700">{entry.ip_address ?? "—"}</td>
+                    <td className="p-2">{formatDate(entry.created_at)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="p-6 text-center text-sm text-neutral-500">
+                    Login activity placeholder: no rows available yet.
+                  </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </section>

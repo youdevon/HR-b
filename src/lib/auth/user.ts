@@ -28,3 +28,36 @@ export async function getAuthenticatedUserProfile(): Promise<AuthenticatedUserPr
       "User",
   };
 }
+
+export async function changePasswordWithCurrentPassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user?.email) {
+    throw new Error("No authenticated user found.");
+  }
+
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: currentPassword,
+  });
+
+  if (signInError) {
+    throw new Error("Current password is incorrect.");
+  }
+
+  const { error: updateError } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+}

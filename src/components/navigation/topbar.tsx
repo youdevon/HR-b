@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getAuthenticatedUserProfile } from "../../lib/auth/user";
+import { getAuthenticatedUserProfile } from "@/lib/auth/user";
 
 function getInitials(name?: string | null): string {
   if (!name) return "G";
@@ -14,7 +14,7 @@ function getInitials(name?: string | null): string {
 }
 
 export default async function Topbar() {
-  const profile = await getAuthenticatedUserProfile();
+  const profile = await getAuthenticatedUserProfile().catch(() => null);
 
   const displayName: string = profile?.full_name || "Guest";
   const email: string = profile?.email || "Not signed in";

@@ -32,3 +32,11 @@ export async function listRoles(): Promise<AdminRoleRecord[]> {
 export async function listLoginActivity(): Promise<LoginActivityRecord[]> {
   return [];
 }
+
+export async function createUser(): Promise<{ success: true }> {
+  return { success: true };
+}
+
+export async function assignUserRole(): Promise<{ success: true }> {
+  return { success: true };
+}
