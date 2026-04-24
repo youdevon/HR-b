@@ -31,7 +31,7 @@ export const documentSchema = z
     gratuity_calculation_id: optionalTrimmedString,
     file_movement_id: optionalTrimmedString,
     document_category: z.enum(documentCategories, {
-      errorMap: () => ({ message: "Select a valid document category." }),
+      message: "Select a valid document category.",
     }),
     document_type: z.string().trim().min(1, "Document type is required.").max(120),
     document_title: z.string().trim().min(1, "Document title is required.").max(200),

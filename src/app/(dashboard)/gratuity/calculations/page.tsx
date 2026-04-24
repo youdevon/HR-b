@@ -61,7 +61,7 @@ export default async function GratuityCalculationsPage() {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">{r.calculation_status ?? "—"}</td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {r.calculated_amount != null && r.calculated_amount !== "" ? String(r.calculated_amount) : "—"}
+                      {r.calculated_amount != null ? String(r.calculated_amount) : "—"}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">{r.calculation_date ?? "—"}</td>
                   </tr>

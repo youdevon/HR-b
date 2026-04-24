@@ -33,7 +33,7 @@ export const leaveSchema = z
   .object({
     employee_id: z.string().trim().min(1, "Employee is required.").max(100),
     leave_type: z.enum(leaveTypes, {
-      errorMap: () => ({ message: "Select a valid leave type." }),
+      message: "Select a valid leave type.",
     }),
     transaction_type: z.string().trim().min(1, "Transaction type is required.").max(80),
     start_date: optionalDate,

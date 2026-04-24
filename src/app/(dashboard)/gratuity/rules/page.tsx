@@ -26,14 +26,14 @@ export default async function GratuityRulesPage() {
               <thead className="bg-neutral-50">
                 <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
                   <th className="px-4 py-3">Rule</th>
-                  <th className="px-4 py-3">Formula</th>
+                  <th className="px-4 py-3">Description</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100 bg-white text-sm text-neutral-700">
                 {rules.map((r) => (
                   <tr key={r.id} className="transition hover:bg-neutral-50">
                     <td className="px-4 py-3 font-medium text-neutral-900">{r.rule_name ?? "—"}</td>
-                    <td className="max-w-xl px-4 py-3 text-neutral-700">{r.formula ?? "—"}</td>
+                    <td className="max-w-xl px-4 py-3 text-neutral-700">{r.description ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

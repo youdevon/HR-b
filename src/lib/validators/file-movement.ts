@@ -37,7 +37,7 @@ export const fileMovementSchema = z
     date_sent: optionalDate,
     date_received: optionalDate,
     movement_status: z.enum(movementStatuses, {
-      errorMap: () => ({ message: "Select a valid movement status." }),
+      message: "Select a valid movement status.",
     }),
     movement_reason: z.string().trim().min(1, "Movement reason is required.").max(400),
     remarks: optionalTrimmedString,

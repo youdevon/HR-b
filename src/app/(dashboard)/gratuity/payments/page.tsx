@@ -39,16 +39,19 @@ export default async function GratuityPaymentsPage() {
                       {r.employee_id ?? "—"}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {r.gratuity_id ? (
-                        <Link href={`/gratuity/${r.gratuity_id}`} className="font-mono text-xs text-neutral-900 hover:underline">
-                          {r.gratuity_id}
+                      {r.gratuity_calculation_id ? (
+                        <Link
+                          href={`/gratuity/${r.gratuity_calculation_id}`}
+                          className="font-mono text-xs text-neutral-900 hover:underline"
+                        >
+                          {r.gratuity_calculation_id}
                         </Link>
                       ) : (
                         "—"
                       )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {r.amount != null && r.amount !== "" ? String(r.amount) : "—"}
+                      {r.payment_amount != null ? String(r.payment_amount) : "—"}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">{r.payment_status ?? "—"}</td>
                     <td className="whitespace-nowrap px-4 py-3">{r.created_at ?? "—"}</td>
