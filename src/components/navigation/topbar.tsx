@@ -40,11 +40,8 @@ export default async function Topbar() {
             Notifications
           </Link>
 
-          <div className="group relative">
-            <button
-              type="button"
-              className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50"
-            >
+          <details className="group relative">
+            <summary className="flex list-none cursor-pointer items-center gap-3 rounded-xl border border-neutral-200 bg-white px-3 py-2 hover:bg-neutral-50">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-900 text-sm font-semibold text-white">
                 {initials}
               </div>
@@ -57,9 +54,9 @@ export default async function Topbar() {
                   {email}
                 </p>
               </div>
-            </button>
+            </summary>
 
-            <div className="invisible absolute right-0 mt-2 w-56 rounded-2xl border border-neutral-200 bg-white p-2 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+            <div className="absolute right-0 mt-2 hidden w-56 rounded-2xl border border-neutral-200 bg-white p-2 shadow-lg group-open:block">
               <Link
                 href="/profile"
                 className="block rounded-xl px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
@@ -81,7 +78,7 @@ export default async function Topbar() {
                 Logout
               </Link>
             </div>
-          </div>
+          </details>
         </div>
       </div>
     </header>

@@ -19,8 +19,10 @@ export type AdminRoleRecord = {
 
 export type LoginActivityRecord = {
   id: string;
+  user_id: string | null;       // ← add this
   user_email: string | null;
   activity_type: string | null;
+  ip_address: string | null;    // ← add this
   created_at: string | null;
 };
 
