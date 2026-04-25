@@ -86,6 +86,27 @@ export type GratuityCalculationBreakdown = {
   source: "contract" | "calculation_record";
 } & GratuityPaymentBreakdown;
 
+export function calculateContractGratuityEstimate(input: {
+  monthlySalary: number | null | undefined;
+  startDate: string | null | undefined;
+  endDate: string | null | undefined;
+  isGratuityEligible: boolean;
+  gratuityRatePercent?: number;
+  governmentTaxPercent?: number;
+}): { contractMonths: number } & GratuityPaymentBreakdown {
+  const contractMonths = calculateContractMonths(input.startDate, input.endDate);
+  return {
+    contractMonths,
+    ...calculateGratuityPayment({
+      monthlySalary: safeNumber(input.monthlySalary),
+      contractMonths,
+      isGratuityEligible: input.isGratuityEligible,
+      gratuityRatePercent: input.gratuityRatePercent,
+      governmentTaxPercent: input.governmentTaxPercent,
+    }),
+  };
+}
+
 const GRATUITY_RULE_SELECT = `
   id,
   rule_name,
@@ -188,7 +209,7 @@ export function calculateContractMonths(
   if (!start || !end || end < start) return 0;
   const millisecondsPerDay = 24 * 60 * 60 * 1000;
   const inclusiveDays = Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay) + 1;
-  return roundCurrency(inclusiveDays / 30);
+  return Math.max(0, Math.floor(inclusiveDays / 30));
 }
 
 export type CalculateGratuityPaymentInput = {
@@ -207,7 +228,7 @@ export function calculateGratuityPayment(
   input: CalculateGratuityPaymentInput
 ): GratuityPaymentBreakdown {
   const monthly = Math.max(0, safeNumber(input.monthlySalary));
-  const contractMonths = Math.max(0, safeNumber(input.contractMonths));
+  const contractMonths = Math.max(0, Math.floor(safeNumber(input.contractMonths)));
   const gratuityRatePercent = clampPercent(
     safeNumber(input.gratuityRatePercent ?? DEFAULT_GRATUITY_RATE_PERCENT)
   );
@@ -299,12 +320,12 @@ export async function calculateGratuityBreakdownForRecord(
 
   const fallbackSalary = safeNumber(record.salary_basis_amount);
   const fallbackMonths =
-    safeNumber(record.service_length_months) ||
+    Math.max(0, Math.floor(safeNumber(record.service_length_months))) ||
     calculateContractMonths(record.service_start_date, record.service_end_date);
 
   return {
     monthly_salary: roundCurrency(fallbackSalary),
-    contract_months: roundCurrency(fallbackMonths),
+    contract_months: fallbackMonths,
     service_start_date: record.service_start_date,
     service_end_date: record.service_end_date,
     source: "calculation_record",

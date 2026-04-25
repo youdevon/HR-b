@@ -56,7 +56,7 @@ export default async function GratuityRulesPage({
     gratuityRatePercent,
     governmentTaxPercent,
   });
-  const formula = `Monthly Salary × Contract Months × ${gratuityRateDecimal.toFixed(2)} × ${payableAfterTaxDecimal.toFixed(2)}`;
+  const formula = `Monthly Salary × Math.floor(Contract Months) × ${gratuityRateDecimal.toFixed(2)} × ${payableAfterTaxDecimal.toFixed(2)}`;
 
   return (
     <main className="space-y-6">
@@ -148,6 +148,9 @@ export default async function GratuityRulesPage({
           <h2 className="text-lg font-semibold text-neutral-900">Formula</h2>
           <p className="mt-2 text-sm text-neutral-600">
             <span className="font-medium text-neutral-900">Net Gratuity</span> = {formula}
+          </p>
+          <p className="mt-2 text-xs text-neutral-500">
+            Contract months are rounded down to whole months before gratuity is calculated.
           </p>
           <div className="mt-4 grid gap-3 text-sm text-neutral-700 sm:grid-cols-3">
             <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3">

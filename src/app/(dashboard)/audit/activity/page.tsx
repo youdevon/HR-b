@@ -96,7 +96,7 @@ export default async function AuditActivityPage({ searchParams }: AuditActivityP
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span className="font-medium text-neutral-900">
-                          {log.performed_by_name ?? "System"}
+                          {log.performed_by_display_name}
                         </span>
                       </td>
                       <td className="px-4 py-3">

@@ -74,7 +74,7 @@ export default async function ExpiredContractsPage() {
                       </Link>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">{contract.contract_type ?? "—"}</td>
-                    <td className="whitespace-nowrap px-4 py-3">{contract.contract_status ?? "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-3">{contract.effective_contract_status}</td>
                     <td className="whitespace-nowrap px-4 py-3">{formatDate(contract.start_date)}</td>
                     <td className="whitespace-nowrap px-4 py-3">{formatDate(contract.end_date)}</td>
                     <td className="whitespace-nowrap px-4 py-3">

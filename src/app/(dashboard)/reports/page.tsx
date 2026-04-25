@@ -7,7 +7,6 @@ const reportLinks = [
   { href: "/reports/contracts?reportType=expiring", label: "Expiring Contracts", description: "Contracts approaching expiry." },
   { href: "/reports/contracts?reportType=expired", label: "Expired Contracts", description: "Contracts past end date." },
   { href: "/reports/leave", label: "Leave Balances & Transactions", description: "Leave balances, requests, and status history." },
-  { href: "/reports/documents", label: "Document Expiry", description: "Document status and expiry tracking." },
   { href: "/reports/files", label: "Physical File Movements", description: "Custody, status, and physical file movement activity." },
   { href: "/reports/audit", label: "Audit Activity", description: "System activity and sensitive changes." },
   { href: "/reports/users", label: "User Accounts", description: "Application users, roles, and account status." },

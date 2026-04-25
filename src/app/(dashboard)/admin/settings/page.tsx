@@ -2,7 +2,7 @@ import PageHeader from "@/components/layout/page-header";
 
 const settings = [
   { id: "s1", title: "Leave Thresholds", description: "Configure warning thresholds for low leave balances." },
-  { id: "s2", title: "Document Expiry Window", description: "Define days before expiry to trigger alerts." },
+  { id: "s2", title: "Contract Expiry Window", description: "Define days before contract expiry to trigger alerts." },
   { id: "s3", title: "Gratuity Review SLA", description: "Set standard review turnaround for gratuity cases." },
 ];
 

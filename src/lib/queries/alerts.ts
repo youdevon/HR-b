@@ -211,6 +211,83 @@ export async function acknowledgeAlert(id: string): Promise<AlertRecord> {
   return data;
 }
 
+export async function markContractExpiryReviewed(
+  contractId: string
+): Promise<number> {
+  const scopedContractId = contractId.trim();
+  if (!scopedContractId) return 0;
+
+  const supabase = await createClient();
+  const { data: existing, error: loadError } = await supabase
+    .from("alerts")
+    .select("id, correlation_id")
+    .eq("module_name", "Contracts")
+    .eq("entity_type", "contract")
+    .eq("entity_id", scopedContractId)
+    .eq("status", "active");
+
+  if (loadError) {
+    throw new Error(`Failed to load contract alerts: ${loadError.message}`);
+  }
+
+  const expiryPrefixes = [
+    "contract_expiring-",
+    "contract_expiring_critical-",
+    "contracts_expiring_in_30_days-",
+    "contracts_expiring_in_90_days-",
+    "expired_contracts-",
+  ];
+
+  const alertIds = (existing ?? [])
+    .filter((row) => {
+      const correlationId = String(row.correlation_id ?? "").toLowerCase();
+      return expiryPrefixes.some((prefix) => correlationId.startsWith(prefix));
+    })
+    .map((row) => String(row.id ?? ""))
+    .filter(Boolean);
+  if (alertIds.length === 0) return 0;
+
+  const now = new Date().toISOString();
+  const updateWithTimestamp = await supabase
+    .from("alerts")
+    .update({
+      status: "acknowledged",
+      updated_at: now,
+    })
+    .in("id", alertIds);
+
+  if (!updateWithTimestamp.error) {
+    return alertIds.length;
+  }
+
+  const message = updateWithTimestamp.error.message.toLowerCase();
+  const missingUpdatedAt = message.includes("updated_at") && message.includes("column");
+  if (!missingUpdatedAt) {
+    throw new Error(
+      `Failed to acknowledge contract alerts: ${updateWithTimestamp.error.message}`
+    );
+  }
+
+  const fallbackUpdate = await supabase
+    .from("alerts")
+    .update({
+      status: "acknowledged",
+    })
+    .in("id", alertIds);
+
+  if (fallbackUpdate.error) {
+    throw new Error(`Failed to acknowledge contract alerts: ${fallbackUpdate.error.message}`);
+  }
+
+  return alertIds.length;
+}
+
+export async function acknowledgeContractAlertsByContractId(
+  contractId: string
+): Promise<number> {
+  return markContractExpiryReviewed(contractId);
+}
+
 export async function resolveAlert(
   id: string,
   resolutionNotes?: string

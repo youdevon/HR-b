@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { upsertContractLeaveEntitlements } from "@/lib/queries/leave";
 
 export type ContractRecord = {
   id: string;
@@ -13,6 +14,7 @@ export type ContractRecord = {
   contract_title: string | null;
   contract_type: string | null;
   contract_status: string | null;
+  effective_contract_status: string;
 
   start_date: string | null;
   end_date: string | null;
@@ -23,6 +25,8 @@ export type ContractRecord = {
   salary_amount: number | null;
   salary_frequency: string | null;
   is_gratuity_eligible: boolean | null;
+  vacation_leave_days: number | null;
+  sick_leave_days: number | null;
 
   probation_end_date: string | null;
   renewal_due_date: string | null;
@@ -36,6 +40,7 @@ export type ContractRecord = {
 
 export type ExpiringContractAlertRecord = ContractRecord & {
   days_to_expiry: number;
+  is_reviewed: boolean;
 };
 
 export type ExpiredContractAlertRecord = ContractRecord & {
@@ -44,7 +49,37 @@ export type ExpiredContractAlertRecord = ContractRecord & {
 
 export type ContractSearchParams = {
   query?: string;
+  status?: "all" | "active";
 };
+
+export function normalizeExpiringContractDays(days?: number): 30 | 60 | 90 {
+  if (days === 30 || days === 60 || days === 90) {
+    return days;
+  }
+  return 90;
+}
+
+export function getCurrentActiveContract(
+  contracts: Array<Pick<ContractRecord, "effective_contract_status" | "start_date" | "end_date">>
+): (Pick<ContractRecord, "effective_contract_status" | "start_date" | "end_date"> & {
+  start_date: string;
+  end_date: string;
+}) | null {
+  const today = todayDateString();
+  const active = contracts
+    .filter(
+      (contract): contract is Pick<
+        ContractRecord,
+        "effective_contract_status" | "start_date" | "end_date"
+      > & { start_date: string; end_date: string } =>
+        contract.effective_contract_status === "active" &&
+        Boolean(contract.start_date) &&
+        Boolean(contract.end_date)
+    )
+    .filter((contract) => contract.start_date <= today && contract.end_date >= today)
+    .sort((a, b) => b.start_date.localeCompare(a.start_date));
+  return active[0] ?? null;
+}
 
 export type ContractLifecycleAction =
   | "renew_contract"
@@ -65,6 +100,8 @@ const CONTRACT_LIST_SELECT = `
   salary_amount,
   salary_frequency,
   is_gratuity_eligible,
+  vacation_leave_days,
+  sick_leave_days,
   probation_end_date,
   renewal_due_date,
   renewal_status,
@@ -77,6 +114,9 @@ const CONTRACT_LIST_SELECT = `
 // SQL guidance if the column is missing:
 // alter table public.contracts
 // add column if not exists is_gratuity_eligible boolean not null default false;
+// alter table public.contracts
+// add column if not exists vacation_leave_days numeric default 0,
+// add column if not exists sick_leave_days numeric default 0;
 
 type ContractDatabaseRow = {
   id: string;
@@ -92,6 +132,8 @@ type ContractDatabaseRow = {
   salary_amount: number | null;
   salary_frequency: string | null;
   is_gratuity_eligible: boolean | null;
+  vacation_leave_days: number | null;
+  sick_leave_days: number | null;
   probation_end_date: string | null;
   renewal_due_date: string | null;
   renewal_status: string | null;
@@ -100,6 +142,15 @@ type ContractDatabaseRow = {
   hr_owner: string | null;
   created_at: string | null;
 };
+
+const CONTRACT_TYPE_VALUES = new Set(["temporary", "fixed_term"]);
+const CONTRACT_STATUS_VALUES = new Set(["active", "expired", "inactive"]);
+const SALARY_FREQUENCY_VALUES = new Set([
+  "monthly",
+  "fortnightly",
+  "weekly",
+  "daily",
+]);
 
 type EmployeeNameRow = {
   id: string;
@@ -138,6 +189,27 @@ function parseLocalDate(dateText: string | null): Date | null {
   return new Date(year, month - 1, day);
 }
 
+export function calculateContractYearCount(
+  startDateText: string | null,
+  endDateText: string | null
+): number {
+  const start = parseLocalDate(startDateText);
+  const end = parseLocalDate(endDateText);
+  if (!start || !end || end.getTime() < start.getTime()) {
+    return 0;
+  }
+
+  let count = 0;
+  let cursor = new Date(start);
+  while (cursor.getTime() <= end.getTime()) {
+    count += 1;
+    const next = new Date(cursor);
+    next.setFullYear(next.getFullYear() + 1);
+    cursor = next;
+  }
+  return count;
+}
+
 function currentLocalDateAtMidnight(): Date {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -151,6 +223,207 @@ function includesText(value: string | null | undefined, query: string): boolean 
 function buildEmployeeName(firstName?: string | null, lastName?: string | null) {
   const name = `${firstName ?? ""} ${lastName ?? ""}`.trim();
   return name || null;
+}
+
+function normalizeContractStatus(value: string | null | undefined): string {
+  const normalized = (value ?? "").trim().toLowerCase();
+  return normalized || "inactive";
+}
+
+export function getEffectiveContractStatus(contract: {
+  contract_status?: string | null;
+  end_date?: string | null;
+}): string {
+  const today = todayDateString();
+  const endDate = (contract.end_date ?? "").trim();
+  if (endDate && endDate < today) {
+    return "expired";
+  }
+  return normalizeContractStatus(contract.contract_status);
+}
+
+export function isContractActiveForPeriod(
+  contract: {
+    contract_status?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+  },
+  startDate: string,
+  endDate: string
+): boolean {
+  const effectiveStatus = getEffectiveContractStatus(contract);
+  const contractStart = (contract.start_date ?? "").trim();
+  const contractEnd = (contract.end_date ?? "").trim();
+  if (!contractStart || !contractEnd || !startDate || !endDate) {
+    return false;
+  }
+  return (
+    effectiveStatus === "active" &&
+    contractStart <= startDate &&
+    contractEnd >= endDate
+  );
+}
+
+function assertValidContractType(value: string): string {
+  const normalizedInput = value.trim().toLowerCase();
+  const normalized = normalizedInput === "short_term" ? "temporary" : normalizedInput;
+  if (!CONTRACT_TYPE_VALUES.has(normalized)) {
+    throw new Error("Contract type must be temporary or fixed_term.");
+  }
+  return normalized;
+}
+
+function assertValidContractStatus(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (!CONTRACT_STATUS_VALUES.has(normalized)) {
+    throw new Error("Contract status must be active, expired, or inactive.");
+  }
+  return normalized;
+}
+
+function assertValidSalaryFrequency(value: string | null): string {
+  const normalized = (value ?? "monthly").trim().toLowerCase() || "monthly";
+  if (!SALARY_FREQUENCY_VALUES.has(normalized)) {
+    throw new Error(
+      "Salary frequency must be monthly, fortnightly, weekly, or daily."
+    );
+  }
+  return normalized;
+}
+
+function assertRequiredEmployeeId(value: string): string {
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new Error("Employee is required.");
+  }
+  return normalized;
+}
+
+function assertContractTitleFromEmployeeName(input: {
+  employee_first_name: string | null;
+  employee_last_name: string | null;
+}): string {
+  const fullName = buildEmployeeName(input.employee_first_name, input.employee_last_name);
+  if (!fullName) {
+    throw new Error("Contract title could not be generated because employee name is missing.");
+  }
+  return fullName;
+}
+
+function assertNonNegativeLeaveDays(value: number | null, label: string): number {
+  const normalized = value ?? 0;
+  if (!Number.isFinite(normalized) || normalized < 0) {
+    throw new Error(`${label} must be greater than or equal to 0.`);
+  }
+  return Number(normalized.toFixed(2));
+}
+
+export type CreateContractInput = {
+  employee_id: string;
+  contract_number: string;
+  contract_type: string;
+  contract_status: string;
+  start_date: string;
+  end_date: string;
+  salary_amount: number | null;
+  salary_frequency: string | null;
+  is_gratuity_eligible: boolean;
+  vacation_leave_days: number | null;
+  sick_leave_days: number | null;
+};
+
+export async function createContractRecord(
+  input: CreateContractInput
+): Promise<ContractRecord> {
+  const employeeId = assertRequiredEmployeeId(input.employee_id);
+  const contractNumber = input.contract_number.trim();
+  if (!contractNumber) {
+    throw new Error("Contract number is required.");
+  }
+  if (!input.start_date.trim()) {
+    throw new Error("Start date is required.");
+  }
+  if (!input.end_date.trim()) {
+    throw new Error("End date is required.");
+  }
+  if (input.end_date < input.start_date) {
+    throw new Error("End date must be after or equal to start date.");
+  }
+  if (input.salary_amount !== null && input.salary_amount < 0) {
+    throw new Error("Monthly salary must be greater than or equal to 0.");
+  }
+
+  const contractType = assertValidContractType(input.contract_type);
+  const contractStatus = assertValidContractStatus(input.contract_status);
+  const salaryFrequency = assertValidSalaryFrequency(input.salary_frequency);
+  const vacationLeaveDays = assertNonNegativeLeaveDays(
+    input.vacation_leave_days,
+    "Vacation leave days"
+  );
+  const sickLeaveDays = assertNonNegativeLeaveDays(
+    input.sick_leave_days,
+    "Sick leave days"
+  );
+
+  const supabase = await createClient();
+  const { data: employee, error: employeeError } = await supabase
+    .from("employees")
+    .select("id, first_name, last_name")
+    .eq("id", employeeId)
+    .maybeSingle();
+  if (employeeError || !employee) {
+    throw new Error(
+      `Failed to load selected employee: ${employeeError?.message ?? "Employee not found."}`
+    );
+  }
+  const contractTitle = assertContractTitleFromEmployeeName({
+    employee_first_name: employee.first_name,
+    employee_last_name: employee.last_name,
+  });
+
+  await assertNoContractDateOverlap({
+    employeeId,
+    newStartDate: input.start_date,
+    newEndDate: input.end_date,
+  });
+
+  const { data, error } = await supabase
+    .from("contracts")
+    .insert({
+      employee_id: employeeId,
+      contract_number: contractNumber,
+      contract_title: contractTitle,
+      contract_type: contractType,
+      contract_status: contractStatus,
+      start_date: input.start_date,
+      end_date: input.end_date,
+      salary_amount: input.salary_amount,
+      salary_frequency: salaryFrequency,
+      is_gratuity_eligible: input.is_gratuity_eligible,
+      vacation_leave_days: vacationLeaveDays,
+      sick_leave_days: sickLeaveDays,
+    })
+    .select(CONTRACT_LIST_SELECT)
+    .single();
+  if (error) {
+    throw new Error(`Failed to create contract: ${error.message}`);
+  }
+
+  const created = data as ContractDatabaseRow;
+  await upsertContractLeaveEntitlements({
+    employee_id: employeeId,
+    contract_id: created.id,
+    contract_start_date: created.start_date ?? input.start_date,
+    contract_end_date: created.end_date ?? input.end_date,
+    vacation_leave_days: vacationLeaveDays,
+    sick_leave_days: sickLeaveDays,
+  });
+
+  const [enriched] = await enrichContractsWithEmployeeNames([created]);
+  if (!enriched) {
+    throw new Error("Contract was created but could not be loaded.");
+  }
+  return enriched;
 }
 
 async function enrichContractsWithEmployeeNames(
@@ -167,6 +440,7 @@ async function enrichContractsWithEmployeeNames(
   if (!employeeIds.length) {
     return contracts.map((contract) => ({
       ...contract,
+      effective_contract_status: getEffectiveContractStatus(contract),
       employee_name: null,
       employee_first_name: null,
       employee_last_name: null,
@@ -201,6 +475,7 @@ async function enrichContractsWithEmployeeNames(
 
     return {
       ...contract,
+      effective_contract_status: getEffectiveContractStatus(contract),
       employee_name: buildEmployeeName(
         employee?.first_name,
         employee?.last_name
@@ -217,6 +492,7 @@ export async function listContracts(
 ): Promise<ContractRecord[]> {
   const supabase = await createClient();
   const queryText = params?.query?.trim();
+  const statusFilter = params?.status === "active" ? "active" : "all";
 
   const { data, error } = await supabase
     .from("contracts")
@@ -231,14 +507,18 @@ export async function listContracts(
   const contracts = await enrichContractsWithEmployeeNames(
     (data ?? []) as ContractDatabaseRow[]
   );
+  const scopedContracts =
+    statusFilter === "active"
+      ? contracts.filter((contract) => contract.effective_contract_status === "active")
+      : contracts;
 
   if (!queryText) {
-    return contracts;
+    return scopedContracts;
   }
 
   const normalizedQuery = queryText.toLowerCase();
 
-  return contracts.filter((contract) => {
+  return scopedContracts.filter((contract) => {
     return (
       includesText(contract.contract_number, normalizedQuery) ||
       includesText(contract.contract_title, normalizedQuery) ||
@@ -280,7 +560,8 @@ export async function getContractById(
 }
 
 export async function listContractsByEmployeeId(
-  employeeId: string
+  employeeId: string,
+  query?: string
 ): Promise<ContractRecord[]> {
   const supabase = await createClient();
 
@@ -298,15 +579,35 @@ export async function listContractsByEmployeeId(
     throw new Error(`Failed to load employee contracts: ${error.message}`);
   }
 
-  return enrichContractsWithEmployeeNames((data ?? []) as ContractDatabaseRow[]);
+  const contracts = await enrichContractsWithEmployeeNames(
+    (data ?? []) as ContractDatabaseRow[]
+  );
+  const queryText = query?.trim().toLowerCase();
+  if (!queryText) return contracts;
+
+  return contracts.filter((contract) => {
+    return (
+      includesText(contract.contract_number, queryText) ||
+      includesText(contract.contract_title, queryText) ||
+      includesText(contract.contract_type, queryText) ||
+      includesText(contract.contract_status, queryText) ||
+      includesText(contract.department, queryText) ||
+      includesText(contract.job_title, queryText) ||
+      includesText(contract.employee_name, queryText) ||
+      includesText(contract.employee_first_name, queryText) ||
+      includesText(contract.employee_last_name, queryText) ||
+      includesText(contract.employee_number, queryText)
+    );
+  });
 }
 
 export async function listExpiringContracts(
-  days = 30
+  days?: number
 ): Promise<ExpiringContractAlertRecord[]> {
   const supabase = await createClient();
+  const normalizedDays = normalizeExpiringContractDays(days);
   const todayText = todayDateString();
-  const withinDays = plusDaysDateString(days);
+  const withinDays = plusDaysDateString(normalizedDays);
 
   const { data, error } = await supabase
     .from("contracts")
@@ -327,7 +628,9 @@ export async function listExpiringContracts(
 
   const today = currentLocalDateAtMidnight();
 
-  const rows = enriched.map((contract) => {
+  const rows = enriched
+    .filter((contract) => getEffectiveContractStatus(contract) === "active")
+    .map((contract) => {
     const endDate = parseLocalDate(contract.end_date);
     const daysToExpiry = endDate
       ? Math.max(
@@ -338,13 +641,72 @@ export async function listExpiringContracts(
         )
       : 0;
 
-    return {
-      ...contract,
-      days_to_expiry: daysToExpiry,
-    };
-  });
+      return {
+        ...contract,
+        days_to_expiry: daysToExpiry,
+        is_reviewed: false,
+      };
+    });
 
-  rows.sort((a, b) => a.days_to_expiry - b.days_to_expiry);
+  const contractIds = rows.map((row) => row.id);
+  if (contractIds.length > 0) {
+    const expiryPrefixes = [
+      "contract_expiring-",
+      "contract_expiring_critical-",
+      "contracts_expiring_in_30_days-",
+      "contracts_expiring_in_90_days-",
+      "expired_contracts-",
+    ];
+    const { data: relatedAlerts, error: relatedAlertsError } = await supabase
+      .from("alerts")
+      .select("entity_id, status, correlation_id")
+      .eq("module_name", "Contracts")
+      .eq("entity_type", "contract")
+      .in("entity_id", contractIds)
+      .in("status", ["active", "acknowledged", "resolved"]);
+
+    if (relatedAlertsError) {
+      throw new Error(
+        `Failed to load related contract alerts: ${relatedAlertsError.message}`
+      );
+    }
+
+    const statusByContractId = new Map<
+      string,
+      { hasActive: boolean; hasReviewed: boolean }
+    >();
+    for (const alert of relatedAlerts ?? []) {
+      const entityId = String(alert.entity_id ?? "");
+      const status = String(alert.status ?? "").toLowerCase();
+      const correlationId = String(alert.correlation_id ?? "").toLowerCase();
+      if (!entityId) continue;
+      const isExpiryAlert = expiryPrefixes.some((prefix) =>
+        correlationId.startsWith(prefix)
+      );
+      if (!isExpiryAlert) continue;
+      const current = statusByContractId.get(entityId) ?? {
+        hasActive: false,
+        hasReviewed: false,
+      };
+      if (status === "active") current.hasActive = true;
+      if (status === "acknowledged" || status === "resolved") {
+        current.hasReviewed = true;
+      }
+      statusByContractId.set(entityId, current);
+    }
+
+    for (const row of rows) {
+      const status = statusByContractId.get(row.id);
+      row.is_reviewed = status ? !status.hasActive && status.hasReviewed : false;
+    }
+  }
+
+  rows.sort((a, b) => {
+    if (a.is_reviewed !== b.is_reviewed) {
+      return a.is_reviewed ? 1 : -1;
+    }
+    return a.days_to_expiry - b.days_to_expiry;
+  });
 
   return rows;
 }
@@ -617,26 +979,55 @@ export async function validateContractDateOverlap(input: {
 
 type UpdateContractDetailsInput = {
   id: string;
+  employee_id: string;
   contract_number: string;
   contract_title: string;
   contract_type: string;
   contract_status: string;
   start_date: string;
-  end_date: string | null;
-  effective_date: string | null;
-  notice_period: string | null;
-  job_title: string | null;
-  department: string | null;
-  signed_date: string | null;
-  issued_date: string | null;
+  end_date: string;
   salary_amount: number | null;
   salary_frequency: string | null;
   is_gratuity_eligible: boolean;
+  vacation_leave_days: number | null;
+  sick_leave_days: number | null;
 };
 
 export async function updateContractDetails(
   input: UpdateContractDetailsInput
 ): Promise<ContractRecord> {
+  const employeeId = assertRequiredEmployeeId(input.employee_id);
+  if (!input.contract_number.trim()) {
+    throw new Error("Contract number is required.");
+  }
+  if (!input.contract_title.trim()) {
+    throw new Error("Contract title is required.");
+  }
+  if (!input.start_date.trim()) {
+    throw new Error("Start date is required.");
+  }
+  if (!input.end_date.trim()) {
+    throw new Error("End date is required.");
+  }
+  if (input.end_date < input.start_date) {
+    throw new Error("End date must be after or equal to start date.");
+  }
+  if (input.salary_amount !== null && input.salary_amount < 0) {
+    throw new Error("Monthly salary must be greater than or equal to 0.");
+  }
+
+  const contractType = assertValidContractType(input.contract_type);
+  const contractStatus = assertValidContractStatus(input.contract_status);
+  const salaryFrequency = assertValidSalaryFrequency(input.salary_frequency);
+  const vacationLeaveDays = assertNonNegativeLeaveDays(
+    input.vacation_leave_days,
+    "Vacation leave days"
+  );
+  const sickLeaveDays = assertNonNegativeLeaveDays(
+    input.sick_leave_days,
+    "Sick leave days"
+  );
+
   const supabase = await createClient();
   const { data: existing, error: existingError } = await supabase
     .from("contracts")
@@ -652,32 +1043,28 @@ export async function updateContractDetails(
     );
   }
 
-  const effectiveEndDate = input.end_date ?? input.start_date;
   await assertNoContractDateOverlap({
-    employeeId: existing.employee_id as string | null,
+    employeeId,
     newStartDate: input.start_date,
-    newEndDate: effectiveEndDate,
+    newEndDate: input.end_date,
     excludeContractId: input.id,
   });
 
   const { data, error } = await supabase
     .from("contracts")
     .update({
+      employee_id: employeeId,
       contract_number: input.contract_number,
-      contract_title: input.contract_title,
-      contract_type: input.contract_type,
-      contract_status: input.contract_status,
+      contract_title: input.contract_title.trim(),
+      contract_type: contractType,
+      contract_status: contractStatus,
       start_date: input.start_date,
       end_date: input.end_date,
-      effective_date: input.effective_date,
-      notice_period: input.notice_period,
-      job_title: input.job_title,
-      department: input.department,
-      signed_date: input.signed_date,
-      issued_date: input.issued_date,
       salary_amount: input.salary_amount,
-      salary_frequency: input.salary_frequency,
+      salary_frequency: salaryFrequency,
       is_gratuity_eligible: input.is_gratuity_eligible,
+      vacation_leave_days: vacationLeaveDays,
+      sick_leave_days: sickLeaveDays,
     })
     .eq("id", input.id)
     .select(CONTRACT_LIST_SELECT)
@@ -686,6 +1073,15 @@ export async function updateContractDetails(
   if (error) {
     throw new Error(`Failed to update contract: ${error.message}`);
   }
+
+  await upsertContractLeaveEntitlements({
+    employee_id: employeeId,
+    contract_id: input.id,
+    contract_start_date: input.start_date,
+    contract_end_date: input.end_date,
+    vacation_leave_days: vacationLeaveDays,
+    sick_leave_days: sickLeaveDays,
+  });
 
   const [enriched] = await enrichContractsWithEmployeeNames([
     data as ContractDatabaseRow,

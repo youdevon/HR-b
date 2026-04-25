@@ -33,6 +33,40 @@ function toNullableAmount(value: string): number | null {
   return parsed;
 }
 
+function toNonNegativeDecimalOrZero(value: string, fieldLabel: string): number {
+  if (!value) return 0;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${fieldLabel} must be greater than or equal to 0.`);
+  }
+  return parsed;
+}
+
+const CONTRACT_TYPE_OPTIONS = [
+  { value: "temporary", label: "Short Term" },
+  { value: "fixed_term", label: "Fixed Term" },
+] as const;
+
+function normalizeContractTypeForForm(value: string | null | undefined): string {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized === "short_term") return "temporary";
+  if (normalized === "temporary" || normalized === "fixed_term") return normalized;
+  return "fixed_term";
+}
+
+const CONTRACT_STATUS_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "expired", label: "Expired" },
+  { value: "inactive", label: "Inactive" },
+] as const;
+
+const SALARY_FREQUENCY_OPTIONS = [
+  { value: "monthly", label: "Monthly" },
+  { value: "fortnightly", label: "Fortnightly" },
+  { value: "weekly", label: "Weekly" },
+  { value: "daily", label: "Daily" },
+] as const;
+
 export default async function ContractEditPage({
   params,
   searchParams,
@@ -49,21 +83,24 @@ export default async function ContractEditPage({
     try {
       await updateContractDetails({
         id,
+        employee_id: input(formData, "employee_id"),
         contract_number: input(formData, "contract_number"),
         contract_title: input(formData, "contract_title"),
         contract_type: input(formData, "contract_type"),
         contract_status: input(formData, "contract_status"),
         start_date: input(formData, "start_date"),
-        end_date: toNull(input(formData, "end_date")),
-        effective_date: toNull(input(formData, "effective_date")),
-        notice_period: toNull(input(formData, "notice_period")),
-        job_title: toNull(input(formData, "job_title")),
-        department: toNull(input(formData, "department")),
-        signed_date: toNull(input(formData, "signed_date")),
-        issued_date: toNull(input(formData, "issued_date")),
+        end_date: input(formData, "end_date"),
         salary_amount: toNullableAmount(input(formData, "salary_amount")),
         salary_frequency: toNull(input(formData, "salary_frequency")),
         is_gratuity_eligible: formData.get("is_gratuity_eligible") === "on",
+        vacation_leave_days: toNonNegativeDecimalOrZero(
+          input(formData, "vacation_leave_days"),
+          "Vacation leave days"
+        ),
+        sick_leave_days: toNonNegativeDecimalOrZero(
+          input(formData, "sick_leave_days"),
+          "Sick leave days"
+        ),
       });
     } catch (error) {
       const errorMessage =
@@ -102,7 +139,18 @@ export default async function ContractEditPage({
       <form action={updateContractAction} className="space-y-6">
         <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-neutral-900">Contract Basics</h2>
+          <p className="mt-1 text-sm text-neutral-600">
+            Start and end dates drive leave availability, gratuity calculation, expiry alerts, and lifecycle status.
+          </p>
           <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            <input
+              name="employee_id"
+              defaultValue={contract.employee_id ?? ""}
+              readOnly
+              required
+              placeholder="Employee ID"
+              className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700"
+            />
             <input
               name="contract_number"
               defaultValue={contract.contract_number ?? ""}
@@ -117,23 +165,29 @@ export default async function ContractEditPage({
               placeholder="Contract title"
               className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
             />
-            <input
-              name="contract_type"
-              defaultValue={contract.contract_type ?? ""}
-              required
-              placeholder="Contract type"
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            />
             <select
-              name="contract_status"
-              defaultValue={contract.contract_status ?? "active"}
+              name="contract_type"
+              defaultValue={normalizeContractTypeForForm(contract.contract_type)}
+              required
               className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
             >
-              <option value="active">Active</option>
-              <option value="pending">Pending</option>
-              <option value="draft">Draft</option>
-              <option value="expired">Expired</option>
-              <option value="terminated">Terminated</option>
+              {CONTRACT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <select
+              name="contract_status"
+              defaultValue={contract.effective_contract_status}
+              required
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            >
+              {CONTRACT_STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
             <input
               name="start_date"
@@ -146,6 +200,7 @@ export default async function ContractEditPage({
               name="end_date"
               type="date"
               defaultValue={contract.end_date ?? ""}
+              required
               className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
             />
             <input
@@ -162,10 +217,11 @@ export default async function ContractEditPage({
               defaultValue={contract.salary_frequency ?? "monthly"}
               className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
             >
-              <option value="monthly">Monthly</option>
-              <option value="annual">Annual</option>
-              <option value="weekly">Weekly</option>
-              <option value="daily">Daily</option>
+              {SALARY_FREQUENCY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -179,21 +235,36 @@ export default async function ContractEditPage({
             <span>
               <span className="block text-sm font-medium text-neutral-900">Eligible for Gratuity</span>
               <span className="block text-xs text-neutral-600">
-                Check this only if gratuity applies to this contract. Short-term contracts can be left unchecked.
+                Check this only if gratuity applies to this contract.
               </span>
             </span>
           </label>
         </section>
 
         <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-neutral-900">Additional Details</h2>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            <input name="effective_date" type="date" defaultValue="" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-            <input name="signed_date" type="date" defaultValue="" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-            <input name="issued_date" type="date" defaultValue="" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-            <input name="notice_period" defaultValue="" placeholder="Notice period" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-            <input name="department" defaultValue={contract.department ?? ""} placeholder="Department" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-            <input name="job_title" defaultValue={contract.job_title ?? ""} placeholder="Job title" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+          <h2 className="text-lg font-semibold text-neutral-900">Leave Entitlements</h2>
+          <p className="mt-1 text-sm text-neutral-600">
+            These leave entitlements will be used to create or update the employee&apos;s leave balances for this contract period.
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <input
+              name="vacation_leave_days"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue={contract.vacation_leave_days ?? 0}
+              placeholder="Vacation leave days"
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            />
+            <input
+              name="sick_leave_days"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue={contract.sick_leave_days ?? 0}
+              placeholder="Sick leave days"
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            />
           </div>
         </section>
 

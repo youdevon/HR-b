@@ -6,7 +6,7 @@ import {
   fetchUserProfileForAuthUser,
   type CurrentUserProfile,
 } from "@/lib/auth/permissions";
-import { getCurrentUser, getUser } from "@/lib/auth/session";
+import { getUser } from "@/lib/auth/session";
 export {
   requireAnyPermission,
   hasAnyPermissionForContext,
@@ -20,7 +20,7 @@ type RequireUserOptions = {
 
 export async function requireUser(options: RequireUserOptions = {}): Promise<User> {
   const { redirectTo = "/login" } = options;
-  const user = await getCurrentUser();
+  const user = await getUser();
 
   if (!user) {
     redirect(redirectTo);
@@ -35,7 +35,7 @@ type RequireGuestOptions = {
 
 export async function requireGuest(options: RequireGuestOptions = {}): Promise<void> {
   const { redirectTo = "/dashboard" } = options;
-  const user = await getCurrentUser();
+  const user = await getUser();
 
   if (user) {
     redirect(redirectTo);
@@ -43,7 +43,7 @@ export async function requireGuest(options: RequireGuestOptions = {}): Promise<v
 }
 
 export async function optionalUser() {
-  return getCurrentUser();
+  return getUser();
 }
 
 export type DashboardAuthContext = {

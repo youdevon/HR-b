@@ -36,6 +36,8 @@ function toNumberOrNull(value: string): number | null {
 export default async function NewLeavePage({ searchParams }: NewLeavePageProps) {
   const sp = await searchParams;
   const employeeId = firstString(sp.employeeId) ?? "";
+  const status = firstString(sp.status);
+  const message = firstString(sp.message);
   const employee = employeeId ? await getEmployeeById(employeeId) : null;
   const employeeName = employee
     ? `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim() || "Unknown employee"
@@ -44,21 +46,34 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
   async function createLeaveAction(formData: FormData) {
     "use server";
     const employee_id = input(formData, "employee_id");
-
-    await createLeaveApplication({
-      employee_id: toNull(employee_id),
-      leave_type: input(formData, "leave_type"),
-      start_date: toNull(input(formData, "start_date")),
-      end_date: toNull(input(formData, "end_date")),
-      total_days: toNumberOrNull(input(formData, "total_days")),
-      reason: toNull(input(formData, "reason")),
-      notes: toNull(input(formData, "notes")),
-      medical_certificate_required:
-        String(formData.get("medical_certificate_required") ?? "") === "on",
-      medical_certificate_received:
-        String(formData.get("medical_certificate_received") ?? "") === "on",
-      return_to_work_date: toNull(input(formData, "return_to_work_date")),
-    });
+    try {
+      await createLeaveApplication({
+        employee_id: toNull(employee_id),
+        leave_type: input(formData, "leave_type"),
+        start_date: toNull(input(formData, "start_date")),
+        end_date: toNull(input(formData, "end_date")),
+        total_days: toNumberOrNull(input(formData, "total_days")),
+        reason: toNull(input(formData, "reason")),
+        notes: toNull(input(formData, "notes")),
+        medical_certificate_required:
+          String(formData.get("medical_certificate_required") ?? "") === "on",
+        medical_certificate_received:
+          String(formData.get("medical_certificate_received") ?? "") === "on",
+        return_to_work_date: toNull(input(formData, "return_to_work_date")),
+      });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to apply leave. Please review the form and try again.";
+      const qs = new URLSearchParams();
+      if (employee_id) {
+        qs.set("employeeId", employee_id);
+      }
+      qs.set("status", "error");
+      qs.set("message", errorMessage);
+      redirect(`/leave/new?${qs.toString()}`);
+    }
 
     revalidatePath("/leave");
     revalidatePath("/leave/transactions");
@@ -81,6 +96,18 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
           }
           backHref="/leave"
         />
+
+        {message ? (
+          <section
+            className={`rounded-2xl border p-4 text-sm ${
+              status === "error"
+                ? "border-red-200 bg-red-50 text-red-700"
+                : "border-emerald-200 bg-emerald-50 text-emerald-800"
+            }`}
+          >
+            {message}
+          </section>
+        ) : null}
 
         <form action={createLeaveAction} className="space-y-6">
           <input type="hidden" name="employee_id" value={employeeId} />

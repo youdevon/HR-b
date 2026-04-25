@@ -32,6 +32,7 @@ export type LeaveAction =
 export type LeaveBalanceRecord = {
   id: string;
   employee_id: string | null;
+  contract_id?: string | null;
   leave_type: string | null;
   entitlement_days: number | null;
   used_days: number | null;
@@ -96,6 +97,14 @@ type LeaveTransactionRow = {
   created_at: string | null;
 };
 
+type ContractCoverageRow = {
+  id: string;
+  employee_id: string | null;
+  contract_status: string | null;
+  start_date: string | null;
+  end_date: string | null;
+};
+
 type EmployeeNameRow = {
   id: string;
   employee_number: string | null;
@@ -121,6 +130,338 @@ const LEAVE_BALANCE_SELECT = `
   exhausted_warning_enabled,
   created_at
 `;
+
+export type ContractLeaveEntitlementInput = {
+  employee_id: string;
+  contract_id: string;
+  contract_start_date: string;
+  contract_end_date: string | null;
+  vacation_leave_days: number;
+  sick_leave_days: number;
+};
+
+export type LeaveBalanceLike = Pick<
+  LeaveBalanceRecord,
+  | "leave_type"
+  | "entitlement_days"
+  | "used_days"
+  | "remaining_days"
+  | "effective_from"
+  | "effective_to"
+>;
+
+function parseDateOnly(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const [yearText, monthText, dayText] = value.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function rangesOverlap(
+  startA: string | null | undefined,
+  endA: string | null | undefined,
+  startB: string | null | undefined,
+  endB: string | null | undefined
+): boolean {
+  if (!startB || !endB) return true;
+  const aStart = parseDateOnly(startA);
+  const aEnd = parseDateOnly(endA);
+  const bStart = parseDateOnly(startB);
+  const bEnd = parseDateOnly(endB);
+  if (!aStart || !aEnd || !bStart || !bEnd) return false;
+  return aStart <= bEnd && aEnd >= bStart;
+}
+
+export function summarizeVacationLeaveWithinPeriod(
+  balances: LeaveBalanceLike[],
+  periodStart: string | null | undefined,
+  periodEnd: string | null | undefined
+): { entitlement: number; used: number; remaining: number } {
+  const relevant = balances.filter(
+    (balance) =>
+      normalizeLeaveType(balance.leave_type ?? "") === "vacation_leave" &&
+      rangesOverlap(balance.effective_from, balance.effective_to, periodStart, periodEnd)
+  );
+
+  return relevant.reduce(
+    (acc, balance) => ({
+      entitlement: acc.entitlement + Number(balance.entitlement_days ?? 0),
+      used: acc.used + Number(balance.used_days ?? 0),
+      remaining: acc.remaining + Number(balance.remaining_days ?? 0),
+    }),
+    { entitlement: 0, used: 0, remaining: 0 }
+  );
+}
+
+export function getCurrentSickLeaveBalance(
+  balances: LeaveBalanceLike[],
+  todayDateText: string,
+  periodStart: string | null | undefined,
+  periodEnd: string | null | undefined
+): LeaveBalanceLike | null {
+  const sickBalances = balances.filter(
+    (balance) =>
+      normalizeLeaveType(balance.leave_type ?? "") === "sick_leave" &&
+      rangesOverlap(balance.effective_from, balance.effective_to, periodStart, periodEnd)
+  );
+
+  const inCurrentWindow = sickBalances.find((balance) => {
+    const start = balance.effective_from ?? "";
+    const end = balance.effective_to ?? "";
+    return start <= todayDateText && todayDateText <= end;
+  });
+  if (inCurrentWindow) return inCurrentWindow;
+
+  return sickBalances.sort((a, b) =>
+    String(b.effective_from ?? "").localeCompare(String(a.effective_from ?? ""))
+  )[0] ?? null;
+}
+
+function normalizeNonNegativeNumber(value: number): number {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error("Leave entitlement days must be greater than or equal to 0.");
+  }
+  return Number(value.toFixed(2));
+}
+
+function parseIsoDateOnly(dateText: string): Date | null {
+  const [yearText, monthText, dayText] = dateText.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return null;
+  }
+  const parsed = new Date(year, month - 1, day);
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+  return parsed;
+}
+
+function formatIsoDateOnly(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function addYears(date: Date, years: number): Date {
+  const next = new Date(date);
+  next.setFullYear(next.getFullYear() + years);
+  return next;
+}
+
+function buildContractYearPeriods(
+  startDateText: string,
+  endDateText: string
+): Array<{
+  balance_year: number;
+  effective_from: string;
+  effective_to: string;
+}> {
+  const startDate = parseIsoDateOnly(startDateText);
+  const endDate = parseIsoDateOnly(endDateText);
+  if (!startDate || !endDate) {
+    throw new Error("Contract dates must be valid ISO dates.");
+  }
+  if (endDate.getTime() < startDate.getTime()) {
+    throw new Error("Contract end date must be after or equal to start date.");
+  }
+
+  const periods: Array<{
+    balance_year: number;
+    effective_from: string;
+    effective_to: string;
+  }> = [];
+  let cursor = new Date(startDate);
+
+  while (cursor.getTime() <= endDate.getTime()) {
+    const nextYearStart = addYears(cursor, 1);
+    const periodEndCandidate = addDays(nextYearStart, -1);
+    const effectiveTo =
+      periodEndCandidate.getTime() <= endDate.getTime() ? periodEndCandidate : endDate;
+    periods.push({
+      balance_year: cursor.getFullYear(),
+      effective_from: formatIsoDateOnly(cursor),
+      effective_to: formatIsoDateOnly(effectiveTo),
+    });
+    cursor = addDays(effectiveTo, 1);
+  }
+
+  return periods;
+}
+
+function extractYearsFromPeriods(
+  periods: Array<{ balance_year: number }>
+): number[] {
+  return [...new Set(periods.map((period) => period.balance_year))];
+}
+
+async function hasLeaveBalanceContractIdColumn(): Promise<boolean> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("leave_balances")
+    .select("contract_id")
+    .limit(1);
+  return !error;
+}
+
+export async function upsertContractLeaveEntitlements(
+  input: ContractLeaveEntitlementInput
+): Promise<void> {
+  const employeeId = input.employee_id.trim();
+  const contractId = input.contract_id.trim();
+  const startDate = input.contract_start_date.trim();
+  const endDate = (input.contract_end_date ?? "").trim();
+  if (!employeeId || !contractId) {
+    throw new Error("Employee and contract are required for leave entitlement sync.");
+  }
+  if (!startDate) {
+    throw new Error("Contract start date is required to create leave balances.");
+  }
+  if (!endDate) {
+    throw new Error("Contract end date is required to create leave balances.");
+  }
+
+  const entitlementByType: Array<{ leave_type: LeaveType; entitlement_days: number }> = [
+    {
+      leave_type: "vacation_leave",
+      entitlement_days: normalizeNonNegativeNumber(input.vacation_leave_days),
+    },
+    {
+      leave_type: "sick_leave",
+      entitlement_days: normalizeNonNegativeNumber(input.sick_leave_days),
+    },
+  ];
+
+  const supportsContractId = await hasLeaveBalanceContractIdColumn();
+  const supabase = await createClient();
+  const periods = buildContractYearPeriods(startDate, endDate);
+  const periodYears = extractYearsFromPeriods(periods);
+  const periodByYear = new Map(periods.map((period) => [period.balance_year, period]));
+
+  const existingByTypeAndYear = new Map<string, { id: string }>();
+
+  let existingQuery = supabase
+    .from("leave_balances")
+    .select("id, leave_type, balance_year")
+    .eq("employee_id", employeeId)
+    .in("leave_type", ["vacation_leave", "sick_leave"])
+    .in("balance_year", periodYears);
+  if (supportsContractId) {
+    existingQuery = existingQuery.eq("contract_id", contractId);
+  }
+  const { data: existingRows, error: existingRowsError } = await existingQuery;
+  if (existingRowsError) {
+    throw new Error(
+      `Failed to load existing contract leave balances: ${existingRowsError.message}`
+    );
+  }
+  for (const row of existingRows ?? []) {
+    const leaveType = String(row.leave_type ?? "");
+    const balanceYear = Number(row.balance_year ?? 0);
+    const key = `${leaveType}:${balanceYear}`;
+    existingByTypeAndYear.set(key, { id: String(row.id) });
+  }
+
+  for (const entry of entitlementByType) {
+    for (const period of periods) {
+      const key = `${entry.leave_type}:${period.balance_year}`;
+      const existing = existingByTypeAndYear.get(key);
+
+      const payload: Record<string, string | number | null> = {
+        employee_id: employeeId,
+        leave_type: entry.leave_type,
+        balance_year: period.balance_year,
+        entitlement_days: entry.entitlement_days,
+        used_days: 0,
+        remaining_days: entry.entitlement_days,
+        effective_from: period.effective_from,
+        effective_to: period.effective_to,
+        warning_threshold_days: 0,
+        carried_forward_days: 0,
+      };
+      if (supportsContractId) {
+        payload.contract_id = contractId;
+      }
+
+      if (existing?.id) {
+        const { error: updateError } = await supabase
+          .from("leave_balances")
+          .update(payload)
+          .eq("id", existing.id);
+        if (updateError) {
+          throw new Error(
+            `Failed to update ${entry.leave_type} leave balance: ${updateError.message}`
+          );
+        }
+        continue;
+      }
+
+      const { error: insertError } = await supabase
+        .from("leave_balances")
+        .insert(payload);
+      if (insertError) {
+        throw new Error(
+          `Failed to create ${entry.leave_type} leave balance: ${insertError.message}`
+        );
+      }
+    }
+  }
+}
+
+export async function listContractLeaveBalanceSummary(input: {
+  employee_id: string | null;
+  contract_id: string;
+  contract_start_date: string | null;
+  contract_end_date: string | null;
+}): Promise<LeaveBalanceRecord[]> {
+  const employeeId = (input.employee_id ?? "").trim();
+  const contractId = input.contract_id.trim();
+  const startDate = (input.contract_start_date ?? "").trim();
+  const endDate = (input.contract_end_date ?? "").trim();
+  if (!employeeId || !contractId || !startDate || !endDate) {
+    return [];
+  }
+
+  const periods = buildContractYearPeriods(startDate, endDate);
+  const periodYears = extractYearsFromPeriods(periods);
+  const supportsContractId = await hasLeaveBalanceContractIdColumn();
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("leave_balances")
+    .select(LEAVE_BALANCE_SELECT)
+    .eq("employee_id", employeeId)
+    .in("balance_year", periodYears)
+    .in("leave_type", ["vacation_leave", "sick_leave"]);
+
+  if (supportsContractId) {
+    query = query.eq("contract_id", contractId);
+  }
+
+  const { data, error } = await query
+    .order("balance_year", { ascending: true })
+    .order("leave_type", { ascending: true });
+  if (error) {
+    throw new Error(`Failed to load contract leave balances: ${error.message}`);
+  }
+  return (data ?? []) as LeaveBalanceRecord[];
+}
 
 const LEAVE_TRANSACTION_SELECT = `
   id,
@@ -321,6 +662,141 @@ export type CreateLeaveApplicationInput = {
   return_to_work_date?: string | null;
 };
 
+function normalizeContractStatus(value: string | null | undefined): string {
+  const normalized = (value ?? "").trim().toLowerCase();
+  return normalized || "inactive";
+}
+
+function getEffectiveContractStatusForLeave(contract: {
+  contract_status?: string | null;
+  end_date?: string | null;
+}): string {
+  const today = todayDateString();
+  const endDate = (contract.end_date ?? "").trim();
+  if (endDate && endDate < today) {
+    return "expired";
+  }
+  return normalizeContractStatus(contract.contract_status);
+}
+
+async function listActiveContractsForEmployee(
+  employeeId: string
+): Promise<ContractCoverageRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("contracts")
+    .select("id, employee_id, contract_status, start_date, end_date")
+    .eq("employee_id", employeeId)
+    .not("start_date", "is", null)
+    .not("end_date", "is", null);
+
+  if (error) {
+    throw new Error(`Failed to validate contract period for leave: ${error.message}`);
+  }
+
+  return ((data ?? []) as ContractCoverageRow[]).filter(
+    (contract) => getEffectiveContractStatusForLeave(contract) === "active"
+  );
+}
+
+export async function getContractCoveringLeavePeriod(
+  employeeId: string,
+  startDate: string,
+  endDate: string
+): Promise<ContractCoverageRow | null> {
+  const employee = employeeId.trim();
+  const start = startDate.trim();
+  const end = endDate.trim();
+  if (!employee || !start || !end) return null;
+
+  const activeContracts = await listActiveContractsForEmployee(employee);
+  return (
+    activeContracts.find(
+      (contract) =>
+        Boolean(contract.start_date) &&
+        Boolean(contract.end_date) &&
+        String(contract.start_date) <= start &&
+        String(contract.end_date) >= end
+    ) ?? null
+  );
+}
+
+export async function validateLeaveWithinContractPeriod(
+  employeeId: string | null | undefined,
+  startDate: string | null | undefined,
+  endDate: string | null | undefined
+): Promise<void> {
+  const employee = (employeeId ?? "").trim();
+  const start = (startDate ?? "").trim();
+  const end = (endDate ?? "").trim();
+  if (!employee || !start || !end) {
+    throw new Error("Leave dates must fall within the employee’s active contract period.");
+  }
+
+  const coveringContract = await getContractCoveringLeavePeriod(employee, start, end);
+  if (coveringContract) return;
+
+  const activeContracts = await listActiveContractsForEmployee(employee);
+  if (activeContracts.length === 0) {
+    throw new Error("Leave dates must fall within the employee’s active contract period.");
+  }
+
+  const earliestStart = activeContracts
+    .map((contract) => String(contract.start_date ?? ""))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b))[0];
+  const latestEnd = activeContracts
+    .map((contract) => String(contract.end_date ?? ""))
+    .filter(Boolean)
+    .sort((a, b) => b.localeCompare(a))[0];
+
+  if (earliestStart && start < earliestStart) {
+    throw new Error("Leave cannot start before the employee’s contract start date.");
+  }
+  if (latestEnd && end > latestEnd) {
+    throw new Error("Leave cannot extend beyond the employee’s contract end date.");
+  }
+
+  throw new Error("Leave dates must fall within the employee’s active contract period.");
+}
+
+export async function hasLeaveDateOverlap(input: {
+  employeeId: string | null | undefined;
+  startDate: string | null | undefined;
+  endDate: string | null | undefined;
+  excludeLeaveTransactionId?: string | null | undefined;
+}): Promise<boolean> {
+  const employeeId = (input.employeeId ?? "").trim();
+  const startDate = (input.startDate ?? "").trim();
+  const endDate = (input.endDate ?? "").trim();
+  const excludeId = (input.excludeLeaveTransactionId ?? "").trim();
+
+  if (!employeeId || !startDate || !endDate) return false;
+
+  const supabase = await createClient();
+  let query = supabase
+    .from("leave_transactions")
+    .select("id")
+    .eq("employee_id", employeeId)
+    .in("status", ["pending", "approved"])
+    .not("start_date", "is", null)
+    .not("end_date", "is", null)
+    .lte("start_date", endDate)
+    .gte("end_date", startDate)
+    .limit(1);
+
+  if (excludeId) {
+    query = query.neq("id", excludeId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(`Failed to validate overlapping leave dates: ${error.message}`);
+  }
+
+  return (data ?? []).length > 0;
+}
+
 export async function listLeaveTransactions(
   params?: LeaveListParams
 ): Promise<LeaveTransactionRecord[]> {
@@ -403,10 +879,25 @@ export async function createLeaveApplication(
   input: CreateLeaveApplicationInput
 ): Promise<LeaveTransactionRecord> {
   const supabase = await createClient();
+  const employeeId = (input.employee_id ?? "").trim();
+  const startDate = (input.start_date ?? "").trim();
+  const endDate = (input.end_date ?? "").trim();
+
+  await validateLeaveWithinContractPeriod(employeeId, startDate, endDate);
+
+  const overlapping = await hasLeaveDateOverlap({
+    employeeId,
+    startDate,
+    endDate,
+  });
+  if (overlapping) {
+    throw new Error("Leave dates overlap with an existing leave record for this employee.");
+  }
+
   const calculatedDays =
     input.total_days ??
-    (input.start_date && input.end_date
-      ? calculateDays(input.start_date, input.end_date)
+    (startDate && endDate
+      ? calculateDays(startDate, endDate)
       : null);
   const normalizedLeaveType = normalizeLeaveType(input.leave_type);
 

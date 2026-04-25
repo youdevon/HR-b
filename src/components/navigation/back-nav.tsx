@@ -8,7 +8,6 @@ const exactBackHrefs: Record<string, string | null> = {
   "/employees": "/dashboard",
   "/contracts": "/dashboard",
   "/leave": "/dashboard",
-  "/documents": "/dashboard",
   "/file-movements": "/dashboard",
   "/records": "/dashboard",
   "/reports": "/dashboard",
@@ -18,16 +17,12 @@ const exactBackHrefs: Record<string, string | null> = {
   "/admin/roles": "/dashboard",
   "/admin/permissions": "/dashboard",
   "/audit/activity": "/dashboard",
-  "/compensation/current": "/dashboard",
   "/gratuity/calculations": "/dashboard",
   "/employees/new": "/employees",
   "/contracts/new": "/contracts",
   "/contracts/expiring": "/contracts",
   "/contracts/expired": "/contracts",
   "/contracts/renewals": "/contracts",
-  "/documents/new": "/documents",
-  "/documents/expiring": "/documents",
-  "/documents/expired": "/documents",
   "/leave/new": "/leave",
   "/leave/balances": "/leave",
   "/leave/transactions": "/leave",
@@ -47,8 +42,6 @@ const exactBackHrefs: Record<string, string | null> = {
   "/admin/document-types": "/admin",
   "/admin/custom-fields": "/admin",
   "/admin/settings": "/admin",
-  "/compensation/new": "/compensation/current",
-  "/compensation/history": "/compensation/current",
   "/gratuity/payments": "/gratuity/calculations",
   "/gratuity/rules": "/gratuity/calculations",
   "/gratuity/pending-review": "/gratuity/calculations",
@@ -76,13 +69,6 @@ function parentFromPath(pathname: string): string | null {
   }
   if (segments[0] === "contracts" && segments.length === 3 && segments[2] === "edit") {
     return `/contracts/${segments[1]}`;
-  }
-
-  if (segments[0] === "documents" && segments.length === 2) {
-    return "/documents";
-  }
-  if (segments[0] === "documents" && segments.length === 3 && segments[2] === "edit") {
-    return `/documents/${segments[1]}`;
   }
 
   if (segments[0] === "leave" && segments.length === 2) {
@@ -119,9 +105,6 @@ function parentFromPath(pathname: string): string | null {
   }
   if (segments[0] === "audit" && segments.length === 2) {
     return "/audit/activity";
-  }
-  if (segments[0] === "compensation" && segments.length === 2) {
-    return "/compensation/current";
   }
   if (segments[0] === "gratuity" && segments.length === 2) {
     return "/gratuity/calculations";

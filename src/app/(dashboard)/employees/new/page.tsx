@@ -9,7 +9,7 @@ export default function NewEmployeePage() {
     "use server";
 
     await createEmployee(data);
-    redirect("/employees");
+    redirect("/employees?created=1");
   }
 
   return (

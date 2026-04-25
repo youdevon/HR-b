@@ -2,21 +2,42 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
-import { getEmployeeById } from "@/lib/queries/employees";
-import { createClient } from "@/lib/supabase/server";
-import { validateContractDateOverlap } from "@/lib/queries/contracts";
+import ToastMessage from "@/components/ui/toast-message";
+import EmployeeContractSelector from "@/components/domain/contracts/employee-contract-selector";
+import { getEmployeeById, listEmployeeLookupOptions } from "@/lib/queries/employees";
+import { createContractRecord } from "@/lib/queries/contracts";
 
 type NewContractPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+const CONTRACT_TYPE_OPTIONS = [
+  { value: "temporary", label: "Short Term" },
+  { value: "fixed_term", label: "Fixed Term" },
+] as const;
+
 const CONTRACT_STATUS_OPTIONS = [
   { value: "active", label: "Active" },
-  { value: "pending", label: "Pending" },
-  { value: "draft", label: "Draft" },
   { value: "expired", label: "Expired" },
-  { value: "terminated", label: "Terminated" },
+  { value: "inactive", label: "Inactive" },
 ] as const;
+
+const SALARY_FREQUENCY_OPTIONS = [
+  { value: "monthly", label: "Monthly" },
+  { value: "fortnightly", label: "Fortnightly" },
+  { value: "weekly", label: "Weekly" },
+  { value: "daily", label: "Daily" },
+] as const;
+
+const CONTRACT_TYPE_VALUES = new Set<string>(
+  CONTRACT_TYPE_OPTIONS.map((option) => option.value)
+);
+const CONTRACT_STATUS_VALUES = new Set<string>(
+  CONTRACT_STATUS_OPTIONS.map((option) => option.value)
+);
+const SALARY_FREQUENCY_VALUES = new Set<string>(
+  SALARY_FREQUENCY_OPTIONS.map((option) => option.value)
+);
 
 function firstString(value: string | string[] | undefined): string | undefined {
   if (typeof value === "string") return value;
@@ -28,10 +49,6 @@ function input(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
 }
 
-function toNull(value: string): string | null {
-  return value === "" ? null : value;
-}
-
 function toNullableAmount(value: string): number | null {
   if (!value) return null;
   const parsed = Number(value);
@@ -41,54 +58,82 @@ function toNullableAmount(value: string): number | null {
   return parsed;
 }
 
+function toNonNegativeDecimalOrZero(value: string, fieldLabel: string): number {
+  if (!value) return 0;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${fieldLabel} must be greater than or equal to 0.`);
+  }
+  return parsed;
+}
+
 export default async function NewContractPage({ searchParams }: NewContractPageProps) {
   const sp = await searchParams;
   const employeeId = firstString(sp.employeeId) ?? "";
   const status = firstString(sp.status);
   const message = firstString(sp.message);
+  const created = firstString(sp.created) === "1";
   const employee = employeeId ? await getEmployeeById(employeeId) : null;
   const employeeName = employee
-    ? `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim() || "Unknown employee"
+    ? `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim() || null
     : null;
-  const suggestedContractTitle = employee?.job_title
-    ? `${employee.job_title} Employment Contract`
-    : "";
+  const employeeOptions = (await listEmployeeLookupOptions(300)).map((employeeOption) => ({
+    ...employeeOption,
+    full_name: `${employeeOption.first_name ?? ""} ${employeeOption.last_name ?? ""}`.trim(),
+  }));
 
   async function createContractAction(formData: FormData) {
     "use server";
     const employee_id = input(formData, "employee_id");
+    const contract_number = input(formData, "contract_number");
+    const contract_type = input(formData, "contract_type").toLowerCase();
+    const contract_status = input(formData, "contract_status").toLowerCase();
     const start_date = input(formData, "start_date");
     const end_date = input(formData, "end_date");
-    const effective_end = end_date || start_date;
+    const salary_frequency = (input(formData, "salary_frequency") || "monthly").toLowerCase();
 
-    try {
-      if (employee_id && start_date && effective_end) {
-        await validateContractDateOverlap({
-          employeeId: employee_id,
-          newStartDate: start_date,
-          newEndDate: effective_end,
-        });
-      }
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "Failed to validate contract overlap.";
-      const qs = new URLSearchParams();
-      qs.set("status", "error");
-      qs.set("message", errorMessage);
-      if (employee_id) {
-        qs.set("employeeId", employee_id);
-      }
-      redirect(`/contracts/new?${qs.toString()}`);
+    if (!employee_id) {
+      redirect(
+        `/contracts/new?status=error&message=${encodeURIComponent("Please select an employee before creating a contract.")}`
+      );
+    }
+    if (!contract_number || !contract_type || !contract_status) {
+      redirect(
+        `/contracts/new?status=error&message=${encodeURIComponent("Contract number, type, and status are required.")}&employeeId=${encodeURIComponent(employee_id)}`
+      );
+    }
+    if (!CONTRACT_TYPE_VALUES.has(contract_type)) {
+      redirect(`/contracts/new?status=error&message=${encodeURIComponent("Invalid contract type.")}&employeeId=${encodeURIComponent(employee_id)}`);
+    }
+    if (!CONTRACT_STATUS_VALUES.has(contract_status)) {
+      redirect(`/contracts/new?status=error&message=${encodeURIComponent("Invalid contract status.")}&employeeId=${encodeURIComponent(employee_id)}`);
+    }
+    if (!SALARY_FREQUENCY_VALUES.has(salary_frequency)) {
+      redirect(`/contracts/new?status=error&message=${encodeURIComponent("Invalid salary frequency.")}&employeeId=${encodeURIComponent(employee_id)}`);
+    }
+    if (!start_date || !end_date) {
+      redirect(`/contracts/new?status=error&message=${encodeURIComponent("Start date and end date are required.")}&employeeId=${encodeURIComponent(employee_id)}`);
+    }
+    if (end_date < start_date) {
+      redirect(`/contracts/new?status=error&message=${encodeURIComponent("End date must be after or equal to start date.")}&employeeId=${encodeURIComponent(employee_id)}`);
     }
 
     let salaryAmount: number | null = null;
+    let vacationLeaveDays = 0;
+    let sickLeaveDays = 0;
     try {
       salaryAmount = toNullableAmount(input(formData, "salary_amount"));
+      vacationLeaveDays = toNonNegativeDecimalOrZero(
+        input(formData, "vacation_leave_days"),
+        "Vacation leave days"
+      );
+      sickLeaveDays = toNonNegativeDecimalOrZero(
+        input(formData, "sick_leave_days"),
+        "Sick leave days"
+      );
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : "Invalid salary amount.";
+        error instanceof Error ? error.message : "Invalid contract values.";
       const qs = new URLSearchParams();
       qs.set("status", "error");
       qs.set("message", errorMessage);
@@ -96,36 +141,36 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
       redirect(`/contracts/new?${qs.toString()}`);
     }
 
-    const supabase = await createClient();
-    const { error } = await supabase.from("contracts").insert({
-      employee_id: toNull(employee_id),
-      contract_number: input(formData, "contract_number"),
-      contract_title: input(formData, "contract_title"),
-      contract_type: input(formData, "contract_type"),
-      contract_status: input(formData, "contract_status"),
-      start_date,
-      end_date: toNull(input(formData, "end_date")),
-      effective_date: toNull(input(formData, "effective_date")),
-      notice_period: toNull(input(formData, "notice_period")),
-      job_title: toNull(input(formData, "job_title")),
-      department: toNull(input(formData, "department")),
-      signed_date: toNull(input(formData, "signed_date")),
-      issued_date: toNull(input(formData, "issued_date")),
-      salary_amount: salaryAmount,
-      salary_frequency: toNull(input(formData, "salary_frequency")),
-      is_gratuity_eligible: formData.get("is_gratuity_eligible") === "on",
-    });
-
-    if (error) {
-      throw new Error(`Failed to create contract: ${error.message}`);
+    try {
+      await createContractRecord({
+        employee_id,
+        contract_number,
+        contract_type,
+        contract_status,
+        start_date,
+        end_date,
+        salary_amount: salaryAmount,
+        salary_frequency,
+        is_gratuity_eligible: formData.get("is_gratuity_eligible") === "on",
+        vacation_leave_days: vacationLeaveDays,
+        sick_leave_days: sickLeaveDays,
+      });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to create contract.";
+      const qs = new URLSearchParams();
+      qs.set("status", "error");
+      qs.set("message", errorMessage);
+      if (employee_id) qs.set("employeeId", employee_id);
+      redirect(`/contracts/new?${qs.toString()}`);
     }
 
     revalidatePath("/contracts");
     if (employee_id) {
       revalidatePath(`/employees/${employee_id}`);
-      redirect(`/employees/${employee_id}`);
+      redirect(`/contracts/new?employeeId=${encodeURIComponent(employee_id)}&created=1`);
     }
-    redirect("/contracts");
+    redirect("/contracts/new?created=1");
   }
 
   return (
@@ -135,11 +180,15 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
           title="New Contract"
           description={
             employeeId
-              ? `Create a contract linked to ${employeeName ?? employeeId}.`
-              : "Create a contract linked to an employee profile. No employee preselected."
+              ? `Create a contract linked to ${employeeName ?? "selected employee"} (File #: ${employee?.file_number ?? "—"}).`
+              : "Create a contract linked to an employee profile."
           }
           backHref="/contracts"
         />
+
+        {created ? (
+          <ToastMessage message="Contract created successfully." />
+        ) : null}
 
         {message ? (
           <section
@@ -154,30 +203,35 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
         ) : null}
 
         <form action={createContractAction} className="space-y-6">
-          <input type="hidden" name="employee_id" value={employeeId} />
+          <EmployeeContractSelector
+            options={employeeOptions}
+            initialSelectedEmployeeId={employeeId}
+          />
+
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
             <h2 className="text-lg font-semibold text-neutral-900">Contract Basics</h2>
+            <p className="mt-1 text-sm text-neutral-600">
+              Start and end dates drive leave availability, gratuity calculation, expiry alerts, and lifecycle status.
+            </p>
             <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Employee ID</span>
-                <input value={employeeId} readOnly placeholder="Optional" className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700 placeholder:text-neutral-400" />
-              </label>
               <label className="space-y-1.5">
                 <span className="text-sm font-medium text-neutral-700">Contract Number</span>
                 <input name="contract_number" required className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
               </label>
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Contract Title</span>
-                <input
-                  name="contract_title"
-                  required
-                  defaultValue={suggestedContractTitle}
-                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                />
-              </label>
-              <label className="space-y-1.5">
                 <span className="text-sm font-medium text-neutral-700">Contract Type</span>
-                <input name="contract_type" required className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+                <select
+                  name="contract_type"
+                  required
+                  defaultValue="fixed_term"
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                >
+                  {CONTRACT_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="space-y-1.5">
                 <span className="text-sm font-medium text-neutral-700">Contract Status</span>
@@ -199,6 +253,10 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
                 <input name="start_date" type="date" required className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
               </label>
               <label className="space-y-1.5">
+                <span className="text-sm font-medium text-neutral-700">End Date</span>
+                <input name="end_date" type="date" required className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+              </label>
+              <label className="space-y-1.5">
                 <span className="text-sm font-medium text-neutral-700">Monthly Salary</span>
                 <input
                   name="salary_amount"
@@ -215,10 +273,11 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
                   defaultValue="monthly"
                   className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
                 >
-                  <option value="monthly">Monthly</option>
-                  <option value="annual">Annual</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="daily">Daily</option>
+                  {SALARY_FREQUENCY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>
@@ -231,31 +290,40 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
               <span>
                 <span className="block text-sm font-medium text-neutral-900">Eligible for Gratuity</span>
                 <span className="block text-xs text-neutral-600">
-                  Check this only if gratuity applies to this contract. Short-term contracts can be left unchecked.
+                  Check this only if gratuity applies to this contract.
                 </span>
               </span>
             </label>
           </section>
 
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-            <h2 className="text-lg font-semibold text-neutral-900">Optional Details</h2>
-            <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <input name="end_date" type="date" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              <input name="effective_date" type="date" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              <input name="signed_date" type="date" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              <input name="issued_date" type="date" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              <input
-                name="department"
-                placeholder="Department"
-                defaultValue={employee?.department ?? ""}
-                className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-              />
-              <input
-                name="job_title"
-                placeholder="Job Title"
-                defaultValue={employee?.job_title ?? ""}
-                className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-              />
+            <h2 className="text-lg font-semibold text-neutral-900">Leave Entitlements</h2>
+            <p className="mt-1 text-sm text-neutral-600">
+              These values are annual entitlements. The system creates yearly vacation and sick leave balances for each contract year with no rollover.
+            </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <label className="space-y-1.5">
+                <span className="text-sm font-medium text-neutral-700">Vacation Leave Days</span>
+                <input
+                  name="vacation_leave_days"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  defaultValue="0"
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-sm font-medium text-neutral-700">Sick Leave Days</span>
+                <input
+                  name="sick_leave_days"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  defaultValue="0"
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                />
+              </label>
             </div>
           </section>
 

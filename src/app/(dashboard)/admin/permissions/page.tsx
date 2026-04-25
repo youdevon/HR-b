@@ -5,6 +5,10 @@ import { listPermissions, type AdminPermissionRecord } from "@/lib/queries/admin
 function groupedPermissions(permissions: AdminPermissionRecord[]) {
   return permissions.reduce<Record<string, AdminPermissionRecord[]>>((acc, permission) => {
     const moduleName = permission.module_name ?? "General";
+    const normalized = moduleName.trim().toLowerCase();
+    if (normalized === "documents" || normalized === "compensation") {
+      return acc;
+    }
     acc[moduleName] = [...(acc[moduleName] ?? []), permission];
     return acc;
   }, {});

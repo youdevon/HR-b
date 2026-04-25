@@ -1,18 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveContractStatus } from "@/lib/queries/contracts";
 
 export type DashboardMetrics = {
   activeEmployeesCount: number;
   totalEmployeesCount: number;
   activeContractsCount: number;
-  contractsExpiringIn30DaysCount: number;
+  contractsExpiringIn90DaysCount: number;
   expiredContractsCount: number;
   lowSickLeaveCount: number;
   lowVacationLeaveCount: number;
   employeesOnLeaveCount: number;
   pendingLeaveApprovalsCount: number;
   lowLeaveBalanceAlertsCount: number;
-  documentsExpiringIn30DaysCount: number;
-  expiredDocumentsCount: number;
   filesCheckedOutCount: number;
   overdueFileReturnsCount: number;
   missingFilesCount: number;
@@ -73,35 +72,34 @@ async function countAllEmployees(): Promise<number> {
 
 async function countActiveContracts(): Promise<number> {
   const supabase = await createClient();
-  const { count, error } = await supabase
+  const { data, error } = await supabase
     .from("contracts")
-    .select("id", { head: true, count: "exact" })
-    .eq("contract_status", "active");
+    .select("id, contract_status, end_date");
 
   if (error) {
     throw new Error(`Failed to count active contracts: ${error.message}`);
   }
 
-  return count ?? 0;
+  return (data ?? []).filter((contract) => getEffectiveContractStatus(contract) === "active").length;
 }
 
-async function countContractsExpiringIn30Days(): Promise<number> {
+async function countContractsExpiringIn90Days(): Promise<number> {
   const supabase = await createClient();
   const today = todayDateString();
-  const in30Days = plusDaysDateString(30);
+  const in90Days = plusDaysDateString(90);
 
-  const { count, error } = await supabase
+  const { data, error } = await supabase
     .from("contracts")
-    .select("id", { head: true, count: "exact" })
+    .select("id, contract_status, end_date")
     .not("end_date", "is", null)
     .gte("end_date", today)
-    .lte("end_date", in30Days);
+    .lte("end_date", in90Days);
 
   if (error) {
     throw new Error(`Failed to count expiring contracts: ${error.message}`);
   }
 
-  return count ?? 0;
+  return (data ?? []).filter((contract) => getEffectiveContractStatus(contract) === "active").length;
 }
 
 async function countExpiredContracts(): Promise<number> {
@@ -190,42 +188,6 @@ async function countLowLeaveBalanceAlerts(): Promise<number> {
   }).length;
 }
 
-async function countDocumentsExpiringIn30Days(): Promise<number> {
-  const supabase = await createClient();
-  const today = todayDateString();
-  const in30Days = plusDaysDateString(30);
-
-  const { count, error } = await supabase
-    .from("documents")
-    .select("id", { head: true, count: "exact" })
-    .not("expiry_date", "is", null)
-    .gte("expiry_date", today)
-    .lte("expiry_date", in30Days);
-
-  if (error) {
-    throw new Error(`Failed to count expiring documents: ${error.message}`);
-  }
-
-  return count ?? 0;
-}
-
-async function countExpiredDocuments(): Promise<number> {
-  const supabase = await createClient();
-  const today = todayDateString();
-
-  const { count, error } = await supabase
-    .from("documents")
-    .select("id", { head: true, count: "exact" })
-    .not("expiry_date", "is", null)
-    .lt("expiry_date", today);
-
-  if (error) {
-    throw new Error(`Failed to count expired documents: ${error.message}`);
-  }
-
-  return count ?? 0;
-}
-
 async function countFilesInTransit(): Promise<number> {
   const supabase = await createClient();
   const { count, error } = await supabase
@@ -263,7 +225,7 @@ async function countActiveAlerts(): Promise<number> {
   const { count, error } = await supabase
     .from("alerts")
     .select("id", { head: true, count: "exact" })
-    .in("status", ["active", "acknowledged"]);
+    .eq("status", "active");
 
   if (error) {
     throw new Error(`Failed to count active alerts: ${error.message}`);
@@ -277,7 +239,7 @@ async function countCriticalAlerts(): Promise<number> {
   const { count, error } = await supabase
     .from("alerts")
     .select("id", { head: true, count: "exact" })
-    .in("status", ["active", "acknowledged"])
+    .eq("status", "active")
     .eq("severity_level", "critical");
 
   if (error) {
@@ -292,15 +254,13 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     activeEmployeesCount,
     totalEmployeesCount,
     activeContractsCount,
-    contractsExpiringIn30DaysCount,
+    contractsExpiringIn90DaysCount,
     expiredContractsCount,
     lowSickLeaveCount,
     lowVacationLeaveCount,
     employeesOnLeaveCount,
     pendingLeaveApprovalsCount,
     lowLeaveBalanceAlertsCount,
-    documentsExpiringIn30DaysCount,
-    expiredDocumentsCount,
     filesCheckedOutCount,
     overdueFileReturnsCount,
     missingFilesCount,
@@ -311,15 +271,13 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     countEmployeesByStatus("active"),
     countAllEmployees(),
     countActiveContracts(),
-    countContractsExpiringIn30Days(),
+    countContractsExpiringIn90Days(),
     countExpiredContracts(),
     countLowLeaveByType("sick_leave"),
     countLowLeaveByType("vacation_leave"),
     countEmployeesOnLeave(),
     countPendingLeaveApprovals(),
     countLowLeaveBalanceAlerts(),
-    countDocumentsExpiringIn30Days(),
-    countExpiredDocuments(),
     countFilesByMovementStatus(["checked_out"]),
     countOverdueFileReturns(),
     countFilesByMovementStatus(["missing"]),
@@ -332,15 +290,13 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     activeEmployeesCount,
     totalEmployeesCount,
     activeContractsCount,
-    contractsExpiringIn30DaysCount,
+    contractsExpiringIn90DaysCount,
     expiredContractsCount,
     lowSickLeaveCount,
     lowVacationLeaveCount,
     employeesOnLeaveCount,
     pendingLeaveApprovalsCount,
     lowLeaveBalanceAlertsCount,
-    documentsExpiringIn30DaysCount,
-    expiredDocumentsCount,
     filesCheckedOutCount,
     overdueFileReturnsCount,
     missingFilesCount,

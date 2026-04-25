@@ -1,4 +1,5 @@
 import { listAlertRules, type AlertRuleRecord } from "@/lib/queries/alert-rules";
+import { getEffectiveContractStatus } from "@/lib/queries/contracts";
 import { createClient } from "@/lib/supabase/server";
 
 type AlertPayload = {
@@ -12,6 +13,7 @@ type AlertPayload = {
   status: "active";
   triggered_at: string;
   correlation_id: string;
+  rule_code: string;
 };
 
 export type NotificationGenerationCounts = {
@@ -21,6 +23,8 @@ export type NotificationGenerationCounts = {
   "Physical Files": number;
   Gratuity: number;
   General: number;
+  byModule: Record<string, number>;
+  byRule: Record<string, number>;
   total: number;
 };
 
@@ -31,6 +35,12 @@ type ContractRow = {
   contract_title: string | null;
   contract_status: string | null;
   end_date: string | null;
+};
+
+type EmployeeNameRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
 };
 
 type DocumentRow = {
@@ -52,7 +62,6 @@ type LeaveTransactionRow = {
   id: string;
   employee_id: string | null;
   leave_type: string | null;
-  approval_status: string | null;
   status: string | null;
   medical_certificate_required?: boolean | null;
   medical_certificate_received?: boolean | null;
@@ -77,6 +86,13 @@ type GratuityCalculationRow = {
   created_at: string | null;
 };
 
+type CountableModule =
+  | "Contracts"
+  | "Documents"
+  | "Leave"
+  | "Physical Files"
+  | "Gratuity";
+
 const EMPTY_COUNTS: NotificationGenerationCounts = {
   Contracts: 0,
   Documents: 0,
@@ -84,6 +100,8 @@ const EMPTY_COUNTS: NotificationGenerationCounts = {
   "Physical Files": 0,
   Gratuity: 0,
   General: 0,
+  byModule: {},
+  byRule: {},
   total: 0,
 };
 
@@ -112,9 +130,8 @@ function normalizedLeaveType(value: string | null): string {
 }
 
 function ruleDays(rule: AlertRuleRecord, fallback: number): number {
-  if (typeof rule.threshold_days === "number") return rule.threshold_days;
-  if (typeof rule.threshold_value === "number") return rule.threshold_value;
-  return fallback;
+  const days = rule.threshold_days ?? Number(rule.threshold_value ?? fallback);
+  return Number.isFinite(days) ? Number(days) : fallback;
 }
 
 function ruleValue(rule: AlertRuleRecord, fallback: number): number {
@@ -160,12 +177,15 @@ function moduleName(rule: AlertRuleRecord, fallback: string): string {
 
 function buildAlert(
   rule: AlertRuleRecord,
-  input: Omit<AlertPayload, "severity_level" | "status" | "triggered_at" | "correlation_id"> & {
+  input: Omit<
+    AlertPayload,
+    "severity_level" | "status" | "triggered_at" | "correlation_id" | "rule_code"
+  > & {
     correlationEntityId: string;
     fallbackSeverity: string;
   }
 ): AlertPayload {
-  const ruleCode = rule.rule_code?.trim() || rule.alert_type?.trim() || "alert_rule";
+  const ruleCode = (rule.rule_code?.trim() || rule.alert_type?.trim() || "alert_rule").toLowerCase();
 
   return {
     alert_title: input.alert_title,
@@ -178,6 +198,7 @@ function buildAlert(
     status: "active",
     triggered_at: new Date().toISOString(),
     correlation_id: `${ruleCode}-${input.correlationEntityId}`,
+    rule_code: ruleCode,
   };
 }
 
@@ -237,29 +258,74 @@ export async function generateContractAlertsFromRules(
 
   if (!expiringRules.length && !expiredRules.length) return [];
 
-  const maxThreshold = Math.max(0, ...expiringRules.map((rule) => ruleDays(rule, 30)));
+  const maxThreshold = Math.max(0, ...expiringRules.map((rule) => ruleDays(rule, 0)));
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("contracts")
     .select("id, employee_id, contract_number, contract_title, contract_status, end_date")
     .not("end_date", "is", null)
-    .lte("end_date", dateInDays(maxThreshold));
+    .lte("end_date", dateInDays(maxThreshold))
+    .order("end_date", { ascending: true });
 
   if (error) throw new Error(`Failed to load contracts for notifications: ${error.message}`);
 
   const today = todayDateString();
+  const employeeIds = [
+    ...new Set(
+      ((data ?? []) as ContractRow[])
+        .map((contract) => contract.employee_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  let employeeNamesById = new Map<string, string>();
+  if (employeeIds.length > 0) {
+    const { data: employees, error: employeeError } = await supabase
+      .from("employees")
+      .select("id, first_name, last_name")
+      .in("id", employeeIds);
+    if (employeeError) {
+      throw new Error(`Failed to load employee names for contract alerts: ${employeeError.message}`);
+    }
+    employeeNamesById = new Map(
+      ((employees ?? []) as EmployeeNameRow[]).map((employee) => {
+        const fullName = `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim();
+        return [employee.id, fullName || "Unknown employee"];
+      })
+    );
+  }
+
+  function toLocalDate(dateText: string): Date {
+    const [yearText, monthText, dayText] = dateText.split("-");
+    return new Date(Number(yearText), Number(monthText) - 1, Number(dayText));
+  }
+
+  function dayDiff(fromDateText: string, toDateText: string): number {
+    const from = toLocalDate(fromDateText);
+    const to = toLocalDate(toDateText);
+    return Math.floor((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
+  }
+
   const alerts: AlertPayload[] = [];
 
   for (const contract of (data ?? []) as ContractRow[]) {
     if (!contract.end_date) continue;
+    const effectiveStatus = getEffectiveContractStatus({
+      contract_status: contract.contract_status,
+      end_date: contract.end_date,
+    });
     const label = contract.contract_number ?? contract.contract_title ?? contract.id;
+    const employeeName = contract.employee_id
+      ? employeeNamesById.get(contract.employee_id) ?? "Unknown employee"
+      : "Unknown employee";
+    const daysUntilExpiry = dayDiff(today, contract.end_date);
 
-    if (contract.end_date < today) {
+    if (contract.end_date < today && effectiveStatus === "expired") {
       for (const rule of expiredRules) {
-        if (!statusApplies(contract.contract_status, rule)) continue;
+        if (!statusApplies(effectiveStatus, rule)) continue;
+        const daysExpired = Math.abs(daysUntilExpiry);
         alerts.push(buildAlert(rule, {
-          alert_title: "Contract Expired",
-          alert_message: `Contract ${label} expired on ${contract.end_date}.`,
+          alert_title: rule.rule_name?.trim() || "Contract Expired",
+          alert_message: `Contract ${label} (${employeeName}) ended on ${contract.end_date} and is ${daysExpired} day(s) expired.`,
           module_name: "Contracts",
           entity_type: "contract",
           entity_id: contract.id,
@@ -272,11 +338,12 @@ export async function generateContractAlertsFromRules(
     }
 
     for (const rule of expiringRules) {
-      const threshold = ruleDays(rule, 30);
-      if (contract.end_date <= dateInDays(threshold) && statusApplies(contract.contract_status, rule)) {
+      const threshold = ruleDays(rule, 0);
+      const withinThreshold = contract.end_date >= today && contract.end_date <= dateInDays(threshold);
+      if (effectiveStatus === "active" && withinThreshold && statusApplies(effectiveStatus, rule)) {
         alerts.push(buildAlert(rule, {
-          alert_title: threshold <= 7 ? "Contract Critical Expiry" : "Contract Expiring Soon",
-          alert_message: `Contract ${label} ends on ${contract.end_date}.`,
+          alert_title: rule.rule_name?.trim() || "Contract Expiring Soon",
+          alert_message: `Contract ${label} (${employeeName}) ends on ${contract.end_date} in ${Math.max(0, daysUntilExpiry)} day(s).`,
           module_name: "Contracts",
           entity_type: "contract",
           entity_id: contract.id,
@@ -363,37 +430,72 @@ export async function generateDocumentAlertsFromRules(
 
 async function loadLeaveTransactionsForAlerts(): Promise<{
   rows: LeaveTransactionRow[];
+  hasStatusField: boolean;
   hasMedicalCertificateFields: boolean;
 }> {
   const supabase = await createClient();
-  const withMedical = await supabase
+  const withStatusAndMedical = await supabase
     .from("leave_transactions")
     .select(
-      "id, employee_id, leave_type, approval_status, status, medical_certificate_required, medical_certificate_received, created_at"
+      "id, employee_id, leave_type, status, medical_certificate_required, medical_certificate_received, created_at"
     );
 
-  if (!withMedical.error) {
+  if (!withStatusAndMedical.error) {
     return {
-      rows: (withMedical.data ?? []) as LeaveTransactionRow[],
+      rows: (withStatusAndMedical.data ?? []) as LeaveTransactionRow[],
+      hasStatusField: true,
       hasMedicalCertificateFields: true,
     };
   }
 
-  const message = withMedical.error.message.toLowerCase();
-  if (!message.includes("medical_certificate") && !message.includes("schema cache")) {
-    throw new Error(`Failed to load leave transactions for notifications: ${withMedical.error.message}`);
+  const firstErrorMessage = withStatusAndMedical.error.message.toLowerCase();
+  const looksLikeSchemaColumnIssue =
+    firstErrorMessage.includes("schema cache") ||
+    firstErrorMessage.includes("column") ||
+    firstErrorMessage.includes("medical_certificate") ||
+    firstErrorMessage.includes("status");
+  if (!looksLikeSchemaColumnIssue) {
+    throw new Error(
+      `Failed to load leave transactions for notifications: ${withStatusAndMedical.error.message}`
+    );
   }
 
-  const fallback = await supabase
+  const withStatusOnly = await supabase
     .from("leave_transactions")
-    .select("id, employee_id, leave_type, approval_status, status, created_at");
+    .select("id, employee_id, leave_type, status, created_at");
 
-  if (fallback.error) {
-    throw new Error(`Failed to load leave transactions for notifications: ${fallback.error.message}`);
+  if (!withStatusOnly.error) {
+    return {
+      rows: (withStatusOnly.data ?? []) as LeaveTransactionRow[],
+      hasStatusField: true,
+      hasMedicalCertificateFields: false,
+    };
+  }
+
+  const secondErrorMessage = withStatusOnly.error.message.toLowerCase();
+  const statusMissing =
+    secondErrorMessage.includes("column") &&
+    secondErrorMessage.includes("status");
+  if (statusMissing) {
+    // No status-like field available for rule evaluation; skip leave-transaction alerts safely.
+    return {
+      rows: [],
+      hasStatusField: false,
+      hasMedicalCertificateFields: false,
+    };
+  }
+
+  const minimal = await supabase
+    .from("leave_transactions")
+    .select("id, employee_id, leave_type, created_at");
+
+  if (minimal.error) {
+    throw new Error(`Failed to load leave transactions for notifications: ${minimal.error.message}`);
   }
 
   return {
-    rows: (fallback.data ?? []) as LeaveTransactionRow[],
+    rows: (minimal.data ?? []) as LeaveTransactionRow[],
+    hasStatusField: false,
     hasMedicalCertificateFields: false,
   };
 }
@@ -461,12 +563,13 @@ export async function generateLeaveAlertsFromRules(
   }
 
   if (pendingRules.length || certificateRules.length) {
-    const { rows, hasMedicalCertificateFields } = await loadLeaveTransactionsForAlerts();
+    const { rows, hasStatusField, hasMedicalCertificateFields } =
+      await loadLeaveTransactionsForAlerts();
 
     for (const transaction of rows) {
-      const currentStatus = transaction.approval_status ?? transaction.status;
+      const currentStatus = transaction.status;
 
-      if (normalized(currentStatus) === "pending") {
+      if (hasStatusField && normalized(currentStatus) === "pending") {
         for (const rule of pendingRules) {
           const threshold = ruleDays(rule, 7);
           if (transaction.created_at && transaction.created_at <= `${dateDaysAgo(threshold)}T23:59:59`) {
@@ -484,7 +587,11 @@ export async function generateLeaveAlertsFromRules(
         }
       }
 
-      if (hasMedicalCertificateFields && transaction.medical_certificate_required === true) {
+      if (
+        hasStatusField &&
+        hasMedicalCertificateFields &&
+        transaction.medical_certificate_required === true
+      ) {
         const received = transaction.medical_certificate_received === true;
         if (!received) {
           for (const rule of certificateRules) {
@@ -677,16 +784,36 @@ export async function generateGratuityAlertsFromRules(
   return alerts;
 }
 
-function countsForInserted(inserted: AlertPayload[]): NotificationGenerationCounts {
+function countsForInserted(
+  inserted: AlertPayload[],
+  sourceRules: AlertRuleRecord[]
+): NotificationGenerationCounts {
   const counts = { ...EMPTY_COUNTS };
+  const typedModules = new Set<CountableModule>([
+    "Contracts",
+    "Documents",
+    "Leave",
+    "Physical Files",
+    "Gratuity",
+  ]);
+  for (const rule of sourceRules) {
+    const ruleCode = (rule.rule_code ?? "").trim().toLowerCase();
+    if (ruleCode) {
+      counts.byRule[ruleCode] = counts.byRule[ruleCode] ?? 0;
+    }
+  }
 
   for (const alert of inserted) {
-    const module = alert.module_name as keyof NotificationGenerationCounts;
-    if (module in counts && module !== "total") {
+    const module = alert.module_name as CountableModule;
+    if (typedModules.has(module)) {
       counts[module] += 1;
     } else {
       counts.General += 1;
     }
+    const moduleLabel = alert.module_name?.trim() || "General";
+    counts.byModule[moduleLabel] = (counts.byModule[moduleLabel] ?? 0) + 1;
+    const ruleCode = alert.rule_code?.trim() || "unknown_rule";
+    counts.byRule[ruleCode] = (counts.byRule[ruleCode] ?? 0) + 1;
     counts.total += 1;
   }
 
@@ -694,14 +821,17 @@ function countsForInserted(inserted: AlertPayload[]): NotificationGenerationCoun
 }
 
 export async function generateAllSystemAlerts(): Promise<NotificationGenerationCounts> {
-  const rules = (await listAlertRules()).filter((rule) => rule.is_active !== false);
+  const rules = (await listAlertRules()).filter((rule) => {
+    if (rule.is_active === false) return false;
+    const moduleName = (rule.module_name ?? "").trim().toLowerCase();
+    return moduleName !== "documents" && moduleName !== "compensation";
+  });
   const alertGroups = await Promise.all([
     generateContractAlertsFromRules(rules),
-    generateDocumentAlertsFromRules(rules),
     generateLeaveAlertsFromRules(rules),
     generatePhysicalFileAlertsFromRules(rules),
     generateGratuityAlertsFromRules(rules),
   ]);
   const inserted = await insertNewAlerts(alertGroups.flat());
-  return countsForInserted(inserted);
+  return countsForInserted(inserted, rules);
 }

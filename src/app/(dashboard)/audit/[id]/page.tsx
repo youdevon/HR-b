@@ -138,7 +138,7 @@ export default async function AuditDetailPage({
             <div>
               <dt className="text-xs font-medium text-neutral-500">Performed by</dt>
               <dd className="mt-1 text-sm font-semibold text-neutral-900">
-                {record.performed_by_name ?? "System"}
+                {record.performed_by_display_name}
               </dd>
               {record.performed_by_user_id ? (
                 <dd className="mt-1 font-mono text-xs text-neutral-500">{record.performed_by_user_id}</dd>
@@ -211,7 +211,7 @@ export default async function AuditDetailPage({
                           {item.action_type}
                         </span>
                         <span className="text-xs text-neutral-500">
-                          {item.performed_by_name ?? "System"}
+                          {item.performed_by_display_name}
                         </span>
                       </div>
                       <time className="text-xs text-neutral-500">{formatDate(itemWhen)}</time>

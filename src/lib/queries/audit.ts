@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUserProfile } from "@/lib/auth/permissions";
 import "server-only";
 
 type AuditSupabase = Awaited<ReturnType<typeof createClient>>;
@@ -30,13 +31,31 @@ export type AuditRecord = {
 export type AuditLogWithContext = AuditRecord & {
   related_employee_name: string | null;
   related_employee_number: string | null;
+  performed_by_display_name: string;
 };
+
+export function summarizeChangedFields(
+  changedFields: string[] | null | undefined,
+  maxFields = 3
+): string {
+  const fields = (changedFields ?? []).filter(Boolean);
+  if (fields.length === 0) return "No changed fields listed";
+  if (fields.length <= maxFields) return fields.join(", ");
+  return `${fields.slice(0, maxFields).join(", ")} +${fields.length - maxFields} more`;
+}
 
 type EmployeeAuditJoinRow = {
   id: string;
   first_name: string | null;
   last_name: string | null;
   employee_number: string | null;
+};
+
+type UserProfileAuditJoinRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
 };
 
 export type WriteAuditLogInput = {
@@ -91,6 +110,15 @@ function formatEmployeeDisplayName(row: EmployeeAuditJoinRow): string | null {
   return name || null;
 }
 
+function formatUserProfileDisplayName(
+  profile: Pick<UserProfileAuditJoinRow, "first_name" | "last_name">
+): string | null {
+  const first = profile.first_name?.trim() ?? "";
+  const last = profile.last_name?.trim() ?? "";
+  const full = `${first} ${last}`.trim();
+  return full || null;
+}
+
 async function attachRelatedEmployeeContext(
   supabase: AuditSupabase,
   logs: AuditRecord[]
@@ -118,13 +146,50 @@ async function attachRelatedEmployeeContext(
     byId = new Map((data ?? []).map((row) => [row.id, row as EmployeeAuditJoinRow]));
   }
 
+  const performerUserIds = [
+    ...new Set(
+      logs
+        .map((log) => log.performed_by_user_id)
+        .filter((value): value is string => Boolean(value))
+    ),
+  ];
+  let performersById = new Map<string, UserProfileAuditJoinRow>();
+  if (performerUserIds.length > 0) {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("id, first_name, last_name, email")
+      .in("id", performerUserIds);
+
+    if (error) {
+      console.error("attachRelatedEmployeeContext user_profiles error:", error);
+      throw new Error(
+        `Failed to load performer profiles for audit: ${error.message}`
+      );
+    }
+    performersById = new Map(
+      (data ?? []).map((row) => [row.id, row as UserProfileAuditJoinRow])
+    );
+  }
+
   return logs.map((log) => {
     const isEmployee = log.entity_type?.toLowerCase() === "employee";
     const emp = isEmployee ? byId.get(log.entity_id) : undefined;
+    const performer = log.performed_by_user_id
+      ? performersById.get(log.performed_by_user_id)
+      : undefined;
+    const performerNameFromProfile = performer
+      ? formatUserProfileDisplayName(performer)
+      : null;
+    const performedByDisplayName =
+      performerNameFromProfile ??
+      log.performed_by_name?.trim() ??
+      performer?.email?.trim() ??
+      "System";
     return {
       ...log,
       related_employee_name: emp ? formatEmployeeDisplayName(emp) : null,
       related_employee_number: emp?.employee_number ?? null,
+      performed_by_display_name: performedByDisplayName,
     };
   });
 }
@@ -139,6 +204,11 @@ function sortAuditLogsByEventTimeDesc(logs: AuditRecord[]): AuditRecord[] {
 
 export async function writeAuditLog(input: WriteAuditLogInput): Promise<AuditRecord> {
   const supabase = await createClient();
+  const currentProfile =
+    (await getCurrentUserProfile().catch(() => null)) ?? null;
+  const currentProfileDisplayName = currentProfile
+    ? formatUserProfileDisplayName(currentProfile)
+    : null;
 
   const payload = {
     module_name: input.module_name,
@@ -149,8 +219,8 @@ export async function writeAuditLog(input: WriteAuditLogInput): Promise<AuditRec
     old_values: input.old_values ?? null,
     new_values: input.new_values ?? null,
     source_type: input.source_type ?? "application",
-    performed_by_name: input.performed_by_name ?? null,
-    performed_by_user_id: input.performed_by_user_id ?? null,
+    performed_by_name: input.performed_by_name ?? currentProfileDisplayName ?? null,
+    performed_by_user_id: input.performed_by_user_id ?? currentProfile?.id ?? null,
     role_at_time: input.role_at_time ?? null,
     event_timestamp: input.event_timestamp ?? new Date().toISOString(),
     reason_for_change: input.reason_for_change ?? null,

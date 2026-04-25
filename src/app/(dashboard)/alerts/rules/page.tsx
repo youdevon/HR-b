@@ -13,7 +13,10 @@ function display(value: string | number | boolean | null | undefined): string {
 }
 
 export default async function AlertRulesPage() {
-  const rules = await listAlertRules();
+  const rules = (await listAlertRules()).filter((rule) => {
+    const moduleName = (rule.module_name ?? "").trim().toLowerCase();
+    return moduleName !== "documents" && moduleName !== "compensation";
+  });
 
   return (
     <main className="space-y-6">

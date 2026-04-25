@@ -1,11 +1,14 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import ClickableTableRow from "@/components/ui/clickable-table-row";
+import ToastMessage from "@/components/ui/toast-message";
 import { listEmployees } from "@/lib/queries/employees";
 
 type EmployeesPageProps = {
   searchParams: Promise<{
     q?: string;
     show?: string;
+    created?: string;
   }>;
 };
 
@@ -15,6 +18,7 @@ export default async function EmployeesPage({
   const params = await searchParams;
   const query = params?.q?.trim() ?? "";
   const showAll = params?.show === "all";
+  const created = params?.created === "1";
   const shouldShowEmployees = Boolean(query) || showAll;
 
   const employees = shouldShowEmployees ? await listEmployees({ query }) : [];
@@ -42,6 +46,10 @@ export default async function EmployeesPage({
           </>
         }
       />
+
+      {created ? (
+        <ToastMessage message="Employee created successfully." />
+      ) : null}
 
       <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
         <form className="flex flex-col gap-3 sm:flex-row" method="get">
@@ -91,15 +99,14 @@ export default async function EmployeesPage({
                   <th className="px-3 py-3 font-medium">Job Title</th>
                   <th className="px-3 py-3 font-medium">Status</th>
                   <th className="px-3 py-3 font-medium">File Status</th>
-                  <th className="px-3 py-3 font-medium">View</th>
                 </tr>
               </thead>
 
               <tbody>
                 {employees.map((employee) => (
-                  <tr
+                  <ClickableTableRow
                     key={employee.id}
-                    className="border-b border-neutral-100 transition hover:bg-neutral-50"
+                    href={`/employees/${employee.id}`}
                   >
                     <td className="px-3 py-3">
                       {employee.employee_number ?? "—"}
@@ -122,15 +129,7 @@ export default async function EmployeesPage({
                     <td className="px-3 py-3">
                       {employee.file_status ?? "—"}
                     </td>
-                    <td className="px-3 py-3">
-                      <Link
-                        href={`/employees/${employee.id}`}
-                        className="text-sm font-medium text-neutral-900 underline underline-offset-4"
-                      >
-                        Open
-                      </Link>
-                    </td>
-                  </tr>
+                  </ClickableTableRow>
                 ))}
               </tbody>
             </table>

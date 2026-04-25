@@ -4,17 +4,19 @@ import PageHeader from "@/components/layout/page-header";
 import { getEmployeeById } from "@/lib/queries/employees";
 import {
   formatLeaveType,
+  getCurrentSickLeaveBalance,
   listLeaveBalancesByEmployeeId,
   listLeaveTransactionsByEmployeeId,
+  summarizeVacationLeaveWithinPeriod,
 } from "@/lib/queries/leave";
-import { listDocumentsByEmployeeId } from "@/lib/queries/documents";
 import { listRecordsByEmployeeId } from "@/lib/queries/records";
-import { listContractsByEmployeeId } from "@/lib/queries/contracts";
+import { getCurrentActiveContract, listContractsByEmployeeId } from "@/lib/queries/contracts";
 import {
   getCurrentFileMovementByEmployeeId,
   listFileMovementsByEmployeeId,
 } from "@/lib/queries/file-movements";
-import { listAuditLogsByEmployeeId } from "@/lib/queries/audit";
+import { listAuditLogsByEmployeeId, summarizeChangedFields } from "@/lib/queries/audit";
+import { calculateContractGratuityEstimate } from "@/lib/queries/gratuity";
 
 type EmployeeDetailPageProps = {
   params: Promise<{
@@ -33,6 +35,21 @@ function formatAuditWhen(value: string | null): string {
   return parsed.toLocaleString();
 }
 
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function dateScore(value: string | null | undefined): number {
+  if (!value) return Number.NEGATIVE_INFINITY;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
+}
+
 export default async function EmployeeDetailPage({
   params,
 }: EmployeeDetailPageProps) {
@@ -42,7 +59,6 @@ export default async function EmployeeDetailPage({
     contracts,
     leaveBalances,
     leaveTransactions,
-    documents,
     records,
     fileMovements,
     currentFileMovement,
@@ -53,7 +69,6 @@ export default async function EmployeeDetailPage({
     listContractsByEmployeeId(id),
     listLeaveBalancesByEmployeeId(id),
     listLeaveTransactionsByEmployeeId(id),
-    listDocumentsByEmployeeId(id),
     listRecordsByEmployeeId(id),
     listFileMovementsByEmployeeId(id),
     getCurrentFileMovementByEmployeeId(id),
@@ -77,12 +92,48 @@ export default async function EmployeeDetailPage({
     (total, balance) => total + Number(balance.remaining_days ?? 0),
     0
   );
+  const leaveBalancesByYear = leaveBalances.reduce<Record<string, typeof leaveBalances>>(
+    (acc, balance) => {
+      const key = String(balance.balance_year ?? "Unknown");
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(balance);
+      return acc;
+    },
+    {}
+  );
+  const todayDateText = new Date().toISOString().slice(0, 10);
+  const currentActiveContract = getCurrentActiveContract(contracts);
+  const vacationSummary = summarizeVacationLeaveWithinPeriod(
+    leaveBalances,
+    currentActiveContract?.start_date,
+    currentActiveContract?.end_date
+  );
+  const currentSickBalance = getCurrentSickLeaveBalance(
+    leaveBalances,
+    todayDateText,
+    currentActiveContract?.start_date,
+    currentActiveContract?.end_date
+  );
+  const preferredContract = [...contracts].sort((a, b) => {
+    const activePriority =
+      (b.effective_contract_status === "active" ? 1 : 0) -
+      (a.effective_contract_status === "active" ? 1 : 0);
+    if (activePriority !== 0) return activePriority;
+
+    const startDiff = dateScore(b.start_date) - dateScore(a.start_date);
+    if (startDiff !== 0) return startDiff;
+
+    return dateScore(b.created_at) - dateScore(a.created_at);
+  })[0] ?? null;
+  const contractOverviewHref = preferredContract
+    ? `/contracts/${preferredContract.id}`
+    : null;
 
   return (
     <main className="space-y-6">
       <PageHeader
         title={fullName || "Employee Profile"}
-        description={`Employee #${display(employee.employee_number)} • File #${display(employee.file_number)}`}
+        description={`Employee #${employee.employee_number?.trim() ? employee.employee_number : "Not assigned"} • File #${display(employee.file_number)}`}
         backHref="/employees"
         actions={
           <Link
@@ -97,12 +148,18 @@ export default async function EmployeeDetailPage({
       <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Quick Actions</h2>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Link
-            href={`/employees/${employee.id}/edit`}
-            className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-          >
-            Edit Employee
-          </Link>
+          {contractOverviewHref ? (
+            <Link
+              href={contractOverviewHref}
+              className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
+            >
+              Contract Overview
+            </Link>
+          ) : (
+            <span className="rounded-xl border border-neutral-200 bg-neutral-100 px-4 py-2 text-sm font-medium text-neutral-500">
+              No contract available
+            </span>
+          )}
           <Link
             href={`/contracts/new?employeeId=${employee.id}`}
             className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
@@ -116,10 +173,10 @@ export default async function EmployeeDetailPage({
             Add Leave Record
           </Link>
           <Link
-            href={`/documents/new?employeeId=${employee.id}`}
+            href={`/file-movements/new?employeeId=${employee.id}`}
             className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
           >
-            Upload Document
+            Move Physical File
           </Link>
           <Link
             href={`/records/new?employeeId=${employee.id}`}
@@ -127,24 +184,11 @@ export default async function EmployeeDetailPage({
           >
             Add Record
           </Link>
-          <Link
-            href={`/file-movements/new?employeeId=${employee.id}`}
-            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
-          >
-            Move File
-          </Link>
         </div>
       </section>
 
       <section className="space-y-4">
-        <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-neutral-900">Overview</h2>
-          <p className="mt-1 text-sm text-neutral-600">
-            Employee identity, employment information, and physical file details.
-          </p>
-        </div>
         <div className="grid gap-4 md:grid-cols-3">
-          <SummaryCard label="Employee Number" value={employee.employee_number} />
           <SummaryCard label="File Number" value={employee.file_number} />
           <SummaryCard label="Status" value={employee.employment_status} />
           <SummaryCard
@@ -208,7 +252,10 @@ export default async function EmployeeDetailPage({
         </InfoCard>
       </section>
 
-      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+      <section
+        id="contracts-overview"
+        className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
+      >
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-neutral-900">Contracts</h2>
           <Link
@@ -230,11 +277,19 @@ export default async function EmployeeDetailPage({
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Start</th>
                   <th className="px-4 py-3">End</th>
+                  <th className="px-4 py-3">Gratuity</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
-                {contracts.map((contract) => (
-                  <tr key={contract.id} className="hover:bg-neutral-50">
+                {contracts.map((contract) => {
+                  const gratuity = calculateContractGratuityEstimate({
+                    monthlySalary: contract.salary_amount,
+                    startDate: contract.start_date,
+                    endDate: contract.end_date,
+                    isGratuityEligible: contract.is_gratuity_eligible === true,
+                  });
+                  return (
+                    <tr key={contract.id} className="hover:bg-neutral-50">
                     <td className="max-w-[240px] truncate px-4 py-3 font-medium text-neutral-900">
                       <Link href={`/contracts/${contract.id}`} className="hover:underline">
                         {display(contract.contract_title)}
@@ -247,7 +302,7 @@ export default async function EmployeeDetailPage({
                       {display(contract.contract_type)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {display(contract.contract_status)}
+                      {display(contract.effective_contract_status)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       {display(contract.start_date)}
@@ -255,8 +310,24 @@ export default async function EmployeeDetailPage({
                     <td className="whitespace-nowrap px-4 py-3">
                       {display(contract.end_date)}
                     </td>
-                  </tr>
-                ))}
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {contract.is_gratuity_eligible ? (
+                        <div className="text-xs text-neutral-700">
+                          <p className="font-medium">Gratuity: Eligible</p>
+                          <p className="text-neutral-600">
+                            {formatCurrency(gratuity.net_gratuity_payable)}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-neutral-600">
+                          <p className="font-medium">Gratuity: Not applicable</p>
+                          <p>Not applicable</p>
+                        </div>
+                      )}
+                    </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -280,50 +351,93 @@ export default async function EmployeeDetailPage({
           </Link>
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <SummaryCard label="Total Balance" value={`${totalLeaveBalance} days`} />
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <SummaryCard
+            label="Total Vacation Leave"
+            value={`${vacationSummary.remaining} days`}
+          />
+          <SummaryCard
+            label="Total Sick Leave"
+            value={`${Number(currentSickBalance?.remaining_days ?? 0)} days`}
+          />
           <SummaryCard label="Approved Leave Records" value={`${activeLeaveCount}`} />
           <SummaryCard label="Pending Approvals" value={`${pendingLeaveCount}`} />
         </div>
+        <div className="mt-3 grid gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-700 md:grid-cols-2">
+          <div>
+            <p className="font-semibold text-neutral-900">Vacation Leave</p>
+            <p>Entitlement: {vacationSummary.entitlement}</p>
+            <p>Used: {vacationSummary.used}</p>
+            <p>Remaining: {vacationSummary.remaining}</p>
+            <p>
+              Contract Period: {currentActiveContract?.start_date ?? "—"} -{" "}
+              {currentActiveContract?.end_date ?? "—"}
+            </p>
+          </div>
+          <div>
+            <p className="font-semibold text-neutral-900">Sick Leave</p>
+            <p>Current year entitlement: {Number(currentSickBalance?.entitlement_days ?? 0)}</p>
+            <p>Used: {Number(currentSickBalance?.used_days ?? 0)}</p>
+            <p>Remaining: {Number(currentSickBalance?.remaining_days ?? 0)}</p>
+            <p>
+              Effective: {display(currentSickBalance?.effective_from ?? null)} -{" "}
+              {display(currentSickBalance?.effective_to ?? null)}
+            </p>
+            <p className="mt-1 text-neutral-600">
+              Sick leave resets each contract year and does not roll over.
+            </p>
+          </div>
+        </div>
 
         {leaveBalances.length ? (
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full divide-y divide-neutral-200 text-sm">
-              <thead className="bg-neutral-50">
-                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Year</th>
-                  <th className="px-4 py-3">Entitlement</th>
-                  <th className="px-4 py-3">Used</th>
-                  <th className="px-4 py-3">Remaining</th>
-                  <th className="px-4 py-3">Effective</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
-                {leaveBalances.map((balance) => (
-                  <tr key={balance.id} className="hover:bg-neutral-50">
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {formatLeaveType(balance.leave_type)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {balance.balance_year ?? "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {balance.entitlement_days ?? "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {balance.used_days ?? "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 font-medium text-neutral-900">
-                      {balance.remaining_days ?? "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {display(balance.effective_from)} - {display(balance.effective_to)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-4 space-y-4">
+            {Object.entries(leaveBalancesByYear)
+              .sort(([a], [b]) => Number(b) - Number(a))
+              .map(([year, balances]) => (
+                <div key={year} className="overflow-x-auto rounded-xl border border-neutral-200">
+                  <div className="border-b border-neutral-200 bg-neutral-50 px-4 py-2 text-sm font-semibold text-neutral-800">
+                    Contract Year {year}
+                  </div>
+                  <table className="min-w-full divide-y divide-neutral-200 text-sm">
+                    <thead className="bg-neutral-50">
+                      <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
+                        <th className="px-4 py-3">Type</th>
+                        <th className="px-4 py-3">Entitlement</th>
+                        <th className="px-4 py-3">Used</th>
+                        <th className="px-4 py-3">Remaining</th>
+                        <th className="px-4 py-3">Effective</th>
+                        <th className="px-4 py-3">Rollover</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
+                      {balances.map((balance) => (
+                        <tr key={balance.id} className="hover:bg-neutral-50">
+                          <td className="whitespace-nowrap px-4 py-3">
+                            {formatLeaveType(balance.leave_type)}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            {balance.entitlement_days ?? "—"}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            {balance.used_days ?? "—"}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 font-medium text-neutral-900">
+                            {balance.remaining_days ?? "—"}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            {display(balance.effective_from)} - {display(balance.effective_to)}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            {formatLeaveType(balance.leave_type).toLowerCase().includes("sick")
+                              ? "No (resets yearly)"
+                              : "Within active contract"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
           </div>
         ) : (
           <p className="mt-4 text-sm text-neutral-600">
@@ -385,61 +499,6 @@ export default async function EmployeeDetailPage({
         ) : (
           <p className="mt-4 text-sm text-neutral-600">
             No leave transactions found for this employee.
-          </p>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-neutral-900">Documents</h2>
-          <Link
-            href={`/documents?employeeId=${employee.id}`}
-            className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
-          >
-            View all
-          </Link>
-        </div>
-
-        {documents.length ? (
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full divide-y divide-neutral-200 text-sm">
-              <thead className="bg-neutral-50">
-                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
-                  <th className="px-4 py-3">Title</th>
-                  <th className="px-4 py-3">Category</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Expiry</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
-                {documents.map((document) => (
-                  <tr key={document.id} className="hover:bg-neutral-50">
-                    <td className="max-w-[260px] truncate px-4 py-3 font-medium text-neutral-900">
-                      <Link href={`/documents/${document.id}`} className="hover:underline">
-                        {display(document.document_title)}
-                      </Link>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {display(document.document_category)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {display(document.document_type)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {display(document.document_status)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {display(document.expiry_date)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-neutral-600">
-            No documents found for this employee.
           </p>
         )}
       </section>
@@ -616,22 +675,12 @@ export default async function EmployeeDetailPage({
                 </p>
                 <p className="mt-2 text-xs text-neutral-600">
                   <span className="font-medium text-neutral-700">By:</span>{" "}
-                  {entry.performed_by_name ?? "System"}
+                  {entry.performed_by_display_name}
                 </p>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {(entry.changed_fields ?? []).length > 0 ? (
-                    (entry.changed_fields ?? []).map((field) => (
-                      <span
-                        key={field}
-                        className="inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-900 ring-1 ring-violet-200/70"
-                      >
-                        {field}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-neutral-400">No changed fields listed</span>
-                  )}
-                </div>
+                <p className="mt-3 text-xs text-neutral-600">
+                  <span className="font-medium text-neutral-700">Changed fields:</span>{" "}
+                  {summarizeChangedFields(entry.changed_fields)}
+                </p>
                 <div className="mt-4 border-t border-neutral-200/80 pt-3">
                   <Link
                     href={`/audit/${entry.id}?return_to=${encodeURIComponent(`/employees/${employee.id}`)}`}

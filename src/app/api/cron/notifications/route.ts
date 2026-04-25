@@ -18,6 +18,8 @@ export async function GET(request: Request) {
       success: true,
       timestamp: new Date().toISOString(),
       counts,
+      byModule: counts.byModule,
+      byRule: counts.byRule,
     });
   } catch (error) {
     console.error("Notification cron error:", error);

@@ -1,13 +1,21 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import ClickableTableRow from "@/components/ui/clickable-table-row";
 import { listContracts, listContractsByEmployeeId } from "@/lib/queries/contracts";
+import { getEmployeeById } from "@/lib/queries/employees";
 
 type ContractsPageProps = {
   searchParams: Promise<{
     q?: string;
     employeeId?: string;
+    status?: string;
+    show?: string;
   }>;
 };
+
+function isActiveStatus(status: string | undefined): boolean {
+  return (status ?? "").trim().toLowerCase() === "active";
+}
 
 function lifecycleStatus(contract: {
   renewal_status: string | null;
@@ -37,10 +45,23 @@ export default async function ContractsPage({
   const params = await searchParams;
   const query = params?.q?.trim() ?? "";
   const employeeId = params?.employeeId?.trim() ?? "";
+  const showAllSelected = (params?.show ?? "").trim().toLowerCase() === "all";
+  const selectedStatus = isActiveStatus(params?.status) ? "active" : "all";
+  const hasSearch = query.length > 0;
+  const hasAnyExplicitFilter = showAllSelected || selectedStatus === "active" || hasSearch;
+  const selectedEmployee = employeeId ? await getEmployeeById(employeeId) : null;
+  const selectedEmployeeName = selectedEmployee
+    ? `${selectedEmployee.first_name ?? ""} ${selectedEmployee.last_name ?? ""}`.trim()
+    : "";
 
   const contracts = employeeId
-    ? await listContractsByEmployeeId(employeeId)
-    : await listContracts({ query });
+    ? await listContractsByEmployeeId(employeeId, query)
+    : hasAnyExplicitFilter
+      ? await listContracts({
+          query,
+          status: selectedStatus === "active" ? "active" : "all",
+        })
+      : [];
 
   return (
     <main className="space-y-6">
@@ -48,7 +69,7 @@ export default async function ContractsPage({
         title="Contracts"
         description={
           employeeId
-            ? `Manage employee contracts and contract status. Filtered by employee: ${employeeId}`
+            ? `Contracts for ${selectedEmployeeName || employeeId}.`
             : "Manage employee contracts and contract status."
         }
         backHref="/dashboard"
@@ -62,8 +83,60 @@ export default async function ContractsPage({
         }
       />
 
+      <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/contracts?show=all"
+            className={`rounded-xl border px-3 py-1.5 text-sm font-medium transition ${
+              showAllSelected
+                ? "border-neutral-900 bg-neutral-900 text-white"
+                : "border-neutral-300 bg-white text-neutral-800 hover:bg-neutral-50"
+            }`}
+          >
+            Show All
+          </Link>
+          <Link
+            href={
+              employeeId ? `/contracts?status=active&employeeId=${employeeId}` : "/contracts?status=active"
+            }
+            className={`rounded-xl border px-3 py-1.5 text-sm font-medium transition ${
+              selectedStatus === "active"
+                ? "border-neutral-900 bg-neutral-900 text-white"
+                : "border-neutral-300 bg-white text-neutral-800 hover:bg-neutral-50"
+            }`}
+          >
+            Active Contracts
+          </Link>
+          <Link
+            href={employeeId ? `/contracts/expiring?days=90&employeeId=${employeeId}` : "/contracts/expiring?days=90"}
+            className="rounded-xl border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
+          >
+            Expiring Contracts
+          </Link>
+          <Link
+            href={employeeId ? `/contracts/expired?employeeId=${employeeId}` : "/contracts/expired"}
+            className="rounded-xl border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
+          >
+            Expired Contracts
+          </Link>
+          {hasAnyExplicitFilter ? (
+            <Link
+              href="/contracts"
+              className="ml-1 text-sm font-medium text-neutral-500 underline-offset-4 hover:text-neutral-700 hover:underline"
+            >
+              Clear
+            </Link>
+          ) : null}
+        </div>
+      </section>
+
       <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
         <form className="flex flex-col gap-3 sm:flex-row">
+          {selectedStatus === "active" ? (
+            <input type="hidden" name="status" value="active" />
+          ) : null}
+          {showAllSelected ? <input type="hidden" name="show" value="all" /> : null}
+          {employeeId ? <input type="hidden" name="employeeId" value={employeeId} /> : null}
           <input
             type="text"
             name="q"
@@ -80,7 +153,13 @@ export default async function ContractsPage({
         </form>
       </div>
 
-      {contracts.length === 0 ? (
+      {!employeeId && !hasAnyExplicitFilter ? (
+        <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-neutral-600">
+            Use search or select a filter to view contracts.
+          </p>
+        </div>
+      ) : contracts.length === 0 ? (
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
           <p className="text-sm text-neutral-600">No contracts found.</p>
         </div>
@@ -102,16 +181,15 @@ export default async function ContractsPage({
                   <th className="px-3 py-3 font-medium">Job Title</th>
                   <th className="px-3 py-3 font-medium">Salary</th>
                   <th className="px-3 py-3 font-medium">Gratuity</th>
-                  <th className="px-3 py-3 font-medium">View</th>
                 </tr>
               </thead>
               <tbody>
                 {contracts.map((contract) => (
-                  <tr key={contract.id} className="border-b border-neutral-100">
+                  <ClickableTableRow key={contract.id} href={`/contracts/${contract.id}`}>
                     <td className="px-3 py-3">{contract.contract_number ?? "—"}</td>
                     <td className="px-3 py-3">{contract.contract_title ?? "—"}</td>
                     <td className="px-3 py-3">{contract.contract_type ?? "—"}</td>
-                    <td className="px-3 py-3">{contract.contract_status ?? "—"}</td>
+                    <td className="px-3 py-3">{contract.effective_contract_status}</td>
                     <td className="px-3 py-3">{lifecycleStatus(contract)}</td>
                     <td className="px-3 py-3">
                       {[contract.employee_first_name, contract.employee_last_name]
@@ -130,15 +208,7 @@ export default async function ContractsPage({
                     <td className="px-3 py-3">
                       {contract.is_gratuity_eligible ? "Yes" : "No"}
                     </td>
-                    <td className="px-3 py-3">
-                      <Link
-                        href={`/contracts/${contract.id}`}
-                        className="text-sm font-medium text-neutral-900 underline underline-offset-4"
-                      >
-                        Open
-                      </Link>
-                    </td>
-                  </tr>
+                  </ClickableTableRow>
                 ))}
               </tbody>
             </table>

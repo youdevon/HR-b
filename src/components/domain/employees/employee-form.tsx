@@ -46,6 +46,9 @@ export default function EmployeeForm({
   });
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [noEmployeeNumber, setNoEmployeeNumber] = useState(
+    !(initialValues?.employee_number ?? "").trim()
+  );
 
   function updateField<K extends keyof EmployeeInput>(
     key: K,
@@ -63,7 +66,11 @@ export default function EmployeeForm({
 
     startTransition(async () => {
       try {
-        await onSubmitAction(formData);
+        const payload: EmployeeInput = {
+          ...formData,
+          employee_number: noEmployeeNumber ? "" : formData.employee_number ?? "",
+        };
+        await onSubmitAction(payload);
       } catch (err) {
         setError(
           err instanceof Error
@@ -100,15 +107,17 @@ export default function EmployeeForm({
             label="Employee Number"
             value={formData.employee_number}
             onChange={(value) => updateField("employee_number", value)}
-            placeholder="Leave blank to auto-generate (EMP-0001)"
-            hint="Optional. If empty, the system assigns the next employee number."
+            placeholder={noEmployeeNumber ? "Not assigned" : "Enter employee number"}
+            hint="Optional. Use the checkbox below when this employee has no employee number."
+            disabled={noEmployeeNumber}
           />
           <Field
             label="File Number"
             value={formData.file_number}
             onChange={(value) => updateField("file_number", value)}
-            placeholder="Leave blank to auto-generate (FILE-0001)"
-            hint="Optional. If empty, the system assigns the next file number."
+            required
+            placeholder="Enter file number"
+            hint="Required. Must be unique."
           />
           <Field
             label="First Name"
@@ -147,6 +156,21 @@ export default function EmployeeForm({
             required
           />
         </div>
+        <label className="mt-2 flex items-start gap-2 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+          <input
+            type="checkbox"
+            checked={noEmployeeNumber}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              setNoEmployeeNumber(checked);
+              if (checked) updateField("employee_number", "");
+            }}
+            className="mt-0.5 h-4 w-4 rounded border-neutral-300"
+          />
+          <span className="text-sm text-neutral-700">
+            <span className="font-medium">This employee does not have an employee number</span>
+          </span>
+        </label>
       </section>
 
       <section className="space-y-4 border-t border-neutral-200 pt-6">
@@ -304,11 +328,12 @@ export default function EmployeeForm({
 }
 type FieldProps = {
   label: string;
-  value: string | undefined;
+  value: string | null | undefined;
   type?: string;
   required?: boolean;
   placeholder?: string;
   hint?: string;
+  disabled?: boolean;
   onChange: (value: string) => void;
 };
 
@@ -319,6 +344,7 @@ function Field({
   required = false,
   placeholder,
   hint,
+  disabled = false,
   onChange,
 }: FieldProps) {
   return (
@@ -329,8 +355,9 @@ function Field({
         value={value ?? ""}
         required={required}
         placeholder={placeholder}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+        className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-50"
       />
       {hint ? <span className="text-xs text-neutral-500">{hint}</span> : null}
     </label>

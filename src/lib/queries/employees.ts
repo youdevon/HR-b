@@ -47,6 +47,15 @@ export type EmployeeSearchParams = {
   query?: string;
 };
 
+export type EmployeeLookupRecord = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  file_number: string | null;
+  department: string | null;
+  job_title: string | null;
+};
+
 const EMPLOYEE_LIST_SELECT = `
   id,
   employee_number,
@@ -88,6 +97,15 @@ const EMPLOYEE_DETAIL_SELECT = `
   created_at
 `;
 
+const EMPLOYEE_LOOKUP_SELECT = `
+  id,
+  first_name,
+  last_name,
+  file_number,
+  department,
+  job_title
+`;
+
 function normalizeEmployeeInput(input: EmployeeInput): EmployeeInput {
   return {
     ...input,
@@ -114,77 +132,6 @@ function auditChangedFieldNames(
     (key) => JSON.stringify(oldObj[key]) !== JSON.stringify(newObj[key])
   );
   return changed.length ? changed : null;
-}
-
-const EMPLOYEE_NUMBER_PREFIX = "EMP-";
-const EMPLOYEE_NUMBER_MIN_DIGITS = 4;
-const FILE_NUMBER_PREFIX = "FILE-";
-const FILE_NUMBER_MIN_DIGITS = 4;
-
-function parseEmployeeNumberSequence(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const match = value.match(/^EMP-(\d+)$/i);
-  if (!match) return null;
-  const sequence = Number(match[1]);
-  if (!Number.isInteger(sequence) || sequence <= 0) return null;
-  return sequence;
-}
-
-function formatEmployeeNumber(sequence: number): string {
-  return `${EMPLOYEE_NUMBER_PREFIX}${String(sequence).padStart(EMPLOYEE_NUMBER_MIN_DIGITS, "0")}`;
-}
-
-function parseFileNumberSequence(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const match = value.match(/^FILE-(\d+)$/i);
-  if (!match) return null;
-  const sequence = Number(match[1]);
-  if (!Number.isInteger(sequence) || sequence <= 0) return null;
-  return sequence;
-}
-
-function formatFileNumber(sequence: number): string {
-  return `${FILE_NUMBER_PREFIX}${String(sequence).padStart(FILE_NUMBER_MIN_DIGITS, "0")}`;
-}
-
-async function getLatestEmployeeNumberSequence(
-  supabase: Awaited<ReturnType<typeof createClient>>
-): Promise<number> {
-  const { data, error } = await supabase
-    .from("employees")
-    .select("employee_number")
-    .ilike("employee_number", `${EMPLOYEE_NUMBER_PREFIX}%`)
-    .order("employee_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    console.error("getLatestEmployeeNumberSequence error:", JSON.stringify(error, null, 2));
-    throw new Error(`Failed to load latest employee number: ${error.message}`);
-  }
-
-  const parsed = parseEmployeeNumberSequence(data?.employee_number ?? null);
-  return parsed ?? 0;
-}
-
-async function getLatestFileNumberSequence(
-  supabase: Awaited<ReturnType<typeof createClient>>
-): Promise<number> {
-  const { data, error } = await supabase
-    .from("employees")
-    .select("file_number")
-    .ilike("file_number", `${FILE_NUMBER_PREFIX}%`)
-    .order("file_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    console.error("getLatestFileNumberSequence error:", JSON.stringify(error, null, 2));
-    throw new Error(`Failed to load latest file number: ${error.message}`);
-  }
-
-  const parsed = parseFileNumberSequence(data?.file_number ?? null);
-  return parsed ?? 0;
 }
 
 async function employeeNumberExists(
@@ -223,12 +170,6 @@ async function fileNumberExists(
   }
 
   return Boolean(data?.id);
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const code = "code" in error ? String(error.code ?? "") : "";
-  return code === "23505";
 }
 
 function friendlyDuplicateError(error: unknown): string | null {
@@ -304,6 +245,26 @@ export async function getEmployeeById(
   return data ?? null;
 }
 
+export async function listEmployeeLookupOptions(
+  limit = 200
+): Promise<EmployeeLookupRecord[]> {
+  const supabase = await createClient();
+  const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)));
+  const { data, error } = await supabase
+    .from("employees")
+    .select(EMPLOYEE_LOOKUP_SELECT)
+    .order("first_name", { ascending: true })
+    .order("last_name", { ascending: true })
+    .limit(safeLimit);
+
+  if (error) {
+    console.error("listEmployeeLookupOptions error:", JSON.stringify(error, null, 2));
+    throw new Error(`Failed to load employee lookup options: ${error.message}`);
+  }
+
+  return (data ?? []) as EmployeeLookupRecord[];
+}
+
 export async function createEmployee(
   input: EmployeeInput
 ): Promise<EmployeeListRecord> {
@@ -311,79 +272,48 @@ export async function createEmployee(
   const providedEmployeeNumber = input.employee_number?.trim() ?? "";
   const providedFileNumber = input.file_number?.trim() ?? "";
 
+  if (!providedFileNumber) {
+    throw new Error("File number is required.");
+  }
+
   if (providedEmployeeNumber) {
-    const duplicate = await employeeNumberExists(supabase, providedEmployeeNumber);
-    if (duplicate) {
+    const duplicateEmployeeNumber = await employeeNumberExists(
+      supabase,
+      providedEmployeeNumber
+    );
+    if (duplicateEmployeeNumber) {
       throw new Error("Employee number already exists.");
     }
   }
 
-  if (providedFileNumber) {
-    const duplicate = await fileNumberExists(supabase, providedFileNumber);
-    if (duplicate) {
-      throw new Error("File number already exists.");
-    }
+  const duplicateFileNumber = await fileNumberExists(supabase, providedFileNumber);
+  if (duplicateFileNumber) {
+    throw new Error("File number already exists.");
   }
-
-  const baseEmployeeSequence = providedEmployeeNumber
-    ? parseEmployeeNumberSequence(providedEmployeeNumber) ?? 0
-    : await getLatestEmployeeNumberSequence(supabase);
-  const baseFileSequence = providedFileNumber
-    ? parseFileNumberSequence(providedFileNumber) ?? 0
-    : await getLatestFileNumberSequence(supabase);
 
   const parsed = employeeSchema.parse({
     ...input,
-    employee_number: providedEmployeeNumber || formatEmployeeNumber(baseEmployeeSequence + 1),
-    file_number: providedFileNumber || formatFileNumber(baseFileSequence + 1),
+    employee_number: providedEmployeeNumber,
+    file_number: providedFileNumber,
   });
   const normalized = normalizeEmployeeInput(parsed);
+  const payload = emptyStringsToNull(normalized);
 
-  const maxAttempts = 8;
-  let data: EmployeeListRecord | null = null;
-  let lastError: unknown = null;
+  const response = await supabase
+    .from("employees")
+    .insert(payload)
+    .select(EMPLOYEE_LIST_SELECT)
+    .single();
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const employeeNumber =
-      providedEmployeeNumber || formatEmployeeNumber(baseEmployeeSequence + attempt);
-    const fileNumber = providedFileNumber || formatFileNumber(baseFileSequence + attempt);
-
-    const payload = emptyStringsToNull({
-      ...normalized,
-      employee_number: employeeNumber,
-      file_number: fileNumber,
-    });
-
-    const response = await supabase
-      .from("employees")
-      .insert(payload)
-      .select(EMPLOYEE_LIST_SELECT)
-      .single();
-
-    if (!response.error) {
-      data = response.data;
-      break;
-    }
-
-    lastError = response.error;
+  if (response.error) {
     const duplicateMessage = friendlyDuplicateError(response.error);
     if (duplicateMessage) {
       throw new Error(duplicateMessage);
     }
-
-    if ((providedEmployeeNumber && providedFileNumber) || !isUniqueViolation(response.error)) {
-      console.error("createEmployee error:", JSON.stringify(response.error, null, 2));
-      throw new Error(`Failed to create employee: ${response.error.message}`);
-    }
+    console.error("createEmployee error:", JSON.stringify(response.error, null, 2));
+    throw new Error(`Failed to create employee: ${response.error.message}`);
   }
-
-  if (!data) {
-    const message =
-      lastError && typeof lastError === "object" && "message" in lastError
-        ? String(lastError.message)
-        : "Could not generate a unique employee number.";
-    throw new Error(`Failed to create employee: ${message}`);
-  }
+  const data = response.data;
 
   const createdSnapshot: Record<string, unknown> = {
     employee_number: data.employee_number,

@@ -9,7 +9,7 @@ export default async function LeaveBalancesPage() {
     <main className="space-y-6">
       <PageHeader
         title="Leave Balances"
-        description="Review employee entitlements, usage, remaining days, and warning thresholds."
+        description="Review yearly leave balances by contract period. Vacation and sick leave do not roll over."
         backHref="/leave"
       />
 
@@ -23,14 +23,15 @@ export default async function LeaveBalancesPage() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                  <th className="px-3 py-3 font-medium">Employee ID</th>
+                  <th className="px-3 py-3 font-medium">Employee</th>
                   <th className="px-3 py-3 font-medium">Leave Type</th>
-                  <th className="px-3 py-3 font-medium">Year</th>
+                  <th className="px-3 py-3 font-medium">Balance Year</th>
+                  <th className="px-3 py-3 font-medium">Effective From</th>
+                  <th className="px-3 py-3 font-medium">Effective To</th>
                   <th className="px-3 py-3 font-medium">Entitlement</th>
                   <th className="px-3 py-3 font-medium">Used</th>
                   <th className="px-3 py-3 font-medium">Remaining</th>
-                  <th className="px-3 py-3 font-medium">Pending</th>
-                  <th className="px-3 py-3 font-medium">Threshold</th>
+                  <th className="px-3 py-3 font-medium">No Rollover</th>
                 </tr>
               </thead>
               <tbody>
@@ -39,11 +40,12 @@ export default async function LeaveBalancesPage() {
                     <td className="px-3 py-3">{row.employee_id ?? "—"}</td>
                     <td className="px-3 py-3">{formatLeaveType(row.leave_type)}</td>
                     <td className="px-3 py-3">{row.balance_year ?? "—"}</td>
+                    <td className="px-3 py-3">{row.effective_from ?? "—"}</td>
+                    <td className="px-3 py-3">{row.effective_to ?? "—"}</td>
                     <td className="px-3 py-3">{row.entitlement_days ?? "—"}</td>
                     <td className="px-3 py-3">{row.used_days ?? "—"}</td>
                     <td className="px-3 py-3">{row.remaining_days ?? "—"}</td>
-                    <td className="px-3 py-3">{row.pending_days ?? "—"}</td>
-                    <td className="px-3 py-3">{row.warning_threshold_days ?? "—"}</td>
+                    <td className="px-3 py-3">Yes</td>
                   </tr>
                 ))}
               </tbody>
