@@ -54,7 +54,7 @@ export default async function EditAdminUserPage({
         role_id: String(formData.get("role_id") ?? ""),
         account_status: accountStatus,
         is_active: accountStatus === "Active",
-        password_reset_required: user.password_reset_required ?? false,
+        password_reset_required: user?.password_reset_required ?? false,
         new_password: String(formData.get("new_password") ?? ""),
         confirm_new_password: String(formData.get("confirm_new_password") ?? ""),
       });

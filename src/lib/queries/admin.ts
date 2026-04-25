@@ -1,4 +1,3 @@
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type AdminUserRecord = {
@@ -54,7 +53,7 @@ export type CreateAdminUserInput = {
   confirm_password?: string;
 };
 
-export type UpdateAdminUserInput = Omit<
+export type UpdateAdminUserInput = Omit
   CreateAdminUserInput,
   "password" | "confirm_password"
 > & {
@@ -146,7 +145,7 @@ function validateOptionalPasswordPair(
 async function enrichUsersWithRoles(
   users: UserProfileRow[]
 ): Promise<AdminUserRecord[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const roleIds = [
     ...new Set(
       users
@@ -201,7 +200,7 @@ async function enrichUsersWithRoles(
 }
 
 export async function listUsers(): Promise<AdminUserRecord[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("user_profiles")
@@ -219,7 +218,7 @@ export async function listUsers(): Promise<AdminUserRecord[]> {
 export async function getAdminUserById(
   id: string
 ): Promise<AdminUserRecord | null> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("user_profiles")
@@ -237,7 +236,7 @@ export async function getAdminUserById(
 }
 
 export async function listRoles(): Promise<AdminRoleRecord[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("roles")

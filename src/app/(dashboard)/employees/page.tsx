@@ -4,6 +4,7 @@ import { listEmployees } from "@/lib/queries/employees";
 type EmployeesPageProps = {
   searchParams: Promise<{
     q?: string;
+    show?: string;
   }>;
 };
 
@@ -12,8 +13,10 @@ export default async function EmployeesPage({
 }: EmployeesPageProps) {
   const params = await searchParams;
   const query = params?.q?.trim() ?? "";
+  const showAll = params?.show === "all";
+  const shouldShowEmployees = Boolean(query) || showAll;
 
-  const employees = await listEmployees({ query });
+  const employees = shouldShowEmployees ? await listEmployees({ query }) : [];
 
   return (
     <main className="space-y-6">
@@ -27,12 +30,20 @@ export default async function EmployeesPage({
           </p>
         </div>
 
-        <Link
-          href="/employees/new"
-          className="inline-flex items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-        >
-          New Employee
-        </Link>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Link
+            href="/employees?show=all"
+            className="inline-flex min-w-36 items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
+          >
+            Show all
+          </Link>
+          <Link
+            href="/employees/new"
+            className="inline-flex min-w-36 items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+          >
+            New Employee
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
@@ -52,7 +63,7 @@ export default async function EmployeesPage({
             Search
           </button>
 
-          {query ? (
+          {query || showAll ? (
             <Link
               href="/employees"
               className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-center text-sm font-medium text-neutral-900 hover:bg-neutral-50"
@@ -60,10 +71,11 @@ export default async function EmployeesPage({
               Clear
             </Link>
           ) : null}
+
         </form>
       </div>
 
-      {employees.length === 0 ? (
+      {!shouldShowEmployees ? null : employees.length === 0 ? (
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
           <p className="text-sm text-neutral-600">
             {query ? "No employees match your search." : "No employees found."}
