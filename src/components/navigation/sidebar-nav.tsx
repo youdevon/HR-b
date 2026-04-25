@@ -18,6 +18,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { APP_VERSION } from "@/lib/app-version";
 import type { DashboardNavIconName, SerializedNavItem } from "@/lib/navigation/dashboard-nav";
 import { cn } from "@/lib/utils/cn";
 
@@ -159,9 +160,17 @@ export function DashboardNavContent({
       <div className={cn("shrink-0 border-t border-neutral-200 p-4", isCollapsed && "px-2 py-3")}>
         <div className="rounded-2xl bg-neutral-50 p-4">
           {isCollapsed ? (
-            <p className="text-center text-[0.6rem] font-semibold text-neutral-700">D3</p>
+            <>
+              <p className="text-center text-[0.6rem] font-semibold text-neutral-700">D3</p>
+              <p className="mt-1 text-center text-xs tracking-normal text-neutral-500" aria-label={`Version ${APP_VERSION}`}>
+                {APP_VERSION}
+              </p>
+            </>
           ) : (
-            <p className="text-sm font-semibold text-neutral-900">D3 Services {currentYear}</p>
+            <>
+              <p className="text-sm font-semibold text-neutral-900">D3 Services {currentYear}</p>
+              <p className="mt-1 text-xs tracking-normal text-neutral-500">Version {APP_VERSION}</p>
+            </>
           )}
         </div>
       </div>

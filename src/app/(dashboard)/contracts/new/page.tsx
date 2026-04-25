@@ -32,6 +32,15 @@ function toNull(value: string): string | null {
   return value === "" ? null : value;
 }
 
+function toNullableAmount(value: string): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error("Salary amount must be greater than or equal to 0.");
+  }
+  return parsed;
+}
+
 export default async function NewContractPage({ searchParams }: NewContractPageProps) {
   const sp = await searchParams;
   const employeeId = firstString(sp.employeeId) ?? "";
@@ -74,6 +83,19 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
       redirect(`/contracts/new?${qs.toString()}`);
     }
 
+    let salaryAmount: number | null = null;
+    try {
+      salaryAmount = toNullableAmount(input(formData, "salary_amount"));
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Invalid salary amount.";
+      const qs = new URLSearchParams();
+      qs.set("status", "error");
+      qs.set("message", errorMessage);
+      if (employee_id) qs.set("employeeId", employee_id);
+      redirect(`/contracts/new?${qs.toString()}`);
+    }
+
     const supabase = await createClient();
     const { error } = await supabase.from("contracts").insert({
       employee_id: toNull(employee_id),
@@ -89,6 +111,9 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
       department: toNull(input(formData, "department")),
       signed_date: toNull(input(formData, "signed_date")),
       issued_date: toNull(input(formData, "issued_date")),
+      salary_amount: salaryAmount,
+      salary_frequency: toNull(input(formData, "salary_frequency")),
+      is_gratuity_eligible: formData.get("is_gratuity_eligible") === "on",
     });
 
     if (error) {
@@ -173,7 +198,43 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
                 <span className="text-sm font-medium text-neutral-700">Start Date</span>
                 <input name="start_date" type="date" required className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
               </label>
+              <label className="space-y-1.5">
+                <span className="text-sm font-medium text-neutral-700">Monthly Salary</span>
+                <input
+                  name="salary_amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-sm font-medium text-neutral-700">Salary Frequency</span>
+                <select
+                  name="salary_frequency"
+                  defaultValue="monthly"
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                >
+                  <option value="monthly">Monthly</option>
+                  <option value="annual">Annual</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="daily">Daily</option>
+                </select>
+              </label>
             </div>
+            <label className="mt-4 flex items-start gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+              <input
+                type="checkbox"
+                name="is_gratuity_eligible"
+                className="mt-1 h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-300"
+              />
+              <span>
+                <span className="block text-sm font-medium text-neutral-900">Eligible for Gratuity</span>
+                <span className="block text-xs text-neutral-600">
+                  Check this only if gratuity applies to this contract. Short-term contracts can be left unchecked.
+                </span>
+              </span>
+            </label>
           </section>
 
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">

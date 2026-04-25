@@ -1,8 +1,9 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import {
-  getCurrentUserPermissions,
-  getCurrentUserProfile,
+  fetchPermissionsForProfile,
+  fetchUserProfileForAuthUser,
   type CurrentUserProfile,
 } from "@/lib/auth/permissions";
 import { getCurrentUser, getUser } from "@/lib/auth/session";
@@ -48,6 +49,7 @@ export async function optionalUser() {
 export type DashboardAuthContext = {
   user: User;
   profile: CurrentUserProfile | null;
+  role: string | null;
   permissions: string[];
 };
 
@@ -59,18 +61,35 @@ export type DashboardAuthContext = {
 export async function loadDashboardAuthContext(): Promise<DashboardAuthContext | null> {
   const user = await getUser();
   if (!user) return null;
-  const [profile, permissions] = await Promise.all([
-    getCurrentUserProfile(),
-    getCurrentUserPermissions(),
-  ]);
-  return { user, profile, permissions };
+
+  // Build auth context from the already-resolved user to avoid another auth lookup path.
+  const profile = await fetchUserProfileForAuthUser(user);
+  const role = profile?.role_code ?? profile?.role_name ?? null;
+  const permissions = await fetchPermissionsForProfile(profile).catch((error: unknown) => {
+    console.error(
+      "getDashboardSession permission lookup error:",
+      error instanceof Error ? error.message : String(error)
+    );
+    // No retries in this request path.
+    return [];
+  });
+
+  return { user, profile, role, permissions };
 }
+
+/**
+ * Single dashboard auth/session resolver per request.
+ * Returns user, profile, role, and permissions for layout-level composition.
+ */
+export const getDashboardSession = cache(async (): Promise<DashboardAuthContext | null> => {
+  return loadDashboardAuthContext();
+});
 
 export async function requireDashboardAuth(
   options: { redirectTo?: string } = {}
 ): Promise<DashboardAuthContext> {
   const { redirectTo = "/login" } = options;
-  const ctx = await loadDashboardAuthContext();
+  const ctx = await getDashboardSession();
   if (!ctx) {
     redirect(redirectTo);
   }

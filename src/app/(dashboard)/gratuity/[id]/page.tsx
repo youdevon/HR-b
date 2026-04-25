@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
-import { getGratuityCalculationById } from "@/lib/queries/gratuity";
+import {
+  calculateGratuityBreakdownForRecord,
+  getGratuityCalculationById,
+} from "@/lib/queries/gratuity";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -14,6 +17,15 @@ export default async function Page({ params }: PageProps) {
   if (!record) {
     notFound();
   }
+  const breakdown = await calculateGratuityBreakdownForRecord(record);
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
 
   return (
     <main className="space-y-6">
@@ -44,7 +56,7 @@ export default async function Page({ params }: PageProps) {
           <div>
             <dt className="text-neutral-500">Calculated amount</dt>
             <dd className="mt-1 font-medium text-neutral-900">
-              {record.calculated_amount != null ? String(record.calculated_amount) : "—"}
+              {formatCurrency(breakdown.net_gratuity_payable)}
             </dd>
           </div>
           <div>
@@ -62,6 +74,46 @@ export default async function Page({ params }: PageProps) {
           <div>
             <dt className="text-neutral-500">Calculation date</dt>
             <dd className="mt-1 font-medium text-neutral-900">{record.calculation_date ?? "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-neutral-500">Monthly salary</dt>
+            <dd className="mt-1 font-medium text-neutral-900">
+              {formatCurrency(breakdown.monthly_salary)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-neutral-500">Contract months</dt>
+            <dd className="mt-1 font-medium text-neutral-900">{breakdown.contract_months}</dd>
+          </div>
+          <div>
+            <dt className="text-neutral-500">Total salary earned</dt>
+            <dd className="mt-1 font-medium text-neutral-900">
+              {formatCurrency(breakdown.total_salary_earned)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-neutral-500">Gratuity before tax (20%)</dt>
+            <dd className="mt-1 font-medium text-neutral-900">
+              {formatCurrency(breakdown.gratuity_before_tax)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-neutral-500">Government tax deduction (25%)</dt>
+            <dd className="mt-1 font-medium text-neutral-900">
+              {formatCurrency(breakdown.government_tax_deduction)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-neutral-500">Net gratuity payable (75%)</dt>
+            <dd className="mt-1 font-semibold text-emerald-700">
+              {formatCurrency(breakdown.net_gratuity_payable)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-neutral-500">Calculation source</dt>
+            <dd className="mt-1 font-medium text-neutral-900">
+              {breakdown.source === "contract" ? "Contract salary and dates" : "Stored calculation fields"}
+            </dd>
           </div>
         </dl>
       </section>

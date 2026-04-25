@@ -74,6 +74,10 @@ const CONTRACT_LIST_SELECT = `
   created_at
 `;
 
+// SQL guidance if the column is missing:
+// alter table public.contracts
+// add column if not exists is_gratuity_eligible boolean not null default false;
+
 type ContractDatabaseRow = {
   id: string;
   employee_id: string | null;
@@ -609,6 +613,87 @@ export async function validateContractDateOverlap(input: {
   excludeContractId?: string;
 }): Promise<void> {
   await assertNoContractDateOverlap(input);
+}
+
+type UpdateContractDetailsInput = {
+  id: string;
+  contract_number: string;
+  contract_title: string;
+  contract_type: string;
+  contract_status: string;
+  start_date: string;
+  end_date: string | null;
+  effective_date: string | null;
+  notice_period: string | null;
+  job_title: string | null;
+  department: string | null;
+  signed_date: string | null;
+  issued_date: string | null;
+  salary_amount: number | null;
+  salary_frequency: string | null;
+  is_gratuity_eligible: boolean;
+};
+
+export async function updateContractDetails(
+  input: UpdateContractDetailsInput
+): Promise<ContractRecord> {
+  const supabase = await createClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("contracts")
+    .select("id, employee_id")
+    .eq("id", input.id)
+    .maybeSingle();
+
+  if (existingError || !existing) {
+    throw new Error(
+      `Failed to load contract for update: ${
+        existingError?.message ?? "Contract not found."
+      }`
+    );
+  }
+
+  const effectiveEndDate = input.end_date ?? input.start_date;
+  await assertNoContractDateOverlap({
+    employeeId: existing.employee_id as string | null,
+    newStartDate: input.start_date,
+    newEndDate: effectiveEndDate,
+    excludeContractId: input.id,
+  });
+
+  const { data, error } = await supabase
+    .from("contracts")
+    .update({
+      contract_number: input.contract_number,
+      contract_title: input.contract_title,
+      contract_type: input.contract_type,
+      contract_status: input.contract_status,
+      start_date: input.start_date,
+      end_date: input.end_date,
+      effective_date: input.effective_date,
+      notice_period: input.notice_period,
+      job_title: input.job_title,
+      department: input.department,
+      signed_date: input.signed_date,
+      issued_date: input.issued_date,
+      salary_amount: input.salary_amount,
+      salary_frequency: input.salary_frequency,
+      is_gratuity_eligible: input.is_gratuity_eligible,
+    })
+    .eq("id", input.id)
+    .select(CONTRACT_LIST_SELECT)
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update contract: ${error.message}`);
+  }
+
+  const [enriched] = await enrichContractsWithEmployeeNames([
+    data as ContractDatabaseRow,
+  ]);
+  if (!enriched) {
+    throw new Error("Contract was updated but could not be loaded.");
+  }
+  return enriched;
 }
 
 export async function generateContractLifecycleAlerts(): Promise<number> {

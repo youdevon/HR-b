@@ -290,6 +290,7 @@ function PriorityAlerts({ alerts }: { alerts: AlertRecord[] }) {
 }
 
 export default async function DashboardPage() {
+  // Auth is resolved once in `(dashboard)/layout`; this page only fetches dashboard data.
   let metricsError = "";
   let sections: DashboardSection[] = [];
   let priorityAlerts: AlertRecord[] = [];

@@ -2,6 +2,12 @@ import { getContractById, applyContractLifecycleAction } from "@/lib/queries/con
 import PageHeader from "@/components/layout/page-header";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
+import {
+  calculateContractMonths,
+  calculateGratuityPayment,
+  DEFAULT_GOVERNMENT_TAX_PERCENT,
+  DEFAULT_GRATUITY_RATE_PERCENT,
+} from "@/lib/queries/gratuity";
 
 type ContractDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -25,6 +31,21 @@ export default async function ContractDetailPage({
 
   const contract = await getContractById(id);
   if (!contract) notFound();
+  const contractMonths = calculateContractMonths(contract.start_date, contract.end_date);
+  const gratuityEstimate = calculateGratuityPayment({
+    monthlySalary: Number(contract.salary_amount ?? 0),
+    contractMonths,
+    isGratuityEligible: contract.is_gratuity_eligible === true,
+    gratuityRatePercent: DEFAULT_GRATUITY_RATE_PERCENT,
+    governmentTaxPercent: DEFAULT_GOVERNMENT_TAX_PERCENT,
+  });
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
 
   function redirectWithMessage(
     action: string,
@@ -120,7 +141,49 @@ export default async function ContractDetailPage({
           <Info label="Status" value={contract.contract_status ?? "—"} />
           <Info label="Start Date" value={contract.start_date ?? "—"} />
           <Info label="End Date" value={contract.end_date ?? "—"} />
+          <Info
+            label="Gratuity Eligibility"
+            value={contract.is_gratuity_eligible ? "Eligible" : "Not applicable"}
+          />
+          <Info label="Contract Duration (Months)" value={String(contractMonths)} />
+          <Info
+            label="Estimated Net Gratuity"
+            value={
+              gratuityEstimate.is_eligible
+                ? formatCurrency(gratuityEstimate.net_gratuity_payable)
+                : "Not applicable"
+            }
+          />
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-neutral-900">Gratuity estimate breakdown</h2>
+        <p className="mt-1 text-sm text-neutral-600">
+          Formula: Monthly Salary × Contract Months ×{" "}
+          {gratuityEstimate.gratuity_rate_decimal.toFixed(2)} ×{" "}
+          {gratuityEstimate.payable_after_tax_decimal.toFixed(2)}
+        </p>
+        {!gratuityEstimate.is_eligible ? (
+          <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+            {gratuityEstimate.ineligible_reason ?? "Gratuity is not applicable to this contract."}
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Info label="Monthly Salary" value={formatCurrency(Number(contract.salary_amount ?? 0))} />
+            <Info label="Contract Months" value={String(contractMonths)} />
+            <Info label="Total Salary Earned" value={formatCurrency(gratuityEstimate.total_salary_earned)} />
+            <Info label="Gratuity Before Tax" value={formatCurrency(gratuityEstimate.gratuity_before_tax)} />
+            <Info
+              label={`Government Tax Deduction (${gratuityEstimate.government_tax_percent}%)`}
+              value={formatCurrency(gratuityEstimate.government_tax_deduction)}
+            />
+            <Info
+              label="Net Gratuity Payable"
+              value={formatCurrency(gratuityEstimate.net_gratuity_payable)}
+            />
+          </div>
+        )}
       </section>
 
       {message ? (

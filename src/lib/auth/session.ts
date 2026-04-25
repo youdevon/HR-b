@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 
 /**
  * `getUser` / `getCurrentUser` are request-scoped via React `cache()`.
- * Dashboard routes should use `loadDashboardAuthContext` from guards once and pass
+ * Dashboard routes should use `getDashboardSession` from guards once and pass
  * profile/permissions as props to avoid extra `getUser` calls in the same request.
  */
 export const getSession = cache(async (): Promise<Session | null> => {
@@ -37,9 +37,7 @@ export const getUser = cache(async (): Promise<User | null> => {
   return user ?? null;
 });
 
-export const getCurrentUser = cache(async (): Promise<User | null> => {
-  return getUser();
-});
+export const getCurrentUser = getUser;
 
 export async function isAuthenticated(): Promise<boolean> {
   const user = await getCurrentUser();

@@ -1,4 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
+import { getContractById } from "@/lib/queries/contracts";
+
+export const GRATUITY_RATE = 0.2;
+export const GOVERNMENT_TAX_RATE = 0.25;
+export const NET_GRATUITY_RATE = 0.75;
+export const DEFAULT_GRATUITY_RATE_PERCENT = 20;
+export const DEFAULT_GOVERNMENT_TAX_PERCENT = 25;
 
 export type GratuityRuleRecord = {
   id: string;
@@ -55,6 +62,29 @@ export type GratuityPaymentRecord = {
   payment_notes: string | null;
   created_at: string | null;
 };
+
+export type GratuityPaymentBreakdown = {
+  is_eligible: boolean;
+  ineligible_reason: string | null;
+  gratuity_rate_percent: number;
+  gratuity_rate_decimal: number;
+  government_tax_percent: number;
+  government_tax_decimal: number;
+  payable_after_tax_percent: number;
+  payable_after_tax_decimal: number;
+  total_salary_earned: number;
+  gratuity_before_tax: number;
+  government_tax_deduction: number;
+  net_gratuity_payable: number;
+};
+
+export type GratuityCalculationBreakdown = {
+  monthly_salary: number;
+  contract_months: number;
+  service_start_date: string | null;
+  service_end_date: string | null;
+  source: "contract" | "calculation_record";
+} & GratuityPaymentBreakdown;
 
 const GRATUITY_RULE_SELECT = `
   id,
@@ -123,6 +153,167 @@ function getErrorMessage(error: unknown) {
   }
 
   return JSON.stringify(error);
+}
+
+function roundCurrency(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function safeNumber(value: number | null | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return value;
+}
+
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, value));
+}
+
+function parseIsoDateOnly(dateText: string | null | undefined): Date | null {
+  if (!dateText) return null;
+  const [y, m, d] = dateText.split("-");
+  const year = Number(y);
+  const month = Number(m);
+  const day = Number(d);
+  if (!year || !month || !day) return null;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+export function calculateContractMonths(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined
+): number {
+  const start = parseIsoDateOnly(startDate);
+  const end = parseIsoDateOnly(endDate);
+  if (!start || !end || end < start) return 0;
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  const inclusiveDays = Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay) + 1;
+  return roundCurrency(inclusiveDays / 30);
+}
+
+export type CalculateGratuityPaymentInput = {
+  monthlySalary: number;
+  contractMonths: number;
+  isGratuityEligible: boolean;
+  gratuityRatePercent?: number;
+  governmentTaxPercent?: number;
+};
+
+/**
+ * Net Gratuity Payable =
+ * Monthly Salary × Contract Months × (Gratuity Rate % / 100) × (Payable After Tax % / 100)
+ */
+export function calculateGratuityPayment(
+  input: CalculateGratuityPaymentInput
+): GratuityPaymentBreakdown {
+  const monthly = Math.max(0, safeNumber(input.monthlySalary));
+  const contractMonths = Math.max(0, safeNumber(input.contractMonths));
+  const gratuityRatePercent = clampPercent(
+    safeNumber(input.gratuityRatePercent ?? DEFAULT_GRATUITY_RATE_PERCENT)
+  );
+  const governmentTaxPercent = clampPercent(
+    safeNumber(input.governmentTaxPercent ?? DEFAULT_GOVERNMENT_TAX_PERCENT)
+  );
+  const gratuityRateDecimal = roundCurrency(gratuityRatePercent / 100);
+  const governmentTaxDecimal = roundCurrency(governmentTaxPercent / 100);
+  const payableAfterTaxPercent = roundCurrency(100 - governmentTaxPercent);
+  const payableAfterTaxDecimal = roundCurrency(payableAfterTaxPercent / 100);
+
+  if (!input.isGratuityEligible) {
+    return {
+      is_eligible: false,
+      ineligible_reason: "Gratuity is not applicable to this contract.",
+      gratuity_rate_percent: gratuityRatePercent,
+      gratuity_rate_decimal: gratuityRateDecimal,
+      government_tax_percent: governmentTaxPercent,
+      government_tax_decimal: governmentTaxDecimal,
+      payable_after_tax_percent: payableAfterTaxPercent,
+      payable_after_tax_decimal: payableAfterTaxDecimal,
+      total_salary_earned: 0,
+      gratuity_before_tax: 0,
+      government_tax_deduction: 0,
+      net_gratuity_payable: 0,
+    };
+  }
+
+  if (contractMonths <= 0) {
+    return {
+      is_eligible: true,
+      ineligible_reason: "Contract months must be greater than 0 before calculation.",
+      gratuity_rate_percent: gratuityRatePercent,
+      gratuity_rate_decimal: gratuityRateDecimal,
+      government_tax_percent: governmentTaxPercent,
+      government_tax_decimal: governmentTaxDecimal,
+      payable_after_tax_percent: payableAfterTaxPercent,
+      payable_after_tax_decimal: payableAfterTaxDecimal,
+      total_salary_earned: 0,
+      gratuity_before_tax: 0,
+      government_tax_deduction: 0,
+      net_gratuity_payable: 0,
+    };
+  }
+
+  const totalSalaryEarned = roundCurrency(monthly * contractMonths);
+  const gratuityBeforeTax = roundCurrency(totalSalaryEarned * gratuityRateDecimal);
+  const governmentTaxDeduction = roundCurrency(gratuityBeforeTax * governmentTaxDecimal);
+  const netGratuityPayable = roundCurrency(gratuityBeforeTax * payableAfterTaxDecimal);
+
+  return {
+    is_eligible: true,
+    ineligible_reason: null,
+    gratuity_rate_percent: gratuityRatePercent,
+    gratuity_rate_decimal: gratuityRateDecimal,
+    government_tax_percent: governmentTaxPercent,
+    government_tax_decimal: governmentTaxDecimal,
+    payable_after_tax_percent: payableAfterTaxPercent,
+    payable_after_tax_decimal: payableAfterTaxDecimal,
+    total_salary_earned: totalSalaryEarned,
+    gratuity_before_tax: gratuityBeforeTax,
+    government_tax_deduction: governmentTaxDeduction,
+    net_gratuity_payable: netGratuityPayable,
+  };
+}
+
+export async function calculateGratuityBreakdownForRecord(
+  record: GratuityCalculationRecord
+): Promise<GratuityCalculationBreakdown> {
+  if (record.contract_id) {
+    const contract = await getContractById(record.contract_id).catch(() => null);
+    if (contract) {
+      const monthlySalary = safeNumber(contract.salary_amount);
+      const contractMonths = calculateContractMonths(contract.start_date, contract.end_date);
+      return {
+        monthly_salary: roundCurrency(monthlySalary),
+        contract_months: contractMonths,
+        service_start_date: contract.start_date,
+        service_end_date: contract.end_date,
+        source: "contract",
+        ...calculateGratuityPayment({
+          monthlySalary,
+          contractMonths,
+          isGratuityEligible: contract.is_gratuity_eligible === true,
+        }),
+      };
+    }
+  }
+
+  const fallbackSalary = safeNumber(record.salary_basis_amount);
+  const fallbackMonths =
+    safeNumber(record.service_length_months) ||
+    calculateContractMonths(record.service_start_date, record.service_end_date);
+
+  return {
+    monthly_salary: roundCurrency(fallbackSalary),
+    contract_months: roundCurrency(fallbackMonths),
+    service_start_date: record.service_start_date,
+    service_end_date: record.service_end_date,
+    source: "calculation_record",
+    ...calculateGratuityPayment({
+      monthlySalary: fallbackSalary,
+      contractMonths: fallbackMonths,
+      isGratuityEligible: true,
+    }),
+  };
 }
 
 export async function listGratuityRules(): Promise<GratuityRuleRecord[]> {

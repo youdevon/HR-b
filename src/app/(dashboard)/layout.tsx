@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 import AppShell from "@/components/layout/app-shell";
-import { requireDashboardAuth } from "@/lib/auth/guards";
+import { getDashboardSession } from "@/lib/auth/guards";
 import { profileDisplayName } from "@/lib/auth/permissions";
 import { buildVisibleDashboardNavItems } from "@/lib/navigation/get-visible-dashboard-nav";
 
@@ -22,7 +23,10 @@ function getInitials(name: string): string {
 }
 
 export default async function DashboardLayout({ children }: DashboardLayoutProps) {
-  const auth = await requireDashboardAuth({ redirectTo: "/login" });
+  const auth = await getDashboardSession();
+  if (!auth) {
+    redirect("/login");
+  }
   const navItems = buildVisibleDashboardNavItems(auth.profile, auth.permissions);
   const displayName = auth.profile ? profileDisplayName(auth.profile) : "Guest";
   const currentYear = new Date().getFullYear();
