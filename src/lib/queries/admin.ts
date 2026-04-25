@@ -53,7 +53,7 @@ export type CreateAdminUserInput = {
   confirm_password?: string;
 };
 
-export type UpdateAdminUserInput = Omit
+export type UpdateAdminUserInput = Omit<
   CreateAdminUserInput,
   "password" | "confirm_password"
 > & {
