@@ -65,8 +65,64 @@ export default function UserForm({
               ))}
             </select>
           </label>
+
+          {mode === "create" ? (
+            <>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700">Password</span>
+                <input
+                  name="password"
+                  type="password"
+                  required
+                  minLength={8}
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
+                />
+                <p className="text-xs text-neutral-500">Password must be at least 8 characters.</p>
+              </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700">Confirm Password</span>
+                <input
+                  name="confirm_password"
+                  type="password"
+                  required
+                  minLength={8}
+                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
+                />
+              </label>
+            </>
+          ) : null}
         </div>
       </section>
+
+      {mode === "edit" ? (
+        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200">
+          <h2 className="text-lg font-semibold text-neutral-900">Password Reset</h2>
+          <p className="mt-1 text-sm text-neutral-600">
+            Leave blank if you do not want to change this user&apos;s password.
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-neutral-700">New Password</span>
+              <input
+                name="new_password"
+                type="password"
+                minLength={8}
+                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
+              />
+              <p className="text-xs text-neutral-500">Password must be at least 8 characters.</p>
+            </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-neutral-700">Confirm New Password</span>
+              <input
+                name="confirm_new_password"
+                type="password"
+                minLength={8}
+                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
+              />
+            </label>
+          </div>
+        </section>
+      ) : null}
 
       <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200">
         <button

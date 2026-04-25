@@ -35,6 +35,8 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   await requirePermission("admin.users.view");
   const status = firstString(sp.status);
   const message = firstString(sp.message);
+  const deleted = firstString(sp.deleted);
+  const deactivated = firstString(sp.deactivated);
   const [users, loginActivity] = await Promise.all([
     listUsers(),
     listLoginActivity(),
@@ -56,6 +58,17 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
             </Link>
           }
         />
+
+        {deleted === "1" ? (
+          <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+            User account deleted successfully.
+          </section>
+        ) : null}
+        {deactivated === "1" ? (
+          <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+            User account deactivated successfully.
+          </section>
+        ) : null}
 
         {message ? (
           <section

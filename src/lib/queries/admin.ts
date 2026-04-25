@@ -1,5 +1,6 @@
 ﻿import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { writeAuditLog } from "@/lib/queries/audit";
 
 export type AdminUserRecord = {
   id: string;
@@ -50,6 +51,7 @@ export type CreateAdminUserInput = {
   first_name?: string;
   last_name?: string;
   email?: string;
+  password?: string;
   phone_number?: string;
   role_id?: string;
   account_status?: string;
@@ -100,16 +102,6 @@ function toNull(value: string | undefined): string | null {
 
 function accountStatusToIsActive(status: string): boolean {
   return status.trim().toLowerCase() === "active";
-}
-
-function createTemporaryPassword(length = 20): string {
-  const chars =
-    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*";
-  let password = "";
-  for (let i = 0; i < length; i += 1) {
-    password += chars[Math.floor(Math.random() * chars.length)] ?? "A";
-  }
-  return password;
 }
 
 export function normalizeRoleCode(value: string | undefined): string {
@@ -196,9 +188,11 @@ export async function createAdminUser(input?: CreateAdminUserInput): Promise<Adm
   const lastName = toNull(input?.last_name);
   const email = toNull(input?.email);
   const roleId = toNull(input?.role_id);
+  const password = input?.password ?? "";
   if (!firstName || !lastName) throw new Error("First name and last name are required.");
   if (!email) throw new Error("Email is required.");
   if (!roleId) throw new Error("Role is required.");
+  if (password.length < 8) throw new Error("Password must be at least 8 characters.");
   const accountStatus = toNull(input?.account_status) ?? "Active";
   const isActive = accountStatusToIsActive(accountStatus);
   const nowIso = new Date().toISOString();
@@ -206,7 +200,7 @@ export async function createAdminUser(input?: CreateAdminUserInput): Promise<Adm
   const adminClient = createAdminClient();
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
     email,
-    password: createTemporaryPassword(),
+    password,
     email_confirm: true,
     user_metadata: {
       first_name: firstName,
@@ -256,12 +250,238 @@ export async function updateAdminUser(id: string, input: UpdateAdminUserInput): 
   const email = toNull(input.email);
   if (!firstName || !lastName) throw new Error("First name and last name are required.");
   if (!email) throw new Error("Email is required.");
+  const accountStatus = toNull(input.account_status) ?? "Active";
+  const isActive = accountStatusToIsActive(accountStatus);
+  const nowIso = new Date().toISOString();
 
   const supabase = await createClient();
-  const { data, error } = await supabase.from("user_profiles").update({ first_name: firstName, last_name: lastName, email, phone_number: toNull(input.phone_number), role_id: toNull(input.role_id), account_status: toNull(input.account_status) ?? "Active" }).eq("id", id).select(USER_PROFILE_SELECT).single();
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .update({
+      first_name: firstName,
+      last_name: lastName,
+      email,
+      phone_number: toNull(input.phone_number),
+      role_id: toNull(input.role_id),
+      account_status: accountStatus,
+      is_active: isActive,
+      updated_at: nowIso,
+    })
+    .eq("id", id)
+    .select(USER_PROFILE_SELECT)
+    .single();
   if (error) throw new Error(`Failed to update user profile: ${error.message}`);
   const [user] = await enrichUsersWithRoles([data as UserProfileRow]);
   return user;
+}
+
+export async function updateAdminUserPassword(id: string, password: string): Promise<void> {
+  if (password.length < 8) {
+    throw new Error("Password must be at least 8 characters.");
+  }
+  const adminClient = createAdminClient();
+  const { error } = await adminClient.auth.admin.updateUserById(id, { password });
+  if (error) {
+    throw new Error(`Failed to update user password: ${error.message}`);
+  }
+}
+
+export async function userHasRecordedActivity(userId: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("audit_logs")
+    .select("id", { count: "exact", head: true })
+    .eq("performed_by_user_id", userId)
+    .limit(1);
+  if (error) {
+    throw new Error(`Failed to check user activity: ${error.message}`);
+  }
+  return (count ?? 0) > 0;
+}
+
+type DeletableUserSnapshot = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  role_id: string | null;
+  is_active: boolean | null;
+  account_status: string | null;
+};
+
+async function loadDeletableUserSnapshot(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<DeletableUserSnapshot> {
+  const { data: targetUser, error: targetError } = await supabase
+    .from("user_profiles")
+    .select("id, first_name, last_name, email, role_id, is_active, account_status")
+    .eq("id", userId)
+    .maybeSingle();
+  if (targetError) throw new Error(`Failed to load user account: ${targetError.message}`);
+  if (!targetUser) throw new Error("User account not found.");
+  return targetUser as DeletableUserSnapshot;
+}
+
+async function assertNotLastActiveSuperUser(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  targetUser: DeletableUserSnapshot
+): Promise<void> {
+  const targetRoleId = targetUser.role_id;
+  if (!targetRoleId || targetUser.is_active !== true) return;
+
+  const { data: targetRole, error: targetRoleError } = await supabase
+    .from("roles")
+    .select("id, role_code")
+    .eq("id", targetRoleId)
+    .maybeSingle();
+  if (targetRoleError) throw new Error(`Failed to load user role: ${targetRoleError.message}`);
+  const isTargetSuperUser = (targetRole?.role_code ?? "").toUpperCase() === "SUPER_USER";
+  if (!isTargetSuperUser) return;
+
+  const { data: superRoles, error: superRoleError } = await supabase
+    .from("roles")
+    .select("id")
+    .eq("role_code", "SUPER_USER");
+  if (superRoleError) {
+    throw new Error(`Failed to validate Super User accounts: ${superRoleError.message}`);
+  }
+  const superRoleIds = (superRoles ?? []).map((row) => row.id as string);
+  if (!superRoleIds.length) return;
+  const { count: activeSuperCount, error: countError } = await supabase
+    .from("user_profiles")
+    .select("id", { count: "exact", head: true })
+    .in("role_id", superRoleIds)
+    .eq("is_active", true);
+  if (countError) {
+    throw new Error(`Failed to validate active Super User count: ${countError.message}`);
+  }
+  if ((activeSuperCount ?? 0) <= 1) {
+    throw new Error("Cannot delete the last active Super User account.");
+  }
+}
+
+async function deactivateUserProfile(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  accountStatus: "deactivated" | "deleted"
+): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const supportsDeactivatedAt =
+    !(await supabase.from("user_profiles").select("deactivated_at").limit(1)).error;
+  const profilePatch: Record<string, unknown> = {
+    is_active: false,
+    account_status: accountStatus,
+    updated_at: nowIso,
+  };
+  if (supportsDeactivatedAt) {
+    profilePatch.deactivated_at = nowIso;
+  }
+  const { error } = await supabase
+    .from("user_profiles")
+    .update(profilePatch)
+    .eq("id", userId);
+  if (error) {
+    throw new Error(`Failed to deactivate user profile: ${error.message}`);
+  }
+}
+
+export async function deactivateAdminUserAccount(
+  userId: string,
+  currentUserId: string
+): Promise<void> {
+  if (!userId.trim()) throw new Error("User id is required.");
+  if (!currentUserId.trim()) throw new Error("Current user id is required.");
+  if (userId === currentUserId) {
+    throw new Error("You cannot delete your own user account.");
+  }
+  const supabase = await createClient();
+  const targetUser = await loadDeletableUserSnapshot(supabase, userId);
+  await assertNotLastActiveSuperUser(supabase, targetUser);
+  await deactivateUserProfile(supabase, userId, "deactivated");
+
+  try {
+    await writeAuditLog({
+      module_name: "Admin",
+      entity_type: "user_profile",
+      entity_id: userId,
+      action_type: "deactivate_user",
+      action_summary: "Deactivated user account",
+      old_values: {
+        first_name: targetUser.first_name,
+        last_name: targetUser.last_name,
+        email: targetUser.email,
+        role_id: targetUser.role_id,
+        is_active: targetUser.is_active,
+        account_status: targetUser.account_status,
+      },
+      new_values: {
+        is_active: false,
+        account_status: "deactivated",
+      },
+      performed_by_user_id: currentUserId,
+    });
+  } catch (auditError) {
+    console.error("deactivateAdminUserAccount audit error:", auditError);
+  }
+}
+
+export async function deleteAdminUserAccount(
+  userId: string,
+  currentUserId: string
+): Promise<void> {
+  if (!userId.trim()) throw new Error("User id is required.");
+  if (!currentUserId.trim()) throw new Error("Current user id is required.");
+  if (userId === currentUserId) {
+    throw new Error("You cannot delete your own user account.");
+  }
+  const supabase = await createClient();
+  const targetUser = await loadDeletableUserSnapshot(supabase, userId);
+  await assertNotLastActiveSuperUser(supabase, targetUser);
+
+  if (await userHasRecordedActivity(userId)) {
+    throw new Error(
+      "This user account cannot be deleted because activity has already been recorded. You may deactivate the account instead."
+    );
+  }
+
+  const adminClient = createAdminClient();
+  const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(userId);
+  if (authDeleteError) {
+    throw new Error(`Failed to remove user login access: ${authDeleteError.message}`);
+  }
+  const { error: profileDeleteError } = await supabase
+    .from("user_profiles")
+    .delete()
+    .eq("id", userId);
+  if (profileDeleteError) {
+    throw new Error(`User login removed but profile deletion failed: ${profileDeleteError.message}`);
+  }
+
+  try {
+    await writeAuditLog({
+      module_name: "Admin",
+      entity_type: "user_profile",
+      entity_id: userId,
+      action_type: "delete_user",
+      action_summary: "Deleted/deactivated user account",
+      old_values: {
+        first_name: targetUser.first_name,
+        last_name: targetUser.last_name,
+        email: targetUser.email,
+        role_id: targetUser.role_id,
+        is_active: targetUser.is_active,
+        account_status: targetUser.account_status,
+      },
+      new_values: {
+        is_active: null,
+        account_status: "deleted",
+      },
+      performed_by_user_id: currentUserId,
+    });
+  } catch (auditError) {
+    console.error("deleteAdminUserAccount audit error:", auditError);
+  }
 }
 
 export async function createRole(input: RoleInput): Promise<AdminRoleRecord> {

@@ -37,10 +37,25 @@ export default async function NewAdminUserPage({
     await assertPermission("admin.users.create");
 
     try {
+      const password = String(formData.get("password") ?? "");
+      const confirmPassword = String(formData.get("confirm_password") ?? "");
+      if (!password) {
+        redirectWithMessage("error", "Password is required.");
+      }
+      if (!confirmPassword) {
+        redirectWithMessage("error", "Confirm password is required.");
+      }
+      if (password.length < 8) {
+        redirectWithMessage("error", "Password must be at least 8 characters.");
+      }
+      if (password !== confirmPassword) {
+        redirectWithMessage("error", "Password and confirm password must match.");
+      }
       await createAdminUser({
         first_name: String(formData.get("first_name") ?? ""),
         last_name: String(formData.get("last_name") ?? ""),
         email: String(formData.get("email") ?? ""),
+        password,
         phone_number: String(formData.get("phone_number") ?? ""),
         role_id: String(formData.get("role_id") ?? ""),
         account_status: String(formData.get("account_status") ?? "Active"),
