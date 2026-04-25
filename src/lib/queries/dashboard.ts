@@ -8,6 +8,9 @@ export type DashboardMetrics = {
   expiredContractsCount: number;
   lowSickLeaveCount: number;
   lowVacationLeaveCount: number;
+  employeesOnLeaveCount: number;
+  pendingLeaveApprovalsCount: number;
+  lowLeaveBalanceAlertsCount: number;
   documentsExpiringIn30DaysCount: number;
   filesInTransitCount: number;
   activeAlertsCount: number;
@@ -127,6 +130,56 @@ async function countLowLeaveByType(leaveType: "sick_leave" | "vacation_leave"): 
   }).length;
 }
 
+async function countEmployeesOnLeave(): Promise<number> {
+  const supabase = await createClient();
+  const today = todayDateString();
+
+  const { data, error } = await supabase
+    .from("leave_transactions")
+    .select("employee_id")
+    .eq("status", "approved")
+    .lte("start_date", today)
+    .gte("end_date", today);
+
+  if (error) {
+    throw new Error(`Failed to count employees on leave: ${error.message}`);
+  }
+
+  return new Set((data ?? []).map((row) => row.employee_id).filter(Boolean)).size;
+}
+
+async function countPendingLeaveApprovals(): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("leave_transactions")
+    .select("id", { head: true, count: "exact" })
+    .eq("status", "pending");
+
+  if (error) {
+    throw new Error(`Failed to count pending leave approvals: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
+async function countLowLeaveBalanceAlerts(): Promise<number> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("leave_balances")
+    .select("remaining_days, warning_threshold_days, low_balance_warning_enabled")
+    .neq("low_balance_warning_enabled", false);
+
+  if (error) {
+    throw new Error(`Failed to count low leave balance alerts: ${error.message}`);
+  }
+
+  return (data ?? []).filter((row) => {
+    const remaining = Number(row.remaining_days ?? 0);
+    const threshold = Number(row.warning_threshold_days ?? 0);
+    return remaining <= threshold;
+  }).length;
+}
+
 async function countDocumentsExpiringIn30Days(): Promise<number> {
   const supabase = await createClient();
   const today = todayDateString();
@@ -183,6 +236,9 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     expiredContractsCount,
     lowSickLeaveCount,
     lowVacationLeaveCount,
+    employeesOnLeaveCount,
+    pendingLeaveApprovalsCount,
+    lowLeaveBalanceAlertsCount,
     documentsExpiringIn30DaysCount,
     filesInTransitCount,
     activeAlertsCount,
@@ -194,6 +250,9 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     countExpiredContracts(),
     countLowLeaveByType("sick_leave"),
     countLowLeaveByType("vacation_leave"),
+    countEmployeesOnLeave(),
+    countPendingLeaveApprovals(),
+    countLowLeaveBalanceAlerts(),
     countDocumentsExpiringIn30Days(),
     countFilesInTransit(),
     countActiveAlerts(),
@@ -207,6 +266,9 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     expiredContractsCount,
     lowSickLeaveCount,
     lowVacationLeaveCount,
+    employeesOnLeaveCount,
+    pendingLeaveApprovalsCount,
+    lowLeaveBalanceAlertsCount,
     documentsExpiringIn30DaysCount,
     filesInTransitCount,
     activeAlertsCount,

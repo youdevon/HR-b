@@ -7,6 +7,7 @@ import {
   type AdminUserRecord,
   type LoginActivityRecord,
 } from "@/lib/queries/admin";
+import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -25,6 +26,11 @@ function formatDate(value: string | null): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleString();
+}
+
+function displayFullName(user: AdminUserRecord): string {
+  const fullName = `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim();
+  return fullName || "—";
 }
 
 function redirectWithMessage(status: "success" | "error", message: string): never {
@@ -48,11 +54,15 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
     "use server";
     try {
       await createAdminUser({
-        full_name: String(formData.get("full_name") ?? ""),
+        first_name: String(formData.get("first_name") ?? ""),
+        last_name: String(formData.get("last_name") ?? ""),
         email: String(formData.get("email") ?? ""),
+        phone_number: String(formData.get("phone_number") ?? ""),
         role_id: String(formData.get("role_id") ?? ""),
         account_status: String(formData.get("account_status") ?? "Active"),
-        is_active: String(formData.get("is_active") ?? "") === "true",
+        is_active: true,
+        password: String(formData.get("password") ?? ""),
+        confirm_password: String(formData.get("confirm_password") ?? ""),
       });
       revalidatePath("/admin/users");
       redirectWithMessage("success", "User created successfully.");
@@ -87,10 +97,16 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
 
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
           <h2 className="mb-4 text-lg font-semibold text-neutral-900">Create User</h2>
-          <form action={createUserAction} className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+          <form action={createUserAction} className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
             <input
-              name="full_name"
-              placeholder="Full name"
+              name="first_name"
+              placeholder="First name"
+              required
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            />
+            <input
+              name="last_name"
+              placeholder="Last name"
               required
               className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
             />
@@ -99,6 +115,27 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
               type="email"
               placeholder="Email"
               required
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            />
+            <input
+              name="phone_number"
+              placeholder="Phone number"
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            />
+            <input
+              name="password"
+              type="password"
+              placeholder="Password"
+              required
+              minLength={8}
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            />
+            <input
+              name="confirm_password"
+              type="password"
+              placeholder="Confirm password"
+              required
+              minLength={8}
               className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
             />
             <select
@@ -123,15 +160,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
               <option value="Disabled">Disabled</option>
               <option value="Pending">Pending</option>
             </select>
-            <select
-              name="is_active"
-              defaultValue="true"
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            >
-              <option value="true">Enabled</option>
-              <option value="false">Disabled</option>
-            </select>
-            <div className="lg:col-span-5">
+            <div className="lg:col-span-4">
               <button
                 type="submit"
                 className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
@@ -149,29 +178,28 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
               <tr>
                 <th className="p-2 text-left">Full Name</th>
                 <th className="p-2 text-left">Email</th>
-                <th className="p-2 text-left">Role Name</th>
-                <th className="p-2 text-left">Role Code</th>
-                <th className="p-2 text-left">Account Status</th>
-                <th className="p-2 text-left">Active</th>
+                <th className="p-2 text-left">Role</th>
+                <th className="p-2 text-left">Status</th>
                 <th className="p-2 text-left">Created At</th>
+                <th className="p-2 text-left">Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.length ? (
                 users.map((user: AdminUserRecord) => (
                   <tr key={user.id} className="border-t border-neutral-100">
-                    <td className="p-2 font-medium text-neutral-900">{user.full_name ?? "—"}</td>
+                    <td className="p-2 font-medium text-neutral-900">
+                      {displayFullName(user)}
+                    </td>
                     <td className="p-2 text-neutral-700">{user.email ?? "—"}</td>
                     <td className="p-2">
-                      {user.role_name ?? <span className="text-neutral-400">Unassigned</span>}
-                    </td>
-                    <td className="p-2 font-mono text-xs text-neutral-700">
-                      {user.role_code ?? "—"}
-                    </td>
-                    <td className="p-2">
-                      <span className="inline-flex rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
-                        {user.account_status ?? "Unknown"}
-                      </span>
+                      {user.role_name || user.role_code ? (
+                        <span className="font-medium text-neutral-900">
+                          {user.role_name ?? user.role_code}
+                        </span>
+                      ) : (
+                        <span className="text-neutral-400">Unassigned</span>
+                      )}
                     </td>
                     <td className="p-2">
                       <span
@@ -183,16 +211,28 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                             : "bg-neutral-100 text-neutral-600"
                         }`}
                       >
-                        {user.is_active === null ? "Unknown" : user.is_active ? "Active" : "Inactive"}
+                        {user.is_active === null
+                          ? user.account_status ?? "Unknown"
+                          : user.is_active
+                          ? "Active"
+                          : "Inactive"}
                       </span>
                     </td>
                     <td className="p-2">{formatDate(user.created_at)}</td>
+                    <td className="p-2">
+                      <Link
+                        href={`/admin/users/${user.id}/edit`}
+                        className="text-sm font-medium text-neutral-900 underline-offset-2 hover:underline"
+                      >
+                        Edit
+                      </Link>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-sm text-neutral-500">
-                    No users found in <code>public.users</code>.
+                  <td colSpan={6} className="p-8 text-center text-sm text-neutral-500">
+                    No users found in <code>public.user_profiles</code>.
                   </td>
                 </tr>
               )}

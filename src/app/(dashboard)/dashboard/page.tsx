@@ -5,6 +5,7 @@ import {
   countPendingConfirmations,
   generateContractLifecycleAlerts,
 } from "@/lib/queries/contracts";
+import { generateLeaveWorkflowAlerts } from "@/lib/queries/leave";
 import Link from "next/link";
 
 type MetricCard = {
@@ -43,6 +44,7 @@ export default async function DashboardPage() {
     countPendingConfirmations().catch(() => 0),
   ]);
   await generateContractLifecycleAlerts().catch(() => 0);
+  await generateLeaveWorkflowAlerts().catch(() => 0);
   let priorityAlertsError = "";
   const priorityAlerts = await listPriorityAlerts(5).catch((error: unknown) => {
     priorityAlertsError =
@@ -101,6 +103,24 @@ export default async function DashboardPage() {
         label: "Low Vacation Leave",
         value: metrics.lowVacationLeaveCount,
         hint: "Employees at or below threshold",
+        href: "/leave/low-vacation",
+      },
+      {
+        label: "Employees On Leave",
+        value: metrics.employeesOnLeaveCount,
+        hint: "Approved leave active today",
+        href: "/leave",
+      },
+      {
+        label: "Pending Leave Approvals",
+        value: metrics.pendingLeaveApprovalsCount,
+        hint: "Leave requests awaiting approval",
+        href: "/leave?q=pending",
+      },
+      {
+        label: "Low Leave Balance Alerts",
+        value: metrics.lowLeaveBalanceAlertsCount,
+        hint: "Balances at or below configured threshold",
         href: "/leave/low-vacation",
       },
       {

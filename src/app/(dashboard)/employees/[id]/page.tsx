@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getEmployeeById } from "@/lib/queries/employees";
-import { listLeaveBalancesByEmployeeId } from "@/lib/queries/leave";
+import {
+  listLeaveBalancesByEmployeeId,
+  listLeaveTransactionsByEmployeeId,
+} from "@/lib/queries/leave";
 import { listDocumentsByEmployeeId } from "@/lib/queries/documents";
 import { listRecordsByEmployeeId } from "@/lib/queries/records";
 import { listContractsByEmployeeId } from "@/lib/queries/contracts";
@@ -36,6 +39,7 @@ export default async function EmployeeDetailPage({
     employee,
     contracts,
     leaveBalances,
+    leaveTransactions,
     documents,
     records,
     fileMovements,
@@ -46,6 +50,7 @@ export default async function EmployeeDetailPage({
     getEmployeeById(id),
     listContractsByEmployeeId(id),
     listLeaveBalancesByEmployeeId(id),
+    listLeaveTransactionsByEmployeeId(id),
     listDocumentsByEmployeeId(id),
     listRecordsByEmployeeId(id),
     listFileMovementsByEmployeeId(id),
@@ -60,6 +65,16 @@ export default async function EmployeeDetailPage({
   const fullName = `${employee.first_name ?? ""} ${
     employee.last_name ?? ""
   }`.trim();
+  const pendingLeaveCount = leaveTransactions.filter(
+    (leave) => leave.approval_status === "pending"
+  ).length;
+  const activeLeaveCount = leaveTransactions.filter(
+    (leave) => leave.approval_status === "approved"
+  ).length;
+  const totalLeaveBalance = leaveBalances.reduce(
+    (total, balance) => total + Number(balance.remaining_days ?? 0),
+    0
+  );
 
   return (
     <main className="space-y-6">
@@ -147,6 +162,14 @@ export default async function EmployeeDetailPage({
           <SummaryCard
             label="Current File Location"
             value={currentFileMovement?.current_location ?? employee.file_location}
+          />
+          <SummaryCard
+            label="Leave Balance"
+            value={`${totalLeaveBalance} days`}
+          />
+          <SummaryCard
+            label="Pending Leave"
+            value={`${pendingLeaveCount} request(s)`}
           />
         </div>
       </section>
@@ -256,6 +279,12 @@ export default async function EmployeeDetailPage({
           >
             View all
           </Link>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <SummaryCard label="Total Balance" value={`${totalLeaveBalance} days`} />
+          <SummaryCard label="Approved Leave Records" value={`${activeLeaveCount}`} />
+          <SummaryCard label="Pending Approvals" value={`${pendingLeaveCount}`} />
         </div>
 
         {leaveBalances.length ? (

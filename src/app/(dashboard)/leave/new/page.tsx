@@ -2,7 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getEmployeeById } from "@/lib/queries/employees";
-import { createClient } from "@/lib/supabase/server";
+import { createLeaveApplication, LEAVE_TYPES } from "@/lib/queries/leave";
 
 type NewLeavePageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -40,32 +40,26 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
     "use server";
     const employee_id = input(formData, "employee_id");
 
-    const supabase = await createClient();
-    const { error } = await supabase.from("leave_transactions").insert({
+    await createLeaveApplication({
       employee_id: toNull(employee_id),
       leave_type: input(formData, "leave_type"),
-      transaction_type: input(formData, "transaction_type"),
       start_date: toNull(input(formData, "start_date")),
       end_date: toNull(input(formData, "end_date")),
-      days: toNumberOrNull(input(formData, "days")),
+      total_days: toNumberOrNull(input(formData, "total_days")),
       reason: toNull(input(formData, "reason")),
-      status: input(formData, "status"),
       notes: toNull(input(formData, "notes")),
-      medical_certificate_required: String(formData.get("medical_certificate_required") ?? "") === "on",
-      medical_certificate_received: String(formData.get("medical_certificate_received") ?? "") === "on",
+      medical_certificate_required:
+        String(formData.get("medical_certificate_required") ?? "") === "on",
       return_to_work_date: toNull(input(formData, "return_to_work_date")),
     });
 
-    if (error) {
-      throw new Error(`Failed to create leave record: ${error.message}`);
-    }
-
+    revalidatePath("/leave");
     revalidatePath("/leave/transactions");
     if (employee_id) {
       revalidatePath(`/employees/${employee_id}`);
       redirect(`/employees/${employee_id}`);
     }
-    redirect("/leave/transactions");
+    redirect("/leave");
   }
 
   return (
@@ -75,7 +69,7 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">New Leave</h1>
-              <p className="mt-1 text-sm text-neutral-600">Create a leave transaction linked to employee profile.</p>
+              <p className="mt-1 text-sm text-neutral-600">Apply for leave linked to an employee profile.</p>
               {employeeId ? (
                 <p className="mt-2 inline-flex rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-700">
                   Employee: {employeeName ?? employeeId}
@@ -87,7 +81,7 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
               )}
             </div>
             <Link
-              href={employeeId ? `/employees/${employeeId}` : "/leave/transactions"}
+              href={employeeId ? `/employees/${employeeId}` : "/leave"}
               className="inline-flex w-fit items-center rounded-xl bg-white px-4 py-2 text-sm font-medium text-neutral-900 ring-1 ring-neutral-300 transition hover:bg-neutral-50"
             >
               Back
@@ -105,25 +99,17 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
               </label>
               <label className="space-y-1.5">
                 <span className="text-sm font-medium text-neutral-700">Leave Type</span>
-                <select name="leave_type" defaultValue="sick_leave" className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm">
-                  <option value="sick_leave">sick_leave</option>
-                  <option value="vacation_leave">vacation_leave</option>
-                  <option value="casual_leave">casual_leave</option>
-                  <option value="special_leave">special_leave</option>
-                  <option value="other_leave">other_leave</option>
+                <select name="leave_type" defaultValue="Vacation" className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm">
+                  {LEAVE_TYPES.map((leaveType) => (
+                    <option key={leaveType} value={leaveType}>
+                      {leaveType}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Transaction Type</span>
-                <input name="transaction_type" required className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              </label>
-              <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Status</span>
-                <input name="status" required defaultValue="pending" className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              </label>
-              <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Days</span>
-                <input name="days" type="number" step="0.5" className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+                <span className="text-sm font-medium text-neutral-700">Total Days</span>
+                <input name="total_days" type="number" step="0.5" className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
               </label>
               <label className="space-y-1.5">
                 <span className="text-sm font-medium text-neutral-700">Start Date</span>
