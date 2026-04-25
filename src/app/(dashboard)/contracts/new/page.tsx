@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import PageHeader from "@/components/layout/page-header";
 import { getEmployeeById } from "@/lib/queries/employees";
 import { createClient } from "@/lib/supabase/server";
 import { validateContractDateOverlap } from "@/lib/queries/contracts";
@@ -105,33 +106,15 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-                New Contract
-              </h1>
-              <p className="mt-1 text-sm text-neutral-600">
-                Create a contract linked to an employee profile.
-              </p>
-              {employeeId ? (
-                <p className="mt-2 inline-flex rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-700">
-                  Employee: {employeeName ?? employeeId}
-                </p>
-              ) : (
-                <p className="mt-2 text-xs text-neutral-500">
-                  No employee preselected. You can still create an unlinked contract.
-                </p>
-              )}
-            </div>
-            <Link
-              href={employeeId ? `/employees/${employeeId}` : "/contracts"}
-              className="inline-flex w-fit items-center rounded-xl bg-white px-4 py-2 text-sm font-medium text-neutral-900 ring-1 ring-neutral-300 transition hover:bg-neutral-50"
-            >
-              Back
-            </Link>
-          </div>
-        </section>
+        <PageHeader
+          title="New Contract"
+          description={
+            employeeId
+              ? `Create a contract linked to ${employeeName ?? employeeId}.`
+              : "Create a contract linked to an employee profile. No employee preselected."
+          }
+          backHref="/contracts"
+        />
 
         {message ? (
           <section

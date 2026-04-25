@@ -1,16 +1,26 @@
 import { createClient } from "@/lib/supabase/server";
 
 export const LEAVE_TYPES = [
-  "Vacation",
-  "Sick",
-  "Casual",
-  "Maternity",
-  "Paternity",
-  "Unpaid",
-  "Special",
+  "vacation_leave",
+  "sick_leave",
+  "casual_leave",
+  "maternity_leave",
+  "paternity_leave",
+  "unpaid_leave",
+  "special_leave",
 ] as const;
 
 export type LeaveType = (typeof LEAVE_TYPES)[number];
+
+export const LEAVE_STATUSES = [
+  "pending",
+  "approved",
+  "rejected",
+  "cancelled",
+  "returned",
+] as const;
+
+export type LeaveStatus = (typeof LEAVE_STATUSES)[number];
 
 export type LeaveAction =
   | "apply_leave"
@@ -135,8 +145,24 @@ function buildEmployeeName(firstName?: string | null, lastName?: string | null):
   return name || null;
 }
 
-function normalizeLeaveType(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, "_");
+export function normalizeLeaveType(value: string): LeaveType {
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const withSuffix = normalized.endsWith("_leave")
+    ? normalized
+    : `${normalized}_leave`;
+
+  return LEAVE_TYPES.includes(withSuffix as LeaveType)
+    ? (withSuffix as LeaveType)
+    : "special_leave";
+}
+
+export function formatLeaveType(value: string | null | undefined): string {
+  if (!value) return "-";
+  return normalizeLeaveType(value)
+    .replace(/_leave$/, "")
+    .split("_")
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
 }
 
 function includesText(value: string | null | undefined, query: string): boolean {
@@ -291,6 +317,7 @@ export type CreateLeaveApplicationInput = {
   reason?: string | null;
   notes?: string | null;
   medical_certificate_required?: boolean;
+  medical_certificate_received?: boolean;
   return_to_work_date?: string | null;
 };
 
@@ -322,6 +349,9 @@ export async function listLeaveTransactions(
       includesText(row.employee_number, queryText) ||
       includesText(row.employee_id, queryText) ||
       includesText(row.leave_type, queryText) ||
+      includesText(formatLeaveType(row.leave_type), queryText) ||
+      includesText(row.transaction_type, queryText) ||
+      includesText(row.status, queryText) ||
       includesText(row.approval_status, queryText)
     );
   });
@@ -393,7 +423,7 @@ export async function createLeaveApplication(
       status: "pending",
       notes: input.notes,
       medical_certificate_required: input.medical_certificate_required ?? false,
-      medical_certificate_received: false,
+      medical_certificate_received: input.medical_certificate_received ?? false,
       return_to_work_date: input.return_to_work_date,
     })
     .select(LEAVE_TRANSACTION_SELECT)
@@ -518,6 +548,16 @@ export async function generateLeaveWorkflowAlerts(): Promise<number> {
     listLeaveTransactions(),
   ]);
 
+  const lowSick = balances.filter((balance) => {
+    const remaining = Number(balance.remaining_days ?? 0);
+    const threshold = Number(balance.warning_threshold_days ?? 0);
+    return (
+      normalizeLeaveType(balance.leave_type ?? "") === "sick_leave" &&
+      balance.low_balance_warning_enabled !== false &&
+      remaining <= threshold
+    );
+  });
+
   const lowVacation = balances.filter((balance) => {
     const remaining = Number(balance.remaining_days ?? 0);
     const threshold = Number(balance.warning_threshold_days ?? 0);
@@ -528,12 +568,6 @@ export async function generateLeaveWorkflowAlerts(): Promise<number> {
     );
   });
 
-  const excessiveSick = balances.filter((balance) => {
-    const used = Number(balance.used_days ?? 0);
-    const entitlement = Number(balance.entitlement_days ?? 0);
-    return normalizeLeaveType(balance.leave_type ?? "") === "sick_leave" && entitlement > 0 && used > entitlement;
-  });
-
   const outstandingApprovals = transactions.filter((transaction) => {
     return (
       transaction.approval_status === "pending" &&
@@ -542,10 +576,10 @@ export async function generateLeaveWorkflowAlerts(): Promise<number> {
   });
 
   const payload = [
-    ...lowVacation.map((balance) => ({
-      correlation_id: `leave-low-vacation-${balance.id}`,
-      alert_title: "Low Vacation Leave Balance",
-      alert_message: `Vacation leave balance is ${balance.remaining_days ?? 0} day(s), at or below threshold.`,
+    ...lowSick.map((balance) => ({
+      correlation_id: `leave-low-sick-${balance.id}`,
+      alert_title: "Low Sick Leave Balance",
+      alert_message: `Sick leave balance is ${balance.remaining_days ?? 0} day(s), at or below threshold.`,
       module_name: "Leave",
       severity_level: "warning",
       status: "active",
@@ -554,12 +588,12 @@ export async function generateLeaveWorkflowAlerts(): Promise<number> {
       employee_id: balance.employee_id,
       triggered_at: new Date().toISOString(),
     })),
-    ...excessiveSick.map((balance) => ({
-      correlation_id: `leave-excessive-sick-${balance.id}`,
-      alert_title: "Excessive Sick Leave",
-      alert_message: `Sick leave used (${balance.used_days ?? 0}) exceeds entitlement (${balance.entitlement_days ?? 0}).`,
+    ...lowVacation.map((balance) => ({
+      correlation_id: `leave-low-vacation-${balance.id}`,
+      alert_title: "Low Vacation Leave Balance",
+      alert_message: `Vacation leave balance is ${balance.remaining_days ?? 0} day(s), at or below threshold.`,
       module_name: "Leave",
-      severity_level: "critical",
+      severity_level: "warning",
       status: "active",
       entity_type: "leave_balance",
       entity_id: balance.id,
@@ -602,7 +636,7 @@ export async function listLowSickLeave(): Promise<LeaveBalanceRecord[]> {
       const threshold = Number(row.warning_threshold_days ?? 0);
 
       return (
-        row.leave_type === "sick_leave" &&
+        normalizeLeaveType(row.leave_type ?? "") === "sick_leave" &&
         row.low_balance_warning_enabled !== false &&
         remaining <= threshold
       );
@@ -622,7 +656,7 @@ export async function listLowVacationLeave(): Promise<LeaveBalanceRecord[]> {
       const threshold = Number(row.warning_threshold_days ?? 0);
 
       return (
-        row.leave_type === "vacation_leave" &&
+        normalizeLeaveType(row.leave_type ?? "") === "vacation_leave" &&
         row.low_balance_warning_enabled !== false &&
         remaining <= threshold
       );
@@ -641,7 +675,7 @@ export async function listExhaustedSickLeave(): Promise<LeaveBalanceRecord[]> {
       const remaining = Number(row.remaining_days ?? 0);
 
       return (
-        row.leave_type === "sick_leave" &&
+        normalizeLeaveType(row.leave_type ?? "") === "sick_leave" &&
         row.exhausted_warning_enabled !== false &&
         remaining <= 0
       );

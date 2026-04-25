@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 import { listMissingFiles } from "@/lib/queries/files";
 
 export default async function MissingFilesPage() {
@@ -7,10 +8,11 @@ export default async function MissingFilesPage() {
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Missing files</h1>
-          <p className="mt-1 text-sm text-neutral-600">Movements with status <span className="font-medium text-neutral-800">missing</span>.</p>
-        </section>
+        <PageHeader
+          title="Missing files"
+          description="Movements with status missing."
+          backHref="/file-movements"
+        />
 
         <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
           <div className="overflow-x-auto">

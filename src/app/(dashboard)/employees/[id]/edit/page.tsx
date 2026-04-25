@@ -1,4 +1,5 @@
 import EmployeeForm from "@/components/domain/employees/employee-form";
+import PageHeader from "@/components/layout/page-header";
 import { getEmployeeById, updateEmployee } from "@/lib/queries/employees";
 import type { EmployeeInput } from "@/lib/validators/employee";
 import { notFound, redirect } from "next/navigation";
@@ -50,13 +51,11 @@ export default async function Page({ params }: PageProps) {
 
   return (
     <main className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-neutral-900">Edit employee</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Update profile and employment details for this employee record.
-        </p>
-        <p className="mt-2 font-mono text-xs text-neutral-500">ID: {id}</p>
-      </div>
+      <PageHeader
+        title="Edit employee"
+        description={`Update profile and employment details for this employee record. ID: ${id}`}
+        backHref={`/employees/${id}`}
+      />
 
       <EmployeeForm
         initialValues={initialValues}

@@ -1,4 +1,5 @@
 import EmployeeForm from "@/components/domain/employees/employee-form";
+import PageHeader from "@/components/layout/page-header";
 import { createEmployee } from "@/lib/queries/employees";
 import type { EmployeeInput } from "@/lib/validators/employee";
 import { redirect } from "next/navigation";
@@ -13,14 +14,11 @@ export default function NewEmployeePage() {
 
   return (
     <main className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-neutral-900">
-          New Employee
-        </h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Create a new employee record and assign their physical file number.
-        </p>
-      </div>
+      <PageHeader
+        title="New Employee"
+        description="Create a new employee record and assign their physical file number."
+        backHref="/employees"
+      />
 
       <EmployeeForm onSubmitAction={createEmployeeAction} />
     </main>

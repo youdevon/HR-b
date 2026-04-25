@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 import { listGratuityRules } from "@/lib/queries/gratuity";
 
 export default async function GratuityRulesPage() {
@@ -7,18 +8,19 @@ export default async function GratuityRulesPage() {
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="flex flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Gratuity rules</h1>
-            <p className="mt-1 text-sm text-neutral-600">Configured calculation rules from the database.</p>
-          </div>
+        <PageHeader
+          title="Gratuity rules"
+          description="Configured calculation rules from the database."
+          backHref="/gratuity/calculations"
+          actions={
           <Link
             href="/gratuity/calculations"
             className="inline-flex shrink-0 items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
           >
             Calculations
           </Link>
-        </section>
+          }
+        />
 
         <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
           <div className="overflow-x-auto">

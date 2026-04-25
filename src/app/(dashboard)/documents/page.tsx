@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 import { listDocuments, listDocumentsByEmployeeId } from "@/lib/queries/documents";
 
 type DocumentsPageProps = {
@@ -16,15 +17,16 @@ export default async function DocumentsPage({ searchParams }: DocumentsPageProps
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="flex flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Documents</h1>
-            <p className="mt-1 text-sm text-neutral-600">Search and manage document records.</p>
-            {employeeId ? (
-              <p className="mt-1 text-xs text-neutral-500">Filtered by employee: {employeeId}</p>
-            ) : null}
-          </div>
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+        <PageHeader
+          title="Documents"
+          description={
+            employeeId
+              ? `Search and manage document records. Filtered by employee: ${employeeId}`
+              : "Search and manage document records."
+          }
+          backHref="/dashboard"
+          actions={
+            <>
             {!employeeId ? (
               <form className="w-full sm:w-80" method="get">
                 <input
@@ -41,8 +43,9 @@ export default async function DocumentsPage({ searchParams }: DocumentsPageProps
             >
               New Document
             </Link>
-          </div>
-        </section>
+            </>
+          }
+        />
 
         <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
           <div className="overflow-x-auto">

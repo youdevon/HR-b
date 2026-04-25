@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import PageHeader from "@/components/layout/page-header";
 import { getGratuityCalculationById } from "@/lib/queries/gratuity";
 
 type PageProps = {
@@ -16,21 +17,19 @@ export default async function Page({ params }: PageProps) {
 
   return (
     <main className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">Gratuity calculation</h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Review basis amounts, service period, and approval status for this calculation.
-          </p>
-          <p className="mt-2 font-mono text-xs text-neutral-500">{id}</p>
-        </div>
+      <PageHeader
+        title="Gratuity calculation"
+        description={`Review basis amounts, service period, and approval status for this calculation. ${id}`}
+        backHref="/gratuity/calculations"
+        actions={
         <Link
           href="/gratuity/calculations"
           className="inline-flex shrink-0 items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
         >
           All calculations
         </Link>
-      </div>
+        }
+      />
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">

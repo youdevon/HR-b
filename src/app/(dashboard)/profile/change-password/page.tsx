@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import PageHeader from "@/components/layout/page-header";
 import { changePasswordWithCurrentPassword } from "@/lib/auth/user";
 
 type ChangePasswordPageProps = {
@@ -39,12 +40,11 @@ export default async function ChangePasswordPage({
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-2xl space-y-6">
-        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <h1 className="text-2xl font-semibold text-neutral-900">Change Password</h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Update your account password securely.
-          </p>
-        </section>
+        <PageHeader
+          title="Change Password"
+          description="Update your account password securely."
+          backHref="/dashboard"
+        />
 
         {message ? (
           <section
@@ -69,11 +69,13 @@ export default async function ChangePasswordPage({
               label="New Password"
               name="new_password"
               placeholder="Enter new password"
+              minLength={8}
             />
             <Field
               label="Confirm New Password"
               name="confirm_password"
               placeholder="Re-enter new password"
+              minLength={8}
             />
             <div className="pt-2">
               <button
@@ -94,10 +96,12 @@ function Field({
   label,
   name,
   placeholder,
+  minLength,
 }: {
   label: string;
   name: string;
   placeholder: string;
+  minLength?: number;
 }) {
   return (
     <label className="block space-y-1.5">
@@ -106,6 +110,7 @@ function Field({
         type="password"
         name={name}
         required
+        minLength={minLength}
         placeholder={placeholder}
         className="w-full rounded-xl border border-neutral-300 px-3 py-2.5 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
       />

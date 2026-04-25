@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import PageHeader from "@/components/layout/page-header";
 import { getEmployeeById } from "@/lib/queries/employees";
 import {
+  formatLeaveType,
   listLeaveBalancesByEmployeeId,
   listLeaveTransactionsByEmployeeId,
 } from "@/lib/queries/leave";
@@ -78,33 +80,19 @@ export default async function EmployeeDetailPage({
 
   return (
     <main className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">
-            {fullName || "Employee Profile"}
-          </h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Employee #{display(employee.employee_number)} • File #
-            {display(employee.file_number)}
-          </p>
-        </div>
-
-        <div className="flex gap-3">
-          <Link
-            href="/employees"
-            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
-          >
-            Back
-          </Link>
-
+      <PageHeader
+        title={fullName || "Employee Profile"}
+        description={`Employee #${display(employee.employee_number)} • File #${display(employee.file_number)}`}
+        backHref="/employees"
+        actions={
           <Link
             href={`/employees/${employee.id}/edit`}
             className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
           >
             Edit Employee
           </Link>
-        </div>
-      </div>
+        }
+      />
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Quick Actions</h2>
@@ -140,10 +128,10 @@ export default async function EmployeeDetailPage({
             Add Record
           </Link>
           <Link
-            href={`/files/movements/new?employeeId=${employee.id}`}
+            href={`/file-movements/new?employeeId=${employee.id}`}
             className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
           >
-            Move Physical File
+            Move File
           </Link>
         </div>
       </section>
@@ -162,6 +150,10 @@ export default async function EmployeeDetailPage({
           <SummaryCard
             label="Current File Location"
             value={currentFileMovement?.current_location ?? employee.file_location}
+          />
+          <SummaryCard
+            label="Current File Holder"
+            value={currentFileMovement?.current_holder ?? "—"}
           />
           <SummaryCard
             label="Leave Balance"
@@ -204,7 +196,14 @@ export default async function EmployeeDetailPage({
 
         <InfoCard title="Physical File Info">
           <InfoRow label="File Status" value={employee.file_status} />
-          <InfoRow label="File Location" value={employee.file_location} />
+          <InfoRow
+            label="Current File Location"
+            value={currentFileMovement?.current_location ?? employee.file_location}
+          />
+          <InfoRow
+            label="Current File Holder"
+            value={currentFileMovement?.current_holder}
+          />
           <InfoRow label="File Notes" value={employee.file_notes} />
         </InfoCard>
       </section>
@@ -304,7 +303,7 @@ export default async function EmployeeDetailPage({
                 {leaveBalances.map((balance) => (
                   <tr key={balance.id} className="hover:bg-neutral-50">
                     <td className="whitespace-nowrap px-4 py-3">
-                      {display(balance.leave_type)}
+                      {formatLeaveType(balance.leave_type)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       {balance.balance_year ?? "—"}
@@ -329,6 +328,63 @@ export default async function EmployeeDetailPage({
         ) : (
           <p className="mt-4 text-sm text-neutral-600">
             No leave balances found for this employee.
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-neutral-900">
+            Recent Leave Transactions
+          </h2>
+          <Link
+            href={`/leave/new?employeeId=${employee.id}`}
+            className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
+          >
+            Add Leave Record
+          </Link>
+        </div>
+
+        {leaveTransactions.length ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full divide-y divide-neutral-200 text-sm">
+              <thead className="bg-neutral-50">
+                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
+                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">Dates</th>
+                  <th className="px-4 py-3">Days</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Return</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
+                {leaveTransactions.slice(0, 5).map((leave) => (
+                  <tr key={leave.id} className="hover:bg-neutral-50">
+                    <td className="whitespace-nowrap px-4 py-3 font-medium text-neutral-900">
+                      <Link href={`/leave/${leave.id}`} className="hover:underline">
+                        {formatLeaveType(leave.leave_type)}
+                      </Link>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(leave.start_date)} - {display(leave.end_date)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {leave.total_days ?? "—"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(leave.approval_status)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {display(leave.return_to_work_date)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-neutral-600">
+            No leave transactions found for this employee.
           </p>
         )}
       </section>
@@ -452,12 +508,20 @@ export default async function EmployeeDetailPage({
           <h2 className="text-lg font-semibold text-neutral-900">
             Physical File Movements
           </h2>
-          <Link
-            href={`/file-movements?employeeId=${employee.id}`}
-            className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
-          >
-            View all
-          </Link>
+          <div className="flex gap-3">
+            <Link
+              href={`/file-movements/new?employeeId=${employee.id}`}
+              className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
+            >
+              Move File
+            </Link>
+            <Link
+              href={`/file-movements?employeeId=${employee.id}`}
+              className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
+            >
+              View all
+            </Link>
+          </div>
         </div>
 
         {fileMovements.length ? (
@@ -467,12 +531,12 @@ export default async function EmployeeDetailPage({
                 <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
                   <th className="px-4 py-3">Current Holder</th>
                   <th className="px-4 py-3">Current Location</th>
-                  <th className="px-4 py-3">Moved By</th>
-                  <th className="px-4 py-3">Movement Type</th>
-                  <th className="px-4 py-3">Reason</th>
+                  <th className="px-4 py-3">File #</th>
+                  <th className="px-4 py-3">From Custodian</th>
+                  <th className="px-4 py-3">To Custodian</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Expected Return</th>
-                  <th className="px-4 py-3">Returned At</th>
+                  <th className="px-4 py-3">Date Sent</th>
+                  <th className="px-4 py-3">View</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
@@ -485,22 +549,24 @@ export default async function EmployeeDetailPage({
                       {display(movement.current_location)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {display(movement.moved_by)}
+                      {display(movement.file_number)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {display(movement.movement_type)}
+                      {display(movement.from_custodian)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {display(movement.movement_reason)}
+                      {display(movement.to_custodian)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {display(movement.status)}
+                      {display(movement.movement_status)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {display(movement.expected_return_date)}
+                      {display(movement.date_sent)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {display(movement.returned_at)}
+                      <Link href={`/file-movements/${movement.id}`} className="font-medium text-neutral-900 hover:underline">
+                        Open
+                      </Link>
                     </td>
                   </tr>
                 ))}

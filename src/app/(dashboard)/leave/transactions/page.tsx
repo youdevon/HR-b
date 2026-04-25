@@ -1,5 +1,7 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 import {
+  formatLeaveType,
   listLeaveTransactions,
   listLeaveTransactionsByEmployeeId,
 } from "@/lib/queries/leave";
@@ -12,6 +14,7 @@ function formatDays(value: string | number | null | undefined): string {
 type LeaveTransactionsPageProps = {
   searchParams: Promise<{
     employeeId?: string;
+    q?: string;
   }>;
 };
 
@@ -20,43 +23,65 @@ export default async function LeaveTransactionsPage({
 }: LeaveTransactionsPageProps) {
   const params = await searchParams;
   const employeeId = params.employeeId?.trim() ?? "";
+  const query = params.q?.trim() ?? "";
   const rows = employeeId
     ? await listLeaveTransactionsByEmployeeId(employeeId)
-    : await listLeaveTransactions();
+    : await listLeaveTransactions({ query });
 
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-                Leave Transactions
-              </h1>
-              <p className="mt-1 text-sm text-neutral-600">
-                Track leave debits, credits, and adjustments.
-              </p>
-              {employeeId ? (
-                <p className="mt-1 text-xs text-neutral-500">
-                  Filtered by employee: {employeeId}
-                </p>
+        <PageHeader
+          title="Leave Transactions"
+          description={
+            employeeId
+              ? `Search and track leave applications, approvals, cancellations, and returns. Filtered by employee: ${employeeId}`
+              : "Search and track leave applications, approvals, cancellations, and returns."
+          }
+          backHref="/leave"
+          actions={
+            <>
+              {!employeeId ? (
+                <form action="/leave/transactions" className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    name="q"
+                    defaultValue={query}
+                    placeholder="Search employee, number, type, status..."
+                    className="min-w-72 rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
+                  >
+                    Search
+                  </button>
+                  {query ? (
+                    <Link
+                      href="/leave/transactions"
+                      className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-center text-sm font-medium text-neutral-900 hover:bg-neutral-50"
+                    >
+                      Clear
+                    </Link>
+                  ) : null}
+                </form>
               ) : null}
-            </div>
-            <Link
-              href={employeeId ? `/leave/new?employeeId=${employeeId}` : "/leave/new"}
-              className="inline-flex w-fit items-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-            >
-              New Leave
-            </Link>
-          </div>
-        </section>
+              <Link
+                href={employeeId ? `/leave/new?employeeId=${employeeId}` : "/leave/new"}
+                className="inline-flex w-fit items-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+              >
+                Apply Leave
+              </Link>
+            </>
+          }
+        />
 
         <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-neutral-200">
               <thead className="bg-neutral-50">
                 <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
-                  <th className="px-4 py-3">Employee ID</th>
+                  <th className="px-4 py-3">Employee</th>
+                  <th className="px-4 py-3">Employee #</th>
                   <th className="px-4 py-3">Leave Type</th>
                   <th className="px-4 py-3">Transaction</th>
                   <th className="px-4 py-3">Start</th>
@@ -70,10 +95,15 @@ export default async function LeaveTransactionsPage({
                 {rows.map((row) => (
                   <tr key={row.id} className="transition hover:bg-neutral-50">
                     <td className="whitespace-nowrap px-4 py-3 font-medium text-neutral-900">
-                      {row.employee_id ?? "-"}
+                      <Link href={`/leave/${row.id}`} className="hover:underline">
+                        {row.employee_name ?? row.employee_id ?? "-"}
+                      </Link>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      {row.leave_type ?? "-"}
+                      {row.employee_number ?? "-"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {formatLeaveType(row.leave_type)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       {row.transaction_type ?? "-"}

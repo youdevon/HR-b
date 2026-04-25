@@ -1,80 +1,108 @@
-"use client";
+import type { AdminRoleRecord, AdminUserRecord } from "@/lib/queries/admin";
 
-import { useState } from "react";
-import { userSchema, type UserInput } from "@/lib/validators/user";
-
-type Props = { initialValues?: Partial<UserInput>; submitLabel?: string };
-type Errors = Partial<Record<keyof UserInput, string>>;
-
-const defaults: UserInput = {
-  full_name: "",
-  first_name: "",
-  last_name: "",
-  email: "",
-  phone_number: "",
-  role_id: "",
-  account_status: "",
-  is_active: true,
+type UserFormProps = {
+  action: (formData: FormData) => void | Promise<void>;
+  roles: AdminRoleRecord[];
+  mode: "create" | "edit";
+  submitLabel: string;
+  user?: AdminUserRecord;
 };
 
-export default function UserForm({ initialValues, submitLabel = "Save User" }: Props) {
-  const [values, setValues] = useState<UserInput>({ ...defaults, ...initialValues });
-  const [errors, setErrors] = useState<Errors>({});
+const accountStatuses = ["Active", "Pending", "Disabled", "Locked"];
 
-  const setField = (name: keyof UserInput, value: string | boolean) => {
-    setValues((p) => ({ ...p, [name]: value }));
-    setErrors((p) => ({ ...p, [name]: undefined }));
-  };
-
+export default function UserForm({
+  action,
+  roles,
+  mode,
+  submitLabel,
+  user,
+}: UserFormProps) {
   return (
-    <form
-      className="space-y-6"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const parsed = userSchema.safeParse(values);
-        if (!parsed.success) {
-          const next: Errors = {};
-          parsed.error.issues.forEach((i) => {
-            const key = i.path[0] as keyof UserInput;
-            if (key && !next[key]) next[key] = i.message;
-          });
-          setErrors(next);
-        } else {
-          setErrors({});
-        }
-      }}
-    >
+    <form action={action} className="space-y-6">
       <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200">
         <h2 className="text-lg font-semibold text-neutral-900">User Profile</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[
-            ["full_name", "Full Name"],
-            ["first_name", "First Name"],
-            ["last_name", "Last Name"],
-            ["email", "Email"],
-            ["phone_number", "Phone Number"],
-            ["role_id", "Role ID"],
-            ["account_status", "Account Status"],
-          ].map(([k, label]) => (
-            <label key={k} className="space-y-2">
-              <span className="text-sm font-medium text-neutral-700">{label}</span>
-              <input
-                value={values[k as keyof UserInput] as string}
-                onChange={(e) => setField(k as keyof UserInput, e.target.value)}
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
-              />
-              {errors[k as keyof UserInput] ? <p className="text-xs text-red-600">{errors[k as keyof UserInput]}</p> : null}
-            </label>
-          ))}
-          <label className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
-            <input type="checkbox" checked={values.is_active} onChange={(e) => setField("is_active", e.target.checked)} />
-            <span className="text-sm">Active account</span>
+          <Field label="First Name" name="first_name" defaultValue={user?.first_name} required />
+          <Field label="Last Name" name="last_name" defaultValue={user?.last_name} required />
+          <Field
+            label="Email"
+            name="email"
+            type="email"
+            defaultValue={user?.email}
+            required
+          />
+          <Field label="Phone Number" name="phone_number" defaultValue={user?.phone_number} />
+
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-neutral-700">Role</span>
+            <select
+              name="role_id"
+              defaultValue={user?.role_id ?? ""}
+              required
+              disabled={roles.length === 0}
+              className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
+            >
+              <option value="">{roles.length ? "Select role" : "No roles available"}</option>
+              {roles.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.role_name ?? role.role_code ?? "Role"}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-neutral-700">Account Status</span>
+            <select
+              name="account_status"
+              defaultValue={user?.account_status ?? "Active"}
+              className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
+            >
+              {accountStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
       </section>
+
       <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200">
-        <button className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white">{submitLabel}</button>
+        <button
+          type="submit"
+          className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+        >
+          {submitLabel}
+        </button>
       </div>
     </form>
+  );
+}
+
+function Field({
+  label,
+  name,
+  defaultValue,
+  type = "text",
+  required = false,
+}: {
+  label: string;
+  name: string;
+  defaultValue?: string | null;
+  type?: string;
+  required?: boolean;
+}) {
+  return (
+    <label className="space-y-2">
+      <span className="text-sm font-medium text-neutral-700">{label}</span>
+      <input
+        name={name}
+        type={type}
+        required={required}
+        defaultValue={defaultValue ?? ""}
+        className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
+      />
+    </label>
   );
 }

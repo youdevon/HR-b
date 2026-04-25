@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 import { listInTransitFiles } from "@/lib/queries/files";
 
 export default async function InTransitFilesPage() {
@@ -7,13 +8,11 @@ export default async function InTransitFilesPage() {
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Files in transit</h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Movements with status <span className="font-medium text-neutral-800">transferred</span> or{" "}
-            <span className="font-medium text-neutral-800">in_transit</span>.
-          </p>
-        </section>
+        <PageHeader
+          title="Files in transit"
+          description="Movements with status transferred or in_transit."
+          backHref="/file-movements"
+        />
 
         <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
           <div className="overflow-x-auto">

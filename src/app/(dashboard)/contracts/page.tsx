@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 import { listContracts, listContractsByEmployeeId } from "@/lib/queries/contracts";
 
 type ContractsPageProps = {
@@ -43,24 +44,23 @@ export default async function ContractsPage({
 
   return (
     <main className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">Contracts</h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Manage employee contracts and contract status.
-          </p>
-          {employeeId ? (
-            <p className="mt-1 text-xs text-neutral-500">Filtered by employee: {employeeId}</p>
-          ) : null}
-        </div>
-
+      <PageHeader
+        title="Contracts"
+        description={
+          employeeId
+            ? `Manage employee contracts and contract status. Filtered by employee: ${employeeId}`
+            : "Manage employee contracts and contract status."
+        }
+        backHref="/dashboard"
+        actions={
         <Link
           href={employeeId ? `/contracts/new?employeeId=${employeeId}` : "/contracts/new"}
           className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white"
         >
           New Contract
         </Link>
-      </div>
+        }
+      />
 
       <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
         <form className="flex flex-col gap-3 sm:flex-row">

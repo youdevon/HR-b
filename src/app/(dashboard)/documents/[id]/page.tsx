@@ -1,4 +1,5 @@
 import { getDocumentById } from "@/lib/queries/documents";
+import PageHeader from "@/components/layout/page-header";
 import { notFound } from "next/navigation";
 
 type DocumentDetailPageProps = {
@@ -20,9 +21,11 @@ export default async function DocumentDetailPage({
 
   return (
     <main className="space-y-6">
-      <h1 className="text-2xl font-semibold text-neutral-900">
-        {document.document_title}
-      </h1>
+      <PageHeader
+        title={document.document_title ?? "Document"}
+        description={document.document_type ?? undefined}
+        backHref="/documents"
+      />
     </main>
   );
 }

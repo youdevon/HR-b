@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 import { listEmployees } from "@/lib/queries/employees";
 
 type EmployeesPageProps = {
@@ -20,17 +21,12 @@ export default async function EmployeesPage({
 
   return (
     <main className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">
-            Employees
-          </h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Manage employee records and physical file details.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row">
+      <PageHeader
+        title="Employees"
+        description="Manage employee records and physical file details."
+        backHref="/dashboard"
+        actions={
+          <>
           <Link
             href="/employees?show=all"
             className="inline-flex min-w-36 items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
@@ -43,8 +39,9 @@ export default async function EmployeesPage({
           >
             New Employee
           </Link>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
         <form className="flex flex-col gap-3 sm:flex-row" method="get">

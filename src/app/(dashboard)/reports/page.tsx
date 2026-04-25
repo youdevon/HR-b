@@ -1,42 +1,40 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 
 const reportLinks = [
-  { href: "/reports/employees", label: "Employees" },
-  { href: "/reports/contracts", label: "Contracts" },
-  { href: "/reports/documents", label: "Documents" },
-  { href: "/reports/files", label: "Files" },
-  { href: "/reports/leave", label: "Leave" },
-  { href: "/reports/compensation", label: "Compensation" },
-  { href: "/reports/gratuity", label: "Gratuity" },
-  { href: "/reports/audit", label: "Audit" },
-  { href: "/reports/users", label: "Users" },
+  { href: "/reports/employees", label: "Employee Master List", description: "Employee identity, department, role, and status." },
+  { href: "/reports/contracts?reportType=active", label: "Active Contracts", description: "Currently active employment contracts." },
+  { href: "/reports/contracts?reportType=expiring", label: "Expiring Contracts", description: "Contracts approaching expiry." },
+  { href: "/reports/contracts?reportType=expired", label: "Expired Contracts", description: "Contracts past end date." },
+  { href: "/reports/leave", label: "Leave Balances & Transactions", description: "Leave balances, requests, and status history." },
+  { href: "/reports/documents", label: "Document Expiry", description: "Document status and expiry tracking." },
+  { href: "/reports/files", label: "Physical File Movements", description: "Custody, status, and physical file movement activity." },
+  { href: "/reports/audit", label: "Audit Activity", description: "System activity and sensitive changes." },
+  { href: "/reports/users", label: "User Accounts", description: "Application users, roles, and account status." },
 ] as const;
 
 export default function Page() {
   return (
     <main className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-neutral-900">Reports</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Browse HR reporting areas. Detailed exports and filters will be added here.
-        </p>
-      </div>
+      <PageHeader
+        title="Reports"
+        description="Browse operational HR reports with filters and export placeholders."
+        backHref="/dashboard"
+      />
 
-      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <h2 className="text-sm font-semibold text-neutral-900">Report categories</h2>
-        <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {reportLinks.map(({ href, label }) => (
+      <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {reportLinks.map(({ href, label, description }) => (
             <li key={href}>
               <Link
                 href={href}
-                className="block rounded-xl border border-neutral-200 px-4 py-3 text-sm font-medium text-neutral-800 transition hover:border-neutral-300 hover:bg-neutral-50"
+                className="block h-full rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-neutral-300 hover:shadow-md"
               >
-                {label}
+                <h2 className="text-sm font-semibold text-neutral-900">{label}</h2>
+                <p className="mt-2 text-sm text-neutral-600">{description}</p>
               </Link>
             </li>
           ))}
-        </ul>
-      </section>
+      </ul>
     </main>
   );
 }

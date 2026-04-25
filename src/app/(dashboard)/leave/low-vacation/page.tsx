@@ -1,3 +1,4 @@
+import PageHeader from "@/components/layout/page-header";
 import { listLowVacationLeave } from "@/lib/queries/leave";
 
 export default async function LowVacationLeavePage() {
@@ -5,12 +6,11 @@ export default async function LowVacationLeavePage() {
 
   return (
     <main className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-neutral-900">Low Vacation Leave</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Vacation leave balances at or below the warning threshold.
-        </p>
-      </div>
+      <PageHeader
+        title="Low Vacation Leave"
+        description="Vacation leave balances at or below the warning threshold."
+        backHref="/leave"
+      />
 
       {rows.length === 0 ? (
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">

@@ -1,3 +1,5 @@
+import PageHeader from "@/components/layout/page-header";
+
 type FileDetailPageProps = {
   params: Promise<{
     id: string;
@@ -11,10 +13,11 @@ export default async function FileDetailPage({
 
   return (
     <main className="space-y-6">
-      <h1 className="text-2xl font-semibold text-neutral-900">
-        File Movement
-      </h1>
-      <p>ID: {id}</p>
+      <PageHeader
+        title="File Movement"
+        description={`ID: ${id}`}
+        backHref="/file-movements"
+      />
     </main>
   );
 }

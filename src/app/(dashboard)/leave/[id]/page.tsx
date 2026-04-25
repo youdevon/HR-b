@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
+import PageHeader from "@/components/layout/page-header";
 import {
   applyLeaveAction,
+  formatLeaveType,
   getLeaveTransactionById,
   type LeaveAction,
 } from "@/lib/queries/leave";
@@ -72,24 +74,11 @@ export default async function LeaveDetailPage({
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-5xl space-y-6">
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-neutral-900">
-                Leave Request
-              </h1>
-              <p className="mt-1 text-sm text-neutral-600">
-                {leave.employee_name ?? leave.employee_id ?? "Unlinked employee"}
-              </p>
-            </div>
-            <Link
-              href={leave.employee_id ? `/employees/${leave.employee_id}` : "/leave"}
-              className="inline-flex w-fit rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
-            >
-              Back
-            </Link>
-          </div>
-        </section>
+        <PageHeader
+          title="Leave Request"
+          description={`${leave.employee_name ?? leave.employee_id ?? "Unlinked employee"} • Employee #: ${leave.employee_number ?? "—"} • ID: ${leave.employee_id ?? "—"}`}
+          backHref="/leave"
+        />
 
         {message ? (
           <section
@@ -104,7 +93,9 @@ export default async function LeaveDetailPage({
         ) : null}
 
         <section className="grid gap-4 md:grid-cols-3">
-          <Info label="Leave Type" value={display(leave.leave_type)} />
+          <Info label="Employee" value={display(leave.employee_name ?? leave.employee_id)} />
+          <Info label="Leave Type" value={formatLeaveType(leave.leave_type)} />
+          <Info label="Transaction Type" value={display(leave.transaction_type)} />
           <Info label="Approval Status" value={display(leave.approval_status)} />
           <Info label="Total Days" value={display(leave.total_days)} />
           <Info label="Start Date" value={display(leave.start_date)} />
@@ -121,6 +112,7 @@ export default async function LeaveDetailPage({
             <TextBlock label="Reason" value={leave.reason} />
             <TextBlock label="Notes" value={leave.notes} />
             <Info label="Medical Certificate Required" value={display(leave.medical_certificate_required)} />
+            <Info label="Medical Certificate Received" value={display(leave.medical_certificate_received)} />
             <Info label="Rejection Reason" value={display(leave.rejection_reason)} />
           </div>
         </section>

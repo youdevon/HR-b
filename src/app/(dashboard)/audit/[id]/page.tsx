@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import PageHeader from "@/components/layout/page-header";
 import { getAuditLogById, listAuditTimelineForEntity } from "@/lib/queries/audit";
 
 type AuditDetailPageProps = {
@@ -84,14 +85,11 @@ export default async function AuditDetailPage({
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-4xl space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Link
-            href={returnTo}
-            className="text-sm font-medium text-neutral-600 underline-offset-2 hover:text-neutral-900 hover:underline"
-          >
-            ← Back
-          </Link>
-        </div>
+        <PageHeader
+          title="Audit Event"
+          description={record.action_summary}
+          backHref="/audit/activity"
+        />
 
         <section className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -99,9 +97,9 @@ export default async function AuditDetailPage({
               <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
                 {record.module_name}
               </p>
-              <h1 className="mt-1 text-xl font-semibold tracking-tight text-neutral-900 sm:text-2xl">
+              <h2 className="mt-1 text-xl font-semibold tracking-tight text-neutral-900 sm:text-2xl">
                 {record.action_summary}
-              </h1>
+              </h2>
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="inline-flex rounded-lg bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-800 ring-1 ring-neutral-200/80">
                   {record.action_type}

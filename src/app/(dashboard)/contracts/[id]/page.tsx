@@ -1,4 +1,5 @@
 import { getContractById, applyContractLifecycleAction } from "@/lib/queries/contracts";
+import PageHeader from "@/components/layout/page-header";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 
@@ -105,11 +106,13 @@ export default async function ContractDetailPage({
 
   return (
     <main className="space-y-6">
+      <PageHeader
+        title="Contract Overview"
+        description="Lifecycle controls for this employee contract."
+        backHref="/contracts"
+      />
+
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold text-neutral-900">Contract Overview</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Lifecycle controls for this employee contract.
-        </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Info label="Employee" value={contract.employee_name ?? contract.employee_id ?? "—"} />
           <Info label="Contract #" value={contract.contract_number ?? "—"} />

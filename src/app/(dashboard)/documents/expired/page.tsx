@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 import { listExpiredDocuments } from "@/lib/queries/documents";
 
 export default async function ExpiredDocumentsPage() {
@@ -7,12 +8,11 @@ export default async function ExpiredDocumentsPage() {
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Expired Documents</h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Documents whose expiry date is before today (non-null expiry dates only).
-          </p>
-        </section>
+        <PageHeader
+          title="Expired Documents"
+          description="Documents whose expiry date is before today (non-null expiry dates only)."
+          backHref="/documents"
+        />
 
         <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
           <div className="overflow-x-auto">

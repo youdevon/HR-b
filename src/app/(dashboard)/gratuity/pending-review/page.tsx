@@ -1,3 +1,4 @@
+import PageHeader from "@/components/layout/page-header";
 import { listApprovedUnpaidGratuityCalculations } from "@/lib/queries/gratuity";
 
 export default async function GratuityApprovedUnpaidPage() {
@@ -5,14 +6,11 @@ export default async function GratuityApprovedUnpaidPage() {
 
   return (
     <main className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-neutral-900">
-          Approved Unpaid Gratuity
-        </h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Approved gratuity calculations pending payment.
-        </p>
-      </div>
+      <PageHeader
+        title="Approved Unpaid Gratuity"
+        description="Approved gratuity calculations pending payment."
+        backHref="/gratuity/calculations"
+      />
 
       {rows.length === 0 ? (
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">

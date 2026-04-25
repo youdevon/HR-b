@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import PageHeader from "@/components/layout/page-header";
 import { getEmployeeById } from "@/lib/queries/employees";
 import {
   createFileMovement,
@@ -41,11 +42,9 @@ export default async function NewFileMovementPage({
     await createFileMovement({
       employee_id,
       movement_type,
-      current_holder: input(formData, "current_holder"),
-      current_location: input(formData, "current_location"),
-      moved_by: input(formData, "moved_by"),
+      to_custodian: input(formData, "current_holder"),
+      to_location: input(formData, "current_location"),
       movement_reason: input(formData, "movement_reason"),
-      expected_return_date: input(formData, "expected_return_date"),
     });
 
     revalidatePath("/files/movements");
@@ -56,33 +55,15 @@ export default async function NewFileMovementPage({
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-                Move Physical File
-              </h1>
-              <p className="mt-1 text-sm text-neutral-600">
-                Create a physical file movement record linked to employee profile.
-              </p>
-              {employeeId ? (
-                <p className="mt-2 inline-flex rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-700">
-                  Employee: {employeeName ?? employeeId}
-                </p>
-              ) : (
-                <p className="mt-2 text-xs text-neutral-500">
-                  No employee preselected. Select this flow from Employee Profile quick actions.
-                </p>
-              )}
-            </div>
-            <Link
-              href={employeeId ? `/employees/${employeeId}` : "/files/movements"}
-              className="inline-flex w-fit items-center rounded-xl bg-white px-4 py-2 text-sm font-medium text-neutral-900 ring-1 ring-neutral-300 transition hover:bg-neutral-50"
-            >
-              Back
-            </Link>
-          </div>
-        </section>
+        <PageHeader
+          title="Move Physical File"
+          description={
+            employeeId
+              ? `Create a physical file movement record linked to ${employeeName ?? employeeId}.`
+              : "Create a physical file movement record linked to employee profile. Select this flow from Employee Profile quick actions."
+          }
+          backHref="/file-movements"
+        />
 
         <form action={createFileMovementAction} className="space-y-6">
           <input type="hidden" name="employee_id" value={employeeId} />

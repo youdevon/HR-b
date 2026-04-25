@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 import {
   generateContractLifecycleAlerts,
   listExpiringContracts,
@@ -49,17 +50,18 @@ export default async function ExpiringContractsPage({
 
   return (
     <main className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-neutral-900">Expiring contracts</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Contracts ending in 30/60 days, plus overdue renewals.
-        </p>
-        <div className="mt-3 flex gap-2 text-sm">
+      <PageHeader
+        title="Expiring contracts"
+        description="Contracts ending in 30/60 days, plus overdue renewals."
+        backHref="/contracts"
+        actions={
+          <>
           <Link href="/contracts/expiring?window=30" className="rounded-lg border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50">Next 30 days</Link>
           <Link href="/contracts/expiring?window=60" className="rounded-lg border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50">Next 60 days</Link>
           <Link href="/contracts/expiring?window=overdue" className="rounded-lg border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50">Overdue renewals</Link>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
         {contracts.length ? (

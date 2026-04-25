@@ -1,11 +1,12 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 import {
   acknowledgeAlert,
-  generateContractExpiryAlerts,
   listActiveAlerts,
   resolveAlert,
   type ActiveAlertFilters,
 } from "@/lib/queries/alerts";
+import { generateAllSystemAlerts } from "@/lib/queries/notifications";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -66,9 +67,9 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
 
   const returnTo = buildActiveAlertsPath(filters);
 
-  async function refreshContractAlertsAction() {
+  async function refreshAllAlertsAction() {
     "use server";
-    await generateContractExpiryAlerts();
+    await generateAllSystemAlerts();
     revalidatePath("/alerts/active");
     revalidatePath("/dashboard");
   }
@@ -110,24 +111,21 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold">Active Alerts</h1>
-              <p className="mt-1 text-sm text-neutral-600">
-                Central work queue for alerts with status active or acknowledged.
-              </p>
-            </div>
-            <form action={refreshContractAlertsAction}>
+        <PageHeader
+          title="Active Alerts"
+          description="Central work queue for alerts with status active or acknowledged."
+          backHref="/dashboard"
+          actions={
+            <form action={refreshAllAlertsAction}>
               <button
                 type="submit"
                 className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 transition hover:bg-neutral-50"
               >
-                Refresh Contract Alerts
+                Refresh All Alerts
               </button>
             </form>
-          </div>
-        </section>
+          }
+        />
 
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200">
           <h2 className="text-sm font-semibold text-neutral-900">Filters</h2>

@@ -1,15 +1,12 @@
 import {
-  createAdminUser,
   listLoginActivity,
-  listRoles,
   listUsers,
-  type AdminRoleRecord,
   type AdminUserRecord,
   type LoginActivityRecord,
 } from "@/lib/queries/admin";
 import Link from "next/link";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import PageHeader from "@/components/layout/page-header";
+import { requirePermission } from "@/lib/auth/guards";
 
 type AdminUsersPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -33,55 +30,32 @@ function displayFullName(user: AdminUserRecord): string {
   return fullName || "—";
 }
 
-function redirectWithMessage(status: "success" | "error", message: string): never {
-  const qs = new URLSearchParams();
-  qs.set("status", status);
-  qs.set("message", message);
-  redirect(`/admin/users?${qs.toString()}`);
-}
-
 export default async function AdminUsersPage({ searchParams }: AdminUsersPageProps) {
   const sp = await searchParams;
+  await requirePermission("admin.users.view");
   const status = firstString(sp.status);
   const message = firstString(sp.message);
-  const [users, roles, loginActivity] = await Promise.all([
+  const [users, loginActivity] = await Promise.all([
     listUsers(),
-    listRoles(),
     listLoginActivity(),
   ]);
-
-  async function createUserAction(formData: FormData) {
-    "use server";
-    try {
-      await createAdminUser({
-        first_name: String(formData.get("first_name") ?? ""),
-        last_name: String(formData.get("last_name") ?? ""),
-        email: String(formData.get("email") ?? ""),
-        phone_number: String(formData.get("phone_number") ?? ""),
-        role_id: String(formData.get("role_id") ?? ""),
-        account_status: String(formData.get("account_status") ?? "Active"),
-        is_active: true,
-        password: String(formData.get("password") ?? ""),
-        confirm_password: String(formData.get("confirm_password") ?? ""),
-      });
-      revalidatePath("/admin/users");
-      redirectWithMessage("success", "User created successfully.");
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to create user.";
-      redirectWithMessage("error", errorMessage);
-    }
-  }
 
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <h1 className="text-2xl font-semibold text-neutral-900">User Management</h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Public user directory for HR/Admin with account state and login visibility.
-          </p>
-        </section>
+        <PageHeader
+          title="User Management"
+          description="Public user profiles joined to roles with account state and reset visibility."
+          backHref="/dashboard"
+          actions={
+            <Link
+              href="/admin/users/new"
+              className="inline-flex w-fit rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+            >
+              New User
+            </Link>
+          }
+        />
 
         {message ? (
           <section
@@ -95,93 +69,16 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
           </section>
         ) : null}
 
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <h2 className="mb-4 text-lg font-semibold text-neutral-900">Create User</h2>
-          <form action={createUserAction} className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <input
-              name="first_name"
-              placeholder="First name"
-              required
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <input
-              name="last_name"
-              placeholder="Last name"
-              required
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <input
-              name="email"
-              type="email"
-              placeholder="Email"
-              required
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <input
-              name="phone_number"
-              placeholder="Phone number"
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <input
-              name="password"
-              type="password"
-              placeholder="Password"
-              required
-              minLength={8}
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <input
-              name="confirm_password"
-              type="password"
-              placeholder="Confirm password"
-              required
-              minLength={8}
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <select
-              name="role_id"
-              required
-              disabled={roles.length === 0}
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            >
-              <option value="">{roles.length ? "Select role" : "No roles available"}</option>
-              {roles.map((role: AdminRoleRecord) => (
-                <option key={role.id} value={role.id}>
-                  {role.role_name ?? role.role_code ?? "Role"}
-                </option>
-              ))}
-            </select>
-            <select
-              name="account_status"
-              defaultValue="Active"
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            >
-              <option value="Active">Active</option>
-              <option value="Disabled">Disabled</option>
-              <option value="Pending">Pending</option>
-            </select>
-            <div className="lg:col-span-4">
-              <button
-                type="submit"
-                className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-              >
-                Create User
-              </button>
-            </div>
-          </form>
-        </section>
-
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 overflow-x-auto">
           <h2 className="mb-4 text-lg font-semibold text-neutral-900">Users</h2>
           <table className="min-w-full text-sm">
             <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-600">
               <tr>
-                <th className="p-2 text-left">Full Name</th>
+                <th className="p-2 text-left">Full name</th>
                 <th className="p-2 text-left">Email</th>
                 <th className="p-2 text-left">Role</th>
-                <th className="p-2 text-left">Status</th>
-                <th className="p-2 text-left">Created At</th>
-                <th className="p-2 text-left">Actions</th>
+                <th className="p-2 text-left">Account Status</th>
+                <th className="p-2 text-left">Edit</th>
               </tr>
             </thead>
             <tbody>
@@ -202,23 +99,10 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                       )}
                     </td>
                     <td className="p-2">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                          user.is_active === true
-                            ? "bg-emerald-100 text-emerald-700"
-                            : user.is_active === false
-                            ? "bg-rose-100 text-rose-700"
-                            : "bg-neutral-100 text-neutral-600"
-                        }`}
-                      >
-                        {user.is_active === null
-                          ? user.account_status ?? "Unknown"
-                          : user.is_active
-                          ? "Active"
-                          : "Inactive"}
+                      <span className="inline-flex rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
+                        {user.account_status ?? "Unknown"}
                       </span>
                     </td>
-                    <td className="p-2">{formatDate(user.created_at)}</td>
                     <td className="p-2">
                       <Link
                         href={`/admin/users/${user.id}/edit`}
@@ -231,7 +115,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-sm text-neutral-500">
+                  <td colSpan={5} className="p-8 text-center text-sm text-neutral-500">
                     No users found in <code>public.user_profiles</code>.
                   </td>
                 </tr>

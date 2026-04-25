@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 import { listCurrentCompensation, type CompensationRecord } from "@/lib/queries/compensation";
 
 function salaryLabel(row: CompensationRecord): string {
@@ -15,20 +16,19 @@ export default async function CompensationCurrentPage() {
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="flex flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Current Compensation</h1>
-            <p className="mt-1 text-sm text-neutral-600">
-              Active salary records from salary history.
-            </p>
-          </div>
+        <PageHeader
+          title="Current Compensation"
+          description="Active salary records from salary history."
+          backHref="/dashboard"
+          actions={
           <Link
             href="/compensation/history"
             className="inline-flex shrink-0 items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
           >
             View history
           </Link>
-        </section>
+          }
+        />
 
         <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
           <div className="overflow-x-auto">

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import PageHeader from "@/components/layout/page-header";
 import { getEmployeeById } from "@/lib/queries/employees";
 import { createFileMovement, type FileMovementAction } from "@/lib/queries/file-movements";
 
@@ -18,6 +19,10 @@ function input(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
 }
 
+function toNull(value: string): string | null {
+  return value === "" ? null : value;
+}
+
 export default async function NewFileMovementPage({
   searchParams,
 }: NewFileMovementPageProps) {
@@ -33,56 +38,43 @@ export default async function NewFileMovementPage({
   async function createFileMovementAction(formData: FormData) {
     "use server";
     const employee_id = input(formData, "employee_id");
-    if (!employee_id) redirect("/files/movements");
     const movement_type = input(formData, "movement_type") as FileMovementAction;
     await createFileMovement({
-      employee_id,
+      employee_id: toNull(employee_id),
+      file_number: toNull(input(formData, "file_number")),
+      from_department: toNull(input(formData, "from_department")),
+      to_department: toNull(input(formData, "to_department")),
+      from_location: toNull(input(formData, "from_location")),
+      to_location: toNull(input(formData, "to_location")),
+      from_custodian: toNull(input(formData, "from_custodian")),
+      to_custodian: toNull(input(formData, "to_custodian")),
       movement_type,
-      current_holder: input(formData, "current_holder"),
-      current_location: input(formData, "current_location"),
-      moved_by: input(formData, "moved_by"),
-      movement_reason: input(formData, "movement_reason"),
-      expected_return_date: input(formData, "expected_return_date"),
+      movement_reason: toNull(input(formData, "movement_reason")),
+      date_sent: toNull(input(formData, "date_sent")),
+      date_received: toNull(input(formData, "date_received")),
+      remarks: toNull(input(formData, "remarks")),
     });
 
-    revalidatePath("/files/movements");
+    revalidatePath("/file-movements");
     if (employee_id) {
       revalidatePath(`/employees/${employee_id}`);
       redirect(`/employees/${employee_id}`);
     }
-    redirect("/files/movements");
+    redirect("/file-movements");
   }
 
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-                Move Physical File
-              </h1>
-              <p className="mt-1 text-sm text-neutral-600">
-                Create a physical file movement record linked to employee profile.
-              </p>
-              {employeeId ? (
-                <p className="mt-2 inline-flex rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-700">
-                  Employee: {employeeName ?? employeeId}
-                </p>
-              ) : (
-                <p className="mt-2 text-xs text-neutral-500">
-                  No employee preselected. You can still create an unlinked file movement.
-                </p>
-              )}
-            </div>
-            <Link
-              href={employeeId ? `/employees/${employeeId}` : "/files/movements"}
-              className="inline-flex w-fit items-center rounded-xl bg-white px-4 py-2 text-sm font-medium text-neutral-900 ring-1 ring-neutral-300 transition hover:bg-neutral-50"
-            >
-              Back
-            </Link>
-          </div>
-        </section>
+        <PageHeader
+          title="Move Physical File"
+          description={
+            employeeId
+              ? `Create a physical file movement record linked to ${employeeName ?? employeeId}.`
+              : "Create a physical file movement record linked to employee profile. No employee preselected."
+          }
+          backHref="/file-movements"
+        />
 
         <form action={createFileMovementAction} className="space-y-6">
           <input type="hidden" name="employee_id" value={employeeId} />
@@ -97,12 +89,7 @@ export default async function NewFileMovementPage({
                   className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700 placeholder:text-neutral-400"
                 />
               </label>
-              <input
-                name="current_holder"
-                required
-                placeholder="Current Holder"
-                className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-              />
+              <input name="file_number" defaultValue={employee?.file_number ?? ""} placeholder="File Number" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
               <select
                 name="movement_type"
                 defaultValue="check_out"
@@ -114,19 +101,20 @@ export default async function NewFileMovementPage({
                 <option value="archive">Archive</option>
                 <option value="mark_missing">Mark Missing</option>
               </select>
+              <input name="from_department" placeholder="From Department" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+              <input name="to_department" placeholder="To Department" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+              <input name="from_location" defaultValue={employee?.file_location ?? ""} placeholder="From Location" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+              <input name="to_location" placeholder="To Location" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+              <input name="from_custodian" placeholder="From Custodian" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+              <input name="to_custodian" placeholder="To Custodian / Holder" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
               <input
-                name="expected_return_date"
+                name="date_sent"
                 type="date"
                 className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
               />
               <input
-                name="moved_by"
-                placeholder="Moved By"
-                className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-              />
-              <input
-                name="current_location"
-                placeholder="Current Location"
+                name="date_received"
+                type="date"
                 className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
               />
             </div>
@@ -136,6 +124,12 @@ export default async function NewFileMovementPage({
                 required
                 rows={3}
                 placeholder="Movement Reason"
+                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+              />
+              <textarea
+                name="remarks"
+                rows={3}
+                placeholder="Remarks"
                 className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
               />
             </div>

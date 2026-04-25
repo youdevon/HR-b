@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 import { listRecentAuditLogs } from "@/lib/queries/audit";
 
 function formatDate(value: string | null): string {
@@ -29,24 +30,22 @@ export default async function AuditActivityPage({ searchParams }: AuditActivityP
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Audit Activity</h1>
-              <p className="mt-1 text-sm text-neutral-600">
-                Recent changes across the system. Employee-related rows show the affected person when
-                the audit target is an employee record.
-              </p>
-            </div>
-            {employeeId ? (
+        <section className="space-y-3">
+          <PageHeader
+            title="Audit Activity"
+            description="Recent changes across the system. Employee-related rows show the affected person when the audit target is an employee record."
+            backHref="/dashboard"
+            actions={
+              employeeId ? (
               <Link
                 href="/audit/activity"
                 className="inline-flex rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
               >
                 Clear employee filter
               </Link>
-            ) : null}
-          </div>
+            ) : null
+            }
+          />
           {employeeId ? (
             <p className="mt-3 text-sm text-neutral-700">
               Showing audit history for employee ID:

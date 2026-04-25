@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 import { listExpiredContracts } from "@/lib/queries/contracts";
 
 function formatDate(dateText: string | null): string {
@@ -27,14 +28,11 @@ export default async function ExpiredContractsPage() {
 
   return (
     <main className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-neutral-900">
-          Expired Contracts
-        </h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Contracts where end date is before today.
-        </p>
-      </div>
+      <PageHeader
+        title="Expired Contracts"
+        description="Contracts where end date is before today."
+        backHref="/contracts"
+      />
 
       <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
         {contracts.length ? (

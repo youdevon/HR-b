@@ -2,6 +2,11 @@ import { cache } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
+/**
+ * `getUser` / `getCurrentUser` are request-scoped via React `cache()`.
+ * Dashboard routes should use `loadDashboardAuthContext` from guards once and pass
+ * profile/permissions as props to avoid extra `getUser` calls in the same request.
+ */
 export const getSession = cache(async (): Promise<Session | null> => {
   const supabase = await createClient();
   const {

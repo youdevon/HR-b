@@ -1,8 +1,13 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import PageHeader from "@/components/layout/page-header";
 import { getEmployeeById } from "@/lib/queries/employees";
-import { createLeaveApplication, LEAVE_TYPES } from "@/lib/queries/leave";
+import {
+  createLeaveApplication,
+  formatLeaveType,
+  LEAVE_TYPES,
+} from "@/lib/queries/leave";
 
 type NewLeavePageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -50,6 +55,8 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
       notes: toNull(input(formData, "notes")),
       medical_certificate_required:
         String(formData.get("medical_certificate_required") ?? "") === "on",
+      medical_certificate_received:
+        String(formData.get("medical_certificate_received") ?? "") === "on",
       return_to_work_date: toNull(input(formData, "return_to_work_date")),
     });
 
@@ -59,35 +66,21 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
       revalidatePath(`/employees/${employee_id}`);
       redirect(`/employees/${employee_id}`);
     }
-    redirect("/leave");
+    redirect("/leave/transactions");
   }
 
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">New Leave</h1>
-              <p className="mt-1 text-sm text-neutral-600">Apply for leave linked to an employee profile.</p>
-              {employeeId ? (
-                <p className="mt-2 inline-flex rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-700">
-                  Employee: {employeeName ?? employeeId}
-                </p>
-              ) : (
-                <p className="mt-2 text-xs text-neutral-500">
-                  No employee preselected. You can still create an unlinked leave record.
-                </p>
-              )}
-            </div>
-            <Link
-              href={employeeId ? `/employees/${employeeId}` : "/leave"}
-              className="inline-flex w-fit items-center rounded-xl bg-white px-4 py-2 text-sm font-medium text-neutral-900 ring-1 ring-neutral-300 transition hover:bg-neutral-50"
-            >
-              Back
-            </Link>
-          </div>
-        </section>
+        <PageHeader
+          title="Apply Leave"
+          description={
+            employeeId
+              ? `Apply for leave linked to ${employeeName ?? employeeId}.`
+              : "Apply for leave linked to an employee profile. No employee preselected."
+          }
+          backHref="/leave"
+        />
 
         <form action={createLeaveAction} className="space-y-6">
           <input type="hidden" name="employee_id" value={employeeId} />
@@ -99,10 +92,10 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
               </label>
               <label className="space-y-1.5">
                 <span className="text-sm font-medium text-neutral-700">Leave Type</span>
-                <select name="leave_type" defaultValue="Vacation" className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm">
+                <select name="leave_type" defaultValue="vacation_leave" className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm">
                   {LEAVE_TYPES.map((leaveType) => (
                     <option key={leaveType} value={leaveType}>
-                      {leaveType}
+                      {formatLeaveType(leaveType)}
                     </option>
                   ))}
                 </select>
@@ -141,7 +134,7 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
           </section>
           <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200">
             <button type="submit" className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
-              Create Leave Record
+              Apply Leave
             </button>
           </div>
         </form>

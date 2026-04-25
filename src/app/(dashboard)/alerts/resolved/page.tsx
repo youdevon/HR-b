@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PageHeader from "@/components/layout/page-header";
 import { listResolvedAlerts } from "@/lib/queries/alerts";
 
 function formatDate(value: string | null): string {
@@ -21,12 +22,11 @@ export default async function ResolvedAlertsPage() {
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200">
-          <h1 className="text-2xl font-semibold">Resolved Alerts</h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Historical alerts resolved by HR or operations teams.
-          </p>
-        </section>
+        <PageHeader
+          title="Resolved Alerts"
+          description="Historical alerts resolved by HR or operations teams."
+          backHref="/alerts/active"
+        />
 
         <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
           {alerts.length ? (

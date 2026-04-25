@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import PageHeader from "@/components/layout/page-header";
 import { getRecordById } from "@/lib/queries/records";
 
 type RecordDetailPageProps = {
@@ -23,24 +24,11 @@ export default async function RecordDetailPage({ params }: RecordDetailPageProps
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-4xl space-y-6">
-        <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-neutral-200">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-                {show(record.record_title)}
-              </h1>
-              <p className="mt-1 text-sm text-neutral-600">
-                {show(record.record_type)} • {show(record.record_category)}
-              </p>
-            </div>
-            <Link
-              href={record.employee_id ? `/employees/${record.employee_id}` : "/records"}
-              className="inline-flex w-fit items-center rounded-xl bg-white px-4 py-2 text-sm font-medium text-neutral-900 ring-1 ring-neutral-300 transition hover:bg-neutral-50"
-            >
-              Back
-            </Link>
-          </div>
-        </section>
+        <PageHeader
+          title={show(record.record_title)}
+          description={`${show(record.record_type)} • ${show(record.record_category)}`}
+          backHref="/records"
+        />
 
         <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-neutral-200">
           <dl className="grid gap-4 md:grid-cols-2">

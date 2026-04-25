@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import RecordForm from "@/components/domain/records/record-form";
+import PageHeader from "@/components/layout/page-header";
 import { createRecord } from "@/lib/queries/records";
 import { getEmployeeById } from "@/lib/queries/employees";
 
@@ -53,29 +54,15 @@ export default async function NewRecordPage({ searchParams }: NewRecordPageProps
   return (
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-                New HR Record
-              </h1>
-              <p className="mt-1 text-sm text-neutral-600">
-                Create a new entry in the Record Keeping module.
-              </p>
-              {employeeId ? (
-                <p className="mt-2 inline-flex rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-700">
-                  Employee: {employeeName ?? employeeId}
-                </p>
-              ) : null}
-            </div>
-            <Link
-              href={employeeId ? `/employees/${employeeId}` : "/records"}
-              className="inline-flex w-fit items-center rounded-xl bg-white px-4 py-2 text-sm font-medium text-neutral-900 ring-1 ring-neutral-300 transition hover:bg-neutral-50"
-            >
-              Back
-            </Link>
-          </div>
-        </section>
+        <PageHeader
+          title="New HR Record"
+          description={
+            employeeId
+              ? `Create a new entry in the Record Keeping module for ${employeeName ?? employeeId}.`
+              : "Create a new entry in the Record Keeping module."
+          }
+          backHref="/records"
+        />
 
         <form action={createRecordAction} className="space-y-6">
           <RecordForm employeeId={employeeId} submitLabel="Create Record" />

@@ -12,8 +12,13 @@ export type DashboardMetrics = {
   pendingLeaveApprovalsCount: number;
   lowLeaveBalanceAlertsCount: number;
   documentsExpiringIn30DaysCount: number;
+  expiredDocumentsCount: number;
+  filesCheckedOutCount: number;
+  overdueFileReturnsCount: number;
+  missingFilesCount: number;
   filesInTransitCount: number;
   activeAlertsCount: number;
+  criticalAlertsCount: number;
 };
 
 function todayDateString(): string {
@@ -31,6 +36,12 @@ function plusDaysDateString(days: number): string {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function normalizeLeaveType(value: string | null): string {
+  const normalized = (value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (!normalized) return "";
+  return normalized.endsWith("_leave") ? normalized : `${normalized}_leave`;
 }
 
 async function countEmployeesByStatus(status: string): Promise<number> {
@@ -115,8 +126,7 @@ async function countLowLeaveByType(leaveType: "sick_leave" | "vacation_leave"): 
 
   const { data, error } = await supabase
     .from("leave_balances")
-    .select("remaining_days, warning_threshold_days, low_balance_warning_enabled")
-    .eq("leave_type", leaveType)
+    .select("leave_type, remaining_days, warning_threshold_days, low_balance_warning_enabled")
     .neq("low_balance_warning_enabled", false);
 
   if (error) {
@@ -126,7 +136,7 @@ async function countLowLeaveByType(leaveType: "sick_leave" | "vacation_leave"): 
   return (data ?? []).filter((row) => {
     const remaining = Number(row.remaining_days ?? 0);
     const threshold = Number(row.warning_threshold_days ?? 0);
-    return remaining <= threshold;
+    return normalizeLeaveType(row.leave_type) === leaveType && remaining <= threshold;
   }).length;
 }
 
@@ -199,6 +209,23 @@ async function countDocumentsExpiringIn30Days(): Promise<number> {
   return count ?? 0;
 }
 
+async function countExpiredDocuments(): Promise<number> {
+  const supabase = await createClient();
+  const today = todayDateString();
+
+  const { count, error } = await supabase
+    .from("documents")
+    .select("id", { head: true, count: "exact" })
+    .not("expiry_date", "is", null)
+    .lt("expiry_date", today);
+
+  if (error) {
+    throw new Error(`Failed to count expired documents: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
 async function countFilesInTransit(): Promise<number> {
   const supabase = await createClient();
   const { count, error } = await supabase
@@ -213,6 +240,24 @@ async function countFilesInTransit(): Promise<number> {
   return count ?? 0;
 }
 
+async function countFilesByMovementStatus(statuses: string[]): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("file_movements")
+    .select("id", { head: true, count: "exact" })
+    .in("movement_status", statuses);
+
+  if (error) {
+    throw new Error(`Failed to count file movement statuses: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
+async function countOverdueFileReturns(): Promise<number> {
+  return 0;
+}
+
 async function countActiveAlerts(): Promise<number> {
   const supabase = await createClient();
   const { count, error } = await supabase
@@ -222,6 +267,21 @@ async function countActiveAlerts(): Promise<number> {
 
   if (error) {
     throw new Error(`Failed to count active alerts: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
+async function countCriticalAlerts(): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("alerts")
+    .select("id", { head: true, count: "exact" })
+    .in("status", ["active", "acknowledged"])
+    .eq("severity_level", "critical");
+
+  if (error) {
+    throw new Error(`Failed to count critical alerts: ${error.message}`);
   }
 
   return count ?? 0;
@@ -240,8 +300,13 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     pendingLeaveApprovalsCount,
     lowLeaveBalanceAlertsCount,
     documentsExpiringIn30DaysCount,
+    expiredDocumentsCount,
+    filesCheckedOutCount,
+    overdueFileReturnsCount,
+    missingFilesCount,
     filesInTransitCount,
     activeAlertsCount,
+    criticalAlertsCount,
   ] = await Promise.all([
     countEmployeesByStatus("active"),
     countAllEmployees(),
@@ -254,8 +319,13 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     countPendingLeaveApprovals(),
     countLowLeaveBalanceAlerts(),
     countDocumentsExpiringIn30Days(),
+    countExpiredDocuments(),
+    countFilesByMovementStatus(["checked_out"]),
+    countOverdueFileReturns(),
+    countFilesByMovementStatus(["missing"]),
     countFilesInTransit(),
     countActiveAlerts(),
+    countCriticalAlerts(),
   ]);
 
   return {
@@ -270,7 +340,12 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     pendingLeaveApprovalsCount,
     lowLeaveBalanceAlertsCount,
     documentsExpiringIn30DaysCount,
+    expiredDocumentsCount,
+    filesCheckedOutCount,
+    overdueFileReturnsCount,
+    missingFilesCount,
     filesInTransitCount,
     activeAlertsCount,
+    criticalAlertsCount,
   };
 }
