@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import UserForm from "@/components/domain/admin/user-form";
 import PageHeader from "@/components/layout/page-header";
 import { createAdminUser, listRoles } from "@/lib/queries/admin";
-import { requirePermission } from "@/lib/auth/guards";
+import { assertPermission, requirePermission } from "@/lib/auth/guards";
 
 type NewAdminUserPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -34,6 +34,7 @@ export default async function NewAdminUserPage({
 
   async function createUserAction(formData: FormData) {
     "use server";
+    await assertPermission("admin.users.create");
 
     try {
       await createAdminUser({
@@ -46,7 +47,9 @@ export default async function NewAdminUserPage({
       });
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : "Failed to create user.";
+        error instanceof Error
+          ? error.message
+          : "Failed to create auth user/profile.";
       redirectWithMessage("error", errorMessage);
     }
 

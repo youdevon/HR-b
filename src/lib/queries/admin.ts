@@ -1,4 +1,5 @@
 ﻿import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type AdminUserRecord = {
   id: string;
@@ -97,6 +98,20 @@ function toNull(value: string | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
+function accountStatusToIsActive(status: string): boolean {
+  return status.trim().toLowerCase() === "active";
+}
+
+function createTemporaryPassword(length = 20): string {
+  const chars =
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*";
+  let password = "";
+  for (let i = 0; i < length; i += 1) {
+    password += chars[Math.floor(Math.random() * chars.length)] ?? "A";
+  }
+  return password;
+}
+
 export function normalizeRoleCode(value: string | undefined): string {
   return (value ?? "")
     .trim()
@@ -184,10 +199,51 @@ export async function createAdminUser(input?: CreateAdminUserInput): Promise<Adm
   if (!firstName || !lastName) throw new Error("First name and last name are required.");
   if (!email) throw new Error("Email is required.");
   if (!roleId) throw new Error("Role is required.");
+  const accountStatus = toNull(input?.account_status) ?? "Active";
+  const isActive = accountStatusToIsActive(accountStatus);
+  const nowIso = new Date().toISOString();
+
+  const adminClient = createAdminClient();
+  const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
+    email,
+    password: createTemporaryPassword(),
+    email_confirm: true,
+    user_metadata: {
+      first_name: firstName,
+      last_name: lastName,
+    },
+  });
+  if (authError || !authData.user?.id) {
+    throw new Error(`Failed to create auth user: ${authError?.message ?? "Auth user id not returned."}`);
+  }
+  const authUserId = authData.user.id;
 
   const supabase = await createClient();
-  const { data, error } = await supabase.from("user_profiles").insert({ first_name: firstName, last_name: lastName, email, phone_number: toNull(input?.phone_number), role_id: roleId, account_status: toNull(input?.account_status) ?? "Active" }).select(USER_PROFILE_SELECT).single();
-  if (error) throw new Error(`Failed to create user profile: ${error.message}`);
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .insert({
+      id: authUserId,
+      first_name: firstName,
+      last_name: lastName,
+      email,
+      phone_number: toNull(input?.phone_number),
+      role_id: roleId,
+      account_status: accountStatus,
+      is_active: isActive,
+      created_at: nowIso,
+      updated_at: nowIso,
+    })
+    .select(USER_PROFILE_SELECT)
+    .single();
+  if (error) {
+    const { error: rollbackError } = await adminClient.auth.admin.deleteUser(authUserId);
+    const rollbackHint = rollbackError
+      ? ` Cleanup failed for auth user ${authUserId}: ${rollbackError.message}`
+      : "";
+    throw new Error(
+      `Auth user created but failed to create user profile: ${error.message}.${rollbackHint}`
+    );
+  }
   const [user] = await enrichUsersWithRoles([data as UserProfileRow]);
   return user;
 }
