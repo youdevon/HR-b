@@ -1,5 +1,7 @@
 import EmployeeForm from "@/components/domain/employees/employee-form";
 import PageHeader from "@/components/layout/page-header";
+import { hasPermission } from "@/lib/auth/permissions";
+import { assertPermission, requireDashboardAuth, requirePermission } from "@/lib/auth/guards";
 import { getEmployeeById, updateEmployee } from "@/lib/queries/employees";
 import type { EmployeeInput } from "@/lib/validators/employee";
 import { notFound, redirect } from "next/navigation";
@@ -9,17 +11,33 @@ type PageProps = {
 };
 
 export default async function Page({ params }: PageProps) {
+  await requirePermission("employees.edit");
   const { id } = await params;
   const employee = await getEmployeeById(id);
 
   if (!employee) {
     notFound();
   }
+  const existingEmployee = employee;
 
   async function updateEmployeeAction(data: EmployeeInput) {
     "use server";
-
-    await updateEmployee(id, data);
+    await assertPermission("employees.edit");
+    const auth = await requireDashboardAuth();
+    const [canEditId, canEditBir, canEditFile] = await Promise.all([
+      hasPermission("employee.id.edit"),
+      hasPermission("employee.bir.edit"),
+      hasPermission("employee.file.move"),
+    ]);
+    const protectedData: EmployeeInput = { ...data };
+    if (!canEditId) protectedData.id_number = existingEmployee.id_number ?? "";
+    if (!canEditBir) protectedData.bir_number = existingEmployee.bir_number ?? "";
+    if (!canEditFile) {
+      protectedData.file_location = existingEmployee.file_location ?? "";
+      protectedData.file_notes = existingEmployee.file_notes ?? "";
+      protectedData.file_status = existingEmployee.file_status ?? "active";
+    }
+    await updateEmployee(id, protectedData, auth);
     redirect(`/employees/${id}`);
   }
 

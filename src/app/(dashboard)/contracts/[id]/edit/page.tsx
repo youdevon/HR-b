@@ -1,7 +1,17 @@
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
-import { getContractById, updateContractDetails } from "@/lib/queries/contracts";
+import ContractAllowancesEditor, {
+  type ContractAllowanceDraft,
+} from "@/components/domain/contracts/contract-allowances-editor";
+import { assertPermission, getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
+import {
+  getContractById,
+  listContractAllowancesByContractId,
+  type ContractAllowanceInput,
+  updateContractDetails,
+} from "@/lib/queries/contracts";
 
 type ContractEditPageProps = {
   params: Promise<{
@@ -42,6 +52,31 @@ function toNonNegativeDecimalOrZero(value: string, fieldLabel: string): number {
   return parsed;
 }
 
+function parseAllowancesJson(
+  formData: FormData,
+  canEditSalary: boolean
+): ContractAllowanceInput[] {
+  const raw = String(formData.get("allowances_json") ?? "[]");
+  let parsed: unknown = [];
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Invalid allowances payload.");
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((row) => row as Partial<ContractAllowanceDraft>)
+    .map((row) => ({
+      allowance_name: String(row.allowance_name ?? "").trim(),
+      allowance_type: String(row.allowance_type ?? "").trim() || null,
+      allowance_amount: canEditSalary ? Number(row.allowance_amount ?? 0) : 0,
+      allowance_frequency: String(row.allowance_frequency ?? "monthly").trim().toLowerCase() as ContractAllowanceInput["allowance_frequency"],
+      is_taxable: row.is_taxable === true,
+      notes: String(row.notes ?? "").trim() || null,
+    }))
+    .filter((row) => row.allowance_name);
+}
+
 const CONTRACT_TYPE_OPTIONS = [
   { value: "temporary", label: "Short Term" },
   { value: "fixed_term", label: "Fixed Term" },
@@ -71,16 +106,43 @@ export default async function ContractEditPage({
   params,
   searchParams,
 }: ContractEditPageProps) {
+  await requirePermission("contracts.edit");
+  const auth = await getDashboardSession();
+  const profile = auth?.profile ?? null;
+  const permissions = auth?.permissions ?? [];
+  const canViewSalary = hasAnyPermissionForContext(profile, permissions, ["contracts.salary.view"]);
+  const canEditSalary = hasAnyPermissionForContext(profile, permissions, ["contracts.salary.edit"]);
+  const canSetGratuity = hasAnyPermissionForContext(profile, permissions, ["contracts.gratuity.set"]);
+  const canEditLeaveEntitlement = hasAnyPermissionForContext(profile, permissions, ["contracts.leave_entitlement.edit"]);
   const { id } = await params;
   const sp = await searchParams;
   const status = firstString(sp.status);
   const message = firstString(sp.message);
   const contract = await getContractById(id);
   if (!contract) notFound();
+  const existingContract = contract;
+  const existingAllowances = await listContractAllowancesByContractId(id);
+  const initialAllowanceDrafts: ContractAllowanceDraft[] = existingAllowances.map((allowance) => ({
+    allowance_name: allowance.allowance_name,
+    allowance_type: allowance.allowance_type ?? "",
+    allowance_amount: String(allowance.allowance_amount ?? 0),
+    allowance_frequency: (allowance.allowance_frequency as ContractAllowanceDraft["allowance_frequency"]) ?? "monthly",
+    is_taxable: allowance.is_taxable === true,
+    notes: allowance.notes ?? "",
+  }));
 
   async function updateContractAction(formData: FormData) {
     "use server";
+    await assertPermission("contracts.edit");
+    const serverAuth = await getDashboardSession();
+    const serverProfile = serverAuth?.profile ?? null;
+    const serverPermissions = serverAuth?.permissions ?? [];
+    const allowSalaryEdit = hasAnyPermissionForContext(serverProfile, serverPermissions, ["contracts.salary.edit"]);
+    const allowGratuitySet = hasAnyPermissionForContext(serverProfile, serverPermissions, ["contracts.gratuity.set"]);
+    const allowLeaveEntitlementEdit = hasAnyPermissionForContext(serverProfile, serverPermissions, ["contracts.leave_entitlement.edit"]);
+    let allowances: ContractAllowanceInput[] = [];
     try {
+      allowances = parseAllowancesJson(formData, allowSalaryEdit);
       await updateContractDetails({
         id,
         employee_id: input(formData, "employee_id"),
@@ -90,17 +152,22 @@ export default async function ContractEditPage({
         contract_status: input(formData, "contract_status"),
         start_date: input(formData, "start_date"),
         end_date: input(formData, "end_date"),
-        salary_amount: toNullableAmount(input(formData, "salary_amount")),
-        salary_frequency: toNull(input(formData, "salary_frequency")),
-        is_gratuity_eligible: formData.get("is_gratuity_eligible") === "on",
-        vacation_leave_days: toNonNegativeDecimalOrZero(
-          input(formData, "vacation_leave_days"),
-          "Vacation leave days"
-        ),
-        sick_leave_days: toNonNegativeDecimalOrZero(
-          input(formData, "sick_leave_days"),
-          "Sick leave days"
-        ),
+        salary_amount: allowSalaryEdit
+          ? toNullableAmount(input(formData, "salary_amount"))
+          : existingContract.salary_amount ?? null,
+        salary_frequency: allowSalaryEdit
+          ? toNull(input(formData, "salary_frequency"))
+          : existingContract.salary_frequency ?? null,
+        is_gratuity_eligible: allowGratuitySet
+          ? formData.get("is_gratuity_eligible") === "on"
+          : existingContract.is_gratuity_eligible === true,
+        vacation_leave_days: allowLeaveEntitlementEdit
+          ? toNonNegativeDecimalOrZero(input(formData, "vacation_leave_days"), "Vacation leave days")
+          : Number(existingContract.vacation_leave_days ?? 0),
+        sick_leave_days: allowLeaveEntitlementEdit
+          ? toNonNegativeDecimalOrZero(input(formData, "sick_leave_days"), "Sick leave days")
+          : Number(existingContract.sick_leave_days ?? 0),
+        allowances,
       });
     } catch (error) {
       const errorMessage =
@@ -203,26 +270,32 @@ export default async function ContractEditPage({
               required
               className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
             />
-            <input
-              name="salary_amount"
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={contract.salary_amount ?? ""}
-              placeholder="Monthly salary"
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <select
-              name="salary_frequency"
-              defaultValue={contract.salary_frequency ?? "monthly"}
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            >
-              {SALARY_FREQUENCY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            {canViewSalary ? (
+              <>
+                <input
+                  name="salary_amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  defaultValue={contract.salary_amount ?? ""}
+                  placeholder="Monthly salary"
+                  disabled={!canEditSalary}
+                  className="rounded-xl border border-neutral-300 px-3 py-2 text-sm disabled:bg-neutral-100"
+                />
+                <select
+                  name="salary_frequency"
+                  defaultValue={contract.salary_frequency ?? "monthly"}
+                  disabled={!canEditSalary}
+                  className="rounded-xl border border-neutral-300 px-3 py-2 text-sm disabled:bg-neutral-100"
+                >
+                  {SALARY_FREQUENCY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : null}
           </div>
 
           <label className="mt-4 flex items-start gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
@@ -230,6 +303,7 @@ export default async function ContractEditPage({
               type="checkbox"
               name="is_gratuity_eligible"
               defaultChecked={contract.is_gratuity_eligible === true}
+              disabled={!canSetGratuity}
               className="mt-1 h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-300"
             />
             <span>
@@ -254,7 +328,8 @@ export default async function ContractEditPage({
               step="0.01"
               defaultValue={contract.vacation_leave_days ?? 0}
               placeholder="Vacation leave days"
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+              disabled={!canEditLeaveEntitlement}
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm disabled:bg-neutral-100"
             />
             <input
               name="sick_leave_days"
@@ -263,10 +338,25 @@ export default async function ContractEditPage({
               step="0.01"
               defaultValue={contract.sick_leave_days ?? 0}
               placeholder="Sick leave days"
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+              disabled={!canEditLeaveEntitlement}
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm disabled:bg-neutral-100"
             />
           </div>
         </section>
+
+        {canViewSalary ? (
+          <ContractAllowancesEditor
+            canEditAmounts={canEditSalary}
+            initialAllowances={initialAllowanceDrafts}
+          />
+        ) : (
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-neutral-900">Allowances</h2>
+            <p className="mt-1 text-sm text-neutral-600">
+              You do not have permission to view or edit allowance amounts.
+            </p>
+          </section>
+        )}
 
         <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
           <button

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
+import { assertPermission, requirePermission } from "@/lib/auth/guards";
 import { getEmployeeById } from "@/lib/queries/employees";
 import {
   createLeaveApplication,
@@ -34,6 +35,7 @@ function toNumberOrNull(value: string): number | null {
 }
 
 export default async function NewLeavePage({ searchParams }: NewLeavePageProps) {
+  await requirePermission("leave.create");
   const sp = await searchParams;
   const employeeId = firstString(sp.employeeId) ?? "";
   const status = firstString(sp.status);
@@ -45,6 +47,7 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
 
   async function createLeaveAction(formData: FormData) {
     "use server";
+    await assertPermission("leave.create");
     const employee_id = input(formData, "employee_id");
     try {
       await createLeaveApplication({

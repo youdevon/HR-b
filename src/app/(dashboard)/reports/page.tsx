@@ -3,9 +3,11 @@ import PageHeader from "@/components/layout/page-header";
 
 const reportLinks = [
   { href: "/reports/employees", label: "Employee Master List", description: "Employee identity, department, role, and status." },
-  { href: "/reports/contracts?reportType=active", label: "Active Contracts", description: "Currently active employment contracts." },
-  { href: "/reports/contracts?reportType=expiring", label: "Expiring Contracts", description: "Contracts approaching expiry." },
-  { href: "/reports/contracts?reportType=expired", label: "Expired Contracts", description: "Contracts past end date." },
+  {
+    href: "/reports/contracts",
+    label: "Contract Reports",
+    description: "View active, expiring, expired, fixed-term, and short-term contract reports.",
+  },
   { href: "/reports/leave", label: "Leave Balances & Transactions", description: "Leave balances, requests, and status history." },
   { href: "/reports/files", label: "Physical File Movements", description: "Custody, status, and physical file movement activity." },
   { href: "/reports/audit", label: "Audit Activity", description: "System activity and sensitive changes." },

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
+import { requireDashboardAuth } from "@/lib/auth/guards";
 import {
   applyFileMovementAction,
   getFileMovementById,
@@ -57,6 +58,7 @@ export default async function FileMovementDetailPage({
 
   async function applyAction(formData: FormData) {
     "use server";
+    const auth = await requireDashboardAuth();
     const action = String(formData.get("action") ?? "") as FileMovementAction;
 
     try {
@@ -72,7 +74,7 @@ export default async function FileMovementDetailPage({
         to_custodian: String(formData.get("to_custodian") ?? ""),
         date_received: String(formData.get("date_received") ?? ""),
         remarks: String(formData.get("remarks") ?? ""),
-      });
+      }, auth);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to update file movement.";

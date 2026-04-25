@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { employeeSchema, type EmployeeInput } from "@/lib/validators/employee";
 import { writeAuditLog, type AuditJson } from "@/lib/queries/audit";
+import type { DashboardAuthContext } from "@/lib/auth/guards";
 
 export type EmployeeListRecord = {
   id: string;
@@ -266,7 +267,8 @@ export async function listEmployeeLookupOptions(
 }
 
 export async function createEmployee(
-  input: EmployeeInput
+  input: EmployeeInput,
+  actor?: DashboardAuthContext | null
 ): Promise<EmployeeListRecord> {
   const supabase = await createClient();
   const providedEmployeeNumber = input.employee_number?.trim() ?? "";
@@ -336,6 +338,14 @@ export async function createEmployee(
     new_values: createdSnapshot as AuditJson,
     changed_fields: Object.keys(createdSnapshot),
     source_type: "application",
+    actor: actor
+      ? {
+          user_id: actor.user.id,
+          display_name: `${actor.profile?.first_name ?? ""} ${actor.profile?.last_name ?? ""}`.trim() || actor.profile?.email || actor.user.email || null,
+          role_code: actor.profile?.role_code ?? null,
+          role_name: actor.profile?.role_name ?? null,
+        }
+      : null,
   });
 
   return data;
@@ -343,7 +353,8 @@ export async function createEmployee(
 
 export async function updateEmployee(
   id: string,
-  input: Partial<EmployeeInput>
+  input: Partial<EmployeeInput>,
+  actor?: DashboardAuthContext | null
 ): Promise<EmployeeListRecord> {
   const previous = await getEmployeeById(id);
   const parsed = employeeSchema.partial().parse(input);
@@ -405,6 +416,14 @@ export async function updateEmployee(
     new_values: newSnapshot as AuditJson,
     changed_fields: auditChangedFieldNames(oldSnapshot, newSnapshot),
     source_type: "application",
+    actor: actor
+      ? {
+          user_id: actor.user.id,
+          display_name: `${actor.profile?.first_name ?? ""} ${actor.profile?.last_name ?? ""}`.trim() || actor.profile?.email || actor.user.email || null,
+          role_code: actor.profile?.role_code ?? null,
+          role_name: actor.profile?.role_name ?? null,
+        }
+      : null,
   });
 
   return data;

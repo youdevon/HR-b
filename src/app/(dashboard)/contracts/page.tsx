@@ -1,5 +1,7 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import ClickableTableRow from "@/components/ui/clickable-table-row";
 import { listContracts, listContractsByEmployeeId } from "@/lib/queries/contracts";
 import { getEmployeeById } from "@/lib/queries/employees";
@@ -42,6 +44,12 @@ function lifecycleStatus(contract: {
 export default async function ContractsPage({
   searchParams,
 }: ContractsPageProps) {
+  await requirePermission("contracts.view");
+  const auth = await getDashboardSession();
+  const profile = auth?.profile ?? null;
+  const permissions = auth?.permissions ?? [];
+  const canCreateContract = hasAnyPermissionForContext(profile, permissions, ["contracts.create"]);
+  const canViewSalary = hasAnyPermissionForContext(profile, permissions, ["contracts.salary.view"]);
   const params = await searchParams;
   const query = params?.q?.trim() ?? "";
   const employeeId = params?.employeeId?.trim() ?? "";
@@ -74,12 +82,14 @@ export default async function ContractsPage({
         }
         backHref="/dashboard"
         actions={
-        <Link
-          href={employeeId ? `/contracts/new?employeeId=${employeeId}` : "/contracts/new"}
-          className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white"
-        >
-          New Contract
-        </Link>
+          canCreateContract ? (
+            <Link
+              href={employeeId ? `/contracts/new?employeeId=${employeeId}` : "/contracts/new"}
+              className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white"
+            >
+              New Contract
+            </Link>
+          ) : null
         }
       />
 
@@ -179,7 +189,7 @@ export default async function ContractsPage({
                   <th className="px-3 py-3 font-medium">End</th>
                   <th className="px-3 py-3 font-medium">Department</th>
                   <th className="px-3 py-3 font-medium">Job Title</th>
-                  <th className="px-3 py-3 font-medium">Salary</th>
+                  {canViewSalary ? <th className="px-3 py-3 font-medium">Salary</th> : null}
                   <th className="px-3 py-3 font-medium">Gratuity</th>
                 </tr>
               </thead>
@@ -200,11 +210,13 @@ export default async function ContractsPage({
                     <td className="px-3 py-3">{contract.end_date ?? "—"}</td>
                     <td className="px-3 py-3">{contract.department ?? "—"}</td>
                     <td className="px-3 py-3">{contract.job_title ?? "—"}</td>
-                    <td className="px-3 py-3">
-                      {contract.salary_amount != null
-                        ? `${contract.salary_amount} ${contract.salary_frequency ?? ""}`.trim()
-                        : "—"}
-                    </td>
+                    {canViewSalary ? (
+                      <td className="px-3 py-3">
+                        {contract.salary_amount != null
+                          ? `${contract.salary_amount} ${contract.salary_frequency ?? ""}`.trim()
+                          : "—"}
+                      </td>
+                    ) : null}
                     <td className="px-3 py-3">
                       {contract.is_gratuity_eligible ? "Yes" : "No"}
                     </td>

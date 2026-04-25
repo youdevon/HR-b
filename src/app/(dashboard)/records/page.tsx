@@ -1,5 +1,7 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import { listRecords, listRecordsByEmployeeId } from "@/lib/queries/records";
 
 type RecordsPageProps = {
@@ -7,6 +9,13 @@ type RecordsPageProps = {
 };
 
 export default async function RecordsPage({ searchParams }: RecordsPageProps) {
+  await requirePermission("records.view");
+  const auth = await getDashboardSession();
+  const canCreateRecord = hasAnyPermissionForContext(
+    auth?.profile ?? null,
+    auth?.permissions ?? [],
+    ["records.create"]
+  );
   const resolved = await searchParams;
   const query = resolved.q?.trim() ?? "";
   const employeeId = resolved.employeeId?.trim() ?? "";
@@ -38,12 +47,14 @@ export default async function RecordsPage({ searchParams }: RecordsPageProps) {
                 />
               </form>
             ) : null}
-            <Link
-              href={employeeId ? `/records/new?employeeId=${employeeId}` : "/records/new"}
-              className="inline-flex shrink-0 items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
-            >
-              New Record
-            </Link>
+            {canCreateRecord ? (
+              <Link
+                href={employeeId ? `/records/new?employeeId=${employeeId}` : "/records/new"}
+                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+              >
+                New Record
+              </Link>
+            ) : null}
             </>
           }
         />

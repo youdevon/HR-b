@@ -11,20 +11,28 @@ export type AlertRecord = {
   alert_title: string | null;
   alert_message: string | null;
   module_name: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
   severity_level: string | null;
   status: string | null;
+  correlation_id: string | null;
   triggered_at: string | null;
+  updated_at: string | null;
+  acknowledged_at: string | null;
   employee_id: string | null;
   resolved_at: string | null;
-  resolution_notes: string | null;
+  resolution_notes?: string | null;
+};
+
+export type ActiveAlertListItem = AlertRecord & {
+  employee_name: string | null;
+  employee_file_number: string | null;
+  alert_category: string;
+  related_record_href: string | null;
 };
 
 export type AlertDetailRecord = AlertRecord & {
-  correlation_id: string | null;
-  entity_type: string | null;
-  entity_id: string | null;
   created_at: string | null;
-  updated_at: string | null;
 };
 
 export type ActiveAlertFilters = {
@@ -38,12 +46,16 @@ const ALERT_SELECT = `
   alert_title,
   alert_message,
   module_name,
+  entity_type,
+  entity_id,
   severity_level,
   status,
+  correlation_id,
   triggered_at,
+  updated_at,
+  acknowledged_at,
   employee_id,
-  resolved_at,
-  resolution_notes
+  resolved_at
 `;
 
 const ALERT_DETAIL_SELECT = `
@@ -53,36 +65,78 @@ const ALERT_DETAIL_SELECT = `
   module_name,
   severity_level,
   status,
+  correlation_id,
   triggered_at,
+  updated_at,
+  acknowledged_at,
   employee_id,
   resolved_at,
-  resolution_notes,
-  correlation_id,
   entity_type,
   entity_id,
-  created_at,
-  updated_at
+  created_at
 `;
+
+function severitySortRank(level: string | null): number {
+  const normalized = (level ?? "").toLowerCase();
+  if (normalized === "critical") return 0;
+  if (normalized === "warning") return 1;
+  return 2;
+}
+
+function buildRelatedRecordHref(alert: Pick<AlertRecord, "module_name" | "entity_type" | "entity_id">): string | null {
+  if (!alert.entity_id) return null;
+  const moduleName = (alert.module_name ?? "").trim().toLowerCase();
+  const entityType = (alert.entity_type ?? "").trim().toLowerCase();
+
+  if (moduleName === "contracts" || entityType === "contract") {
+    return `/contracts/${alert.entity_id}`;
+  }
+  if (moduleName === "leave" && entityType === "leave_transaction") {
+    return `/leave/${alert.entity_id}`;
+  }
+  if (moduleName === "leave" && entityType === "leave_balance") {
+    return "/leave/balances";
+  }
+  if (moduleName === "physical files" || entityType === "file_movement") {
+    return `/file-movements/${alert.entity_id}`;
+  }
+  if (moduleName === "gratuity" || entityType === "gratuity_calculation") {
+    return `/gratuity/${alert.entity_id}`;
+  }
+  return null;
+}
+
+function deriveAlertCategory(alert: Pick<AlertRecord, "correlation_id" | "entity_type" | "module_name">): string {
+  const correlationPrefix = String(alert.correlation_id ?? "")
+    .trim()
+    .toLowerCase()
+    .split("-")[0];
+  if (correlationPrefix) return correlationPrefix.replaceAll("_", " ");
+  return (
+    (alert.entity_type ?? "").trim() ||
+    (alert.module_name ?? "").trim() ||
+    "general"
+  );
+}
 
 export async function listActiveAlerts(
   filters?: ActiveAlertFilters
-): Promise<AlertRecord[]> {
+): Promise<ActiveAlertListItem[]> {
   const supabase = await createClient();
+
+  const normalizedStatus = (filters?.status ?? "").trim().toLowerCase();
+  const effectiveStatus =
+    normalizedStatus === "acknowledged" ? "acknowledged" : "active";
 
   let query = supabase
     .from("alerts")
     .select(ALERT_SELECT)
-    .in("status", ["active", "acknowledged"])
+    .eq("status", effectiveStatus)
     .order("triggered_at", { ascending: false });
 
   const severity = filters?.severity_level?.trim();
   if (severity) {
     query = query.eq("severity_level", severity);
-  }
-
-  const status = filters?.status?.trim().toLowerCase();
-  if (status === "active" || status === "acknowledged") {
-    query = query.eq("status", status);
   }
 
   const moduleName = filters?.module_name?.trim();
@@ -97,40 +151,63 @@ export async function listActiveAlerts(
     throw new Error(`Failed to load active alerts: ${error.message}`);
   }
 
-  return data ?? [];
-}
+  const rows = (data ?? []) as AlertRecord[];
+  const employeeIds = [
+    ...new Set(
+      rows
+        .map((row) => row.employee_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
 
-function severitySortRank(level: string | null): number {
-  const normalized = (level ?? "").toLowerCase();
-  if (normalized === "critical") return 0;
-  if (normalized === "warning") return 1;
-  return 2;
-}
-
-export async function listPriorityAlerts(limit = 5): Promise<AlertRecord[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("alerts")
-    .select(ALERT_SELECT)
-    .in("status", ["active", "acknowledged"])
-    .order("triggered_at", { ascending: false })
-    .limit(80);
-
-  if (error) {
-    console.error("listPriorityAlerts error:", error);
-    throw new Error(`Failed to load priority alerts: ${error.message}`);
+  const employeeById = new Map<
+    string,
+    { first_name: string | null; last_name: string | null; file_number: string | null }
+  >();
+  if (employeeIds.length > 0) {
+    const { data: employees, error: employeesError } = await supabase
+      .from("employees")
+      .select("id, first_name, last_name, file_number")
+      .in("id", employeeIds);
+    if (employeesError) {
+      throw new Error(`Failed to load alert employee context: ${employeesError.message}`);
+    }
+    for (const employee of employees ?? []) {
+      employeeById.set(String(employee.id), {
+        first_name: employee.first_name ?? null,
+        last_name: employee.last_name ?? null,
+        file_number: employee.file_number ?? null,
+      });
+    }
   }
 
-  const rows = [...(data ?? [])];
-  rows.sort((a, b) => {
-    const rankDiff =
-      severitySortRank(a.severity_level) - severitySortRank(b.severity_level);
-    if (rankDiff !== 0) return rankDiff;
+  const enriched = rows.map((row) => {
+    const employee = row.employee_id ? employeeById.get(row.employee_id) : undefined;
+    const employeeName = employee
+      ? `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim() || null
+      : null;
+    return {
+      ...row,
+      employee_name: employeeName,
+      employee_file_number: employee?.file_number ?? null,
+      alert_category: deriveAlertCategory(row),
+      related_record_href: buildRelatedRecordHref(row),
+    };
+  });
+
+  enriched.sort((a, b) => {
+    const severityDiff = severitySortRank(a.severity_level) - severitySortRank(b.severity_level);
+    if (severityDiff !== 0) return severityDiff;
     const ta = new Date(a.triggered_at ?? 0).getTime();
     const tb = new Date(b.triggered_at ?? 0).getTime();
     return tb - ta;
   });
 
+  return enriched;
+}
+
+export async function listPriorityAlerts(limit = 5): Promise<ActiveAlertListItem[]> {
+  const rows = await listActiveAlerts({ status: "active" });
   return rows.slice(0, limit);
 }
 
@@ -195,14 +272,12 @@ export async function acknowledgeAlert(id: string): Promise<AlertRecord> {
       ? {
           status: before.status,
           resolved_at: before.resolved_at,
-          resolution_notes: before.resolution_notes,
           severity_level: before.severity_level,
         }
       : null,
     new_values: {
       status: data.status,
       resolved_at: data.resolved_at,
-      resolution_notes: data.resolution_notes,
       severity_level: data.severity_level,
     },
     source_type: "application",
@@ -321,14 +396,12 @@ export async function resolveAlert(
       ? {
           status: before.status,
           resolved_at: before.resolved_at,
-          resolution_notes: before.resolution_notes,
           severity_level: before.severity_level,
         }
       : null,
     new_values: {
       status: data.status,
       resolved_at: data.resolved_at,
-      resolution_notes: data.resolution_notes,
       severity_level: data.severity_level,
     },
     source_type: "application",

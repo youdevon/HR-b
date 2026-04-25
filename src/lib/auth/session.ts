@@ -39,6 +39,15 @@ export const getUser = cache(async (): Promise<User | null> => {
 
 export const getCurrentUser = getUser;
 
+/**
+ * Returns auth user id quickly for server-side permission-aware query branches.
+ * This avoids pulling full profile details in places that only need identity.
+ */
+export const getCurrentUserId = cache(async (): Promise<string | null> => {
+  const user = await getCurrentUser();
+  return user?.id ?? null;
+});
+
 export async function isAuthenticated(): Promise<boolean> {
   const user = await getCurrentUser();
   return Boolean(user);

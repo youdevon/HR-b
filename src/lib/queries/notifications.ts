@@ -56,6 +56,7 @@ type LeaveBalanceRow = {
   employee_id: string | null;
   leave_type: string | null;
   remaining_days: number | null;
+  effective_to: string | null;
 };
 
 type LeaveTransactionRow = {
@@ -65,6 +66,8 @@ type LeaveTransactionRow = {
   status: string | null;
   medical_certificate_required?: boolean | null;
   medical_certificate_received?: boolean | null;
+  start_date?: string | null;
+  end_date?: string | null;
   created_at: string | null;
 };
 
@@ -183,9 +186,11 @@ function buildAlert(
   > & {
     correlationEntityId: string;
     fallbackSeverity: string;
+    correlationPrefix?: string;
   }
 ): AlertPayload {
   const ruleCode = (rule.rule_code?.trim() || rule.alert_type?.trim() || "alert_rule").toLowerCase();
+  const correlationPrefix = input.correlationPrefix?.trim().toLowerCase();
 
   return {
     alert_title: input.alert_title,
@@ -197,7 +202,9 @@ function buildAlert(
     severity_level: severity(rule, input.fallbackSeverity),
     status: "active",
     triggered_at: new Date().toISOString(),
-    correlation_id: `${ruleCode}-${input.correlationEntityId}`,
+    correlation_id: correlationPrefix
+      ? `${correlationPrefix}-${input.correlationEntityId}`
+      : `${ruleCode}-${input.correlationEntityId}`,
     rule_code: ruleCode,
   };
 }
@@ -331,6 +338,7 @@ export async function generateContractAlertsFromRules(
           entity_id: contract.id,
           employee_id: contract.employee_id,
           correlationEntityId: contract.id,
+          correlationPrefix: `expired_contracts-${(rule.rule_code ?? "expired_contracts").trim().toLowerCase()}`,
           fallbackSeverity: "critical",
         }));
       }
@@ -349,6 +357,7 @@ export async function generateContractAlertsFromRules(
           entity_id: contract.id,
           employee_id: contract.employee_id,
           correlationEntityId: contract.id,
+          correlationPrefix: `contract_expiring-${(rule.rule_code ?? "contract_expiring").trim().toLowerCase()}`,
           fallbackSeverity: threshold <= 7 ? "critical" : "warning",
         }));
       }
@@ -437,7 +446,7 @@ async function loadLeaveTransactionsForAlerts(): Promise<{
   const withStatusAndMedical = await supabase
     .from("leave_transactions")
     .select(
-      "id, employee_id, leave_type, status, medical_certificate_required, medical_certificate_received, created_at"
+      "id, employee_id, leave_type, status, medical_certificate_required, medical_certificate_received, start_date, end_date, created_at"
     );
 
   if (!withStatusAndMedical.error) {
@@ -462,7 +471,7 @@ async function loadLeaveTransactionsForAlerts(): Promise<{
 
   const withStatusOnly = await supabase
     .from("leave_transactions")
-    .select("id, employee_id, leave_type, status, created_at");
+    .select("id, employee_id, leave_type, status, start_date, end_date, created_at");
 
   if (!withStatusOnly.error) {
     return {
@@ -505,13 +514,15 @@ export async function generateLeaveAlertsFromRules(
 ): Promise<AlertPayload[]> {
   const sickRules = rulesFor(rules, ["low_sick_leave"]);
   const vacationRules = rulesFor(rules, ["low_vacation_leave"]);
-  const exhaustedSickRules = rulesFor(rules, ["exhausted_sick_leave"]);
+  const vacationDueRules = rulesFor(rules, ["vacation_leave_due", "vacation_leave_due_before_period_end"]);
+  const exhaustedSickRules = rulesFor(rules, ["exhausted_sick_leave", "sick_leave_exhausted"]);
   const pendingRules = rulesFor(rules, ["leave_pending_approval"], ["leave_pending_approval"]);
   const certificateRules = rulesFor(rules, ["missing_medical_certificate"], ["missing_medical_certificate"]);
 
   if (
     !sickRules.length &&
     !vacationRules.length &&
+    !vacationDueRules.length &&
     !exhaustedSickRules.length &&
     !pendingRules.length &&
     !certificateRules.length
@@ -522,41 +533,90 @@ export async function generateLeaveAlertsFromRules(
   const supabase = await createClient();
   const alerts: AlertPayload[] = [];
 
-  if (sickRules.length || vacationRules.length || exhaustedSickRules.length) {
+  if (sickRules.length || vacationRules.length || vacationDueRules.length || exhaustedSickRules.length) {
     const { data, error } = await supabase
       .from("leave_balances")
-      .select("id, employee_id, leave_type, remaining_days");
+      .select("id, employee_id, leave_type, remaining_days, effective_to");
 
     if (error) throw new Error(`Failed to load leave balances for notifications: ${error.message}`);
 
     for (const balance of (data ?? []) as LeaveBalanceRow[]) {
       const type = normalizedLeaveType(balance.leave_type);
       const remaining = Number(balance.remaining_days ?? 0);
-      const matchingRules =
-        type === "sick_leave"
-          ? [...sickRules, ...exhaustedSickRules]
-          : type === "vacation_leave"
-            ? vacationRules
-            : [];
+      if (type === "vacation_leave") {
+        for (const rule of vacationRules) {
+          const threshold = ruleValue(rule, 3);
+          if (remaining <= threshold) {
+            alerts.push(buildAlert(rule, {
+              alert_title: "Low Vacation Leave Balance",
+              alert_message: `Remaining vacation leave is ${remaining} day(s), at or below threshold ${threshold}.`,
+              module_name: "Leave",
+              entity_type: "leave_balance",
+              entity_id: balance.id,
+              employee_id: balance.employee_id,
+              correlationEntityId: balance.id,
+              correlationPrefix: "low_vacation_leave",
+              fallbackSeverity: "warning",
+            }));
+          }
+        }
+        for (const rule of vacationDueRules) {
+          if (!balance.effective_to || remaining <= 0) continue;
+          const threshold = ruleDays(rule, 30);
+          if (balance.effective_to >= todayDateString() && balance.effective_to <= dateInDays(threshold)) {
+            alerts.push(buildAlert(rule, {
+              alert_title: "Vacation Leave Due",
+              alert_message: `Employee has ${remaining} vacation day(s) remaining before period end ${balance.effective_to}. Schedule usage before entitlement window closes.`,
+              module_name: "Leave",
+              entity_type: "leave_balance",
+              entity_id: balance.id,
+              employee_id: balance.employee_id,
+              correlationEntityId: balance.id,
+              correlationPrefix: "vacation_leave_due",
+              fallbackSeverity: "warning",
+            }));
+          }
+        }
+      }
 
-      for (const rule of matchingRules) {
-        const threshold = ruleValue(rule, normalized(rule.rule_code) === "exhausted_sick_leave" ? 0 : 3);
-        if (remaining <= threshold) {
-          alerts.push(buildAlert(rule, {
-            alert_title:
-              normalized(rule.rule_code) === "exhausted_sick_leave"
-                ? "Exhausted Sick Leave"
-                : type === "sick_leave"
-                  ? "Low Sick Leave"
-                  : "Low Vacation Leave",
-            alert_message: `${type.replaceAll("_", " ")} balance is ${remaining} days, at or below threshold ${threshold}.`,
-            module_name: "Leave",
-            entity_type: "leave_balance",
-            entity_id: balance.id,
-            employee_id: balance.employee_id,
-            correlationEntityId: balance.id,
-            fallbackSeverity: normalized(rule.rule_code) === "exhausted_sick_leave" ? "critical" : "warning",
-          }));
+      if (type === "sick_leave") {
+        for (const rule of sickRules) {
+          const threshold = ruleValue(rule, 3);
+          if (remaining <= threshold) {
+            alerts.push(buildAlert(rule, {
+              alert_title: remaining <= 1 ? "Sick Leave Nearly Finished" : "Low Sick Leave Balance",
+              alert_message:
+                remaining <= 1
+                  ? `Sick leave is nearly finished with ${remaining} day(s) remaining.`
+                  : `Remaining sick leave is ${remaining} day(s), at or below threshold ${threshold}.`,
+              module_name: "Leave",
+              entity_type: "leave_balance",
+              entity_id: balance.id,
+              employee_id: balance.employee_id,
+              correlationEntityId: balance.id,
+              correlationPrefix: "low_sick_leave",
+              fallbackSeverity: remaining <= 1 ? "critical" : "warning",
+            }));
+          }
+        }
+        for (const rule of exhaustedSickRules) {
+          const threshold = ruleValue(rule, 0);
+          if (remaining <= threshold) {
+            alerts.push(buildAlert(rule, {
+              alert_title: "Sick Leave Nearly Finished",
+              alert_message:
+                remaining <= 0
+                  ? "Sick leave is exhausted (0 days remaining)."
+                  : `Sick leave is nearly finished with ${remaining} day(s) remaining.`,
+              module_name: "Leave",
+              entity_type: "leave_balance",
+              entity_id: balance.id,
+              employee_id: balance.employee_id,
+              correlationEntityId: balance.id,
+              correlationPrefix: "sick_leave_exhausted",
+              fallbackSeverity: remaining <= 0 ? "critical" : "warning",
+            }));
+          }
         }
       }
     }
@@ -581,6 +641,7 @@ export async function generateLeaveAlertsFromRules(
               entity_id: transaction.id,
               employee_id: transaction.employee_id,
               correlationEntityId: transaction.id,
+              correlationPrefix: "leave_pending_approval",
               fallbackSeverity: "warning",
             }));
           }

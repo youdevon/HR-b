@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
+import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import { getEmployeeById } from "@/lib/queries/employees";
 import {
   formatLeaveType,
@@ -53,6 +55,18 @@ function dateScore(value: string | null | undefined): number {
 export default async function EmployeeDetailPage({
   params,
 }: EmployeeDetailPageProps) {
+  await requirePermission("employees.view");
+  const auth = await getDashboardSession();
+  const profile = auth?.profile ?? null;
+  const permissions = auth?.permissions ?? [];
+  const canEditEmployee = hasAnyPermissionForContext(profile, permissions, ["employees.edit"]);
+  const canCreateContract = hasAnyPermissionForContext(profile, permissions, ["contracts.create"]);
+  const canCreateLeave = hasAnyPermissionForContext(profile, permissions, ["leave.create"]);
+  const canMoveFile = hasAnyPermissionForContext(profile, permissions, ["files.move", "employee.file.move"]);
+  const canCreateRecord = hasAnyPermissionForContext(profile, permissions, ["records.create"]);
+  const canViewEmployeeId = hasAnyPermissionForContext(profile, permissions, ["employee.id.view"]);
+  const canViewBir = hasAnyPermissionForContext(profile, permissions, ["employee.bir.view"]);
+  const canViewFileDetails = hasAnyPermissionForContext(profile, permissions, ["employee.file.view", "files.view"]);
   const { id } = await params;
   const [
     employee,
@@ -136,12 +150,14 @@ export default async function EmployeeDetailPage({
         description={`Employee #${employee.employee_number?.trim() ? employee.employee_number : "Not assigned"} • File #${display(employee.file_number)}`}
         backHref="/employees"
         actions={
-          <Link
-            href={`/employees/${employee.id}/edit`}
-            className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-          >
-            Edit Employee
-          </Link>
+          canEditEmployee ? (
+            <Link
+              href={`/employees/${employee.id}/edit`}
+              className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+            >
+              Edit Employee
+            </Link>
+          ) : null
         }
       />
 
@@ -160,30 +176,18 @@ export default async function EmployeeDetailPage({
               No contract available
             </span>
           )}
-          <Link
-            href={`/contracts/new?employeeId=${employee.id}`}
-            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
-          >
-            Add Contract
-          </Link>
-          <Link
-            href={`/leave/new?employeeId=${employee.id}`}
-            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
-          >
-            Add Leave Record
-          </Link>
-          <Link
-            href={`/file-movements/new?employeeId=${employee.id}`}
-            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
-          >
-            Move Physical File
-          </Link>
-          <Link
-            href={`/records/new?employeeId=${employee.id}`}
-            className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
-          >
-            Add Record
-          </Link>
+          {canCreateContract ? (
+            <Link href={`/contracts/new?employeeId=${employee.id}`} className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50">Add Contract</Link>
+          ) : null}
+          {canCreateLeave ? (
+            <Link href={`/leave/new?employeeId=${employee.id}`} className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50">Add Leave Record</Link>
+          ) : null}
+          {canMoveFile ? (
+            <Link href={`/file-movements/new?employeeId=${employee.id}`} className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50">Move Physical File</Link>
+          ) : null}
+          {canCreateRecord ? (
+            <Link href={`/records/new?employeeId=${employee.id}`} className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50">Add Record</Link>
+          ) : null}
         </div>
       </section>
 
@@ -230,25 +234,25 @@ export default async function EmployeeDetailPage({
 
         <InfoCard title="Identification">
           <InfoRow label="ID Type" value={employee.id_type} />
-          <InfoRow label="ID Number" value={employee.id_number} />
+          <InfoRow label="ID Number" value={canViewEmployeeId ? employee.id_number : "Restricted"} />
           <InfoRow
             label="Other ID Description"
             value={employee.other_id_description}
           />
-          <InfoRow label="BIR Number" value={employee.bir_number} />
+          <InfoRow label="BIR Number" value={canViewBir ? employee.bir_number : "Restricted"} />
         </InfoCard>
 
         <InfoCard title="Physical File Info">
-          <InfoRow label="File Status" value={employee.file_status} />
+          <InfoRow label="File Status" value={canViewFileDetails ? employee.file_status : "Restricted"} />
           <InfoRow
             label="Current File Location"
-            value={currentFileMovement?.current_location ?? employee.file_location}
+            value={canViewFileDetails ? currentFileMovement?.current_location ?? employee.file_location : "Restricted"}
           />
           <InfoRow
             label="Current File Holder"
-            value={currentFileMovement?.current_holder}
+            value={canViewFileDetails ? currentFileMovement?.current_holder : "Restricted"}
           />
-          <InfoRow label="File Notes" value={employee.file_notes} />
+          <InfoRow label="File Notes" value={canViewFileDetails ? employee.file_notes : "Restricted"} />
         </InfoCard>
       </section>
 
@@ -451,12 +455,14 @@ export default async function EmployeeDetailPage({
           <h2 className="text-lg font-semibold text-neutral-900">
             Recent Leave Transactions
           </h2>
-          <Link
-            href={`/leave/new?employeeId=${employee.id}`}
-            className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
-          >
-            Add Leave Record
-          </Link>
+          {canCreateLeave ? (
+            <Link
+              href={`/leave/new?employeeId=${employee.id}`}
+              className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
+            >
+              Add Leave Record
+            </Link>
+          ) : null}
         </div>
 
         {leaveTransactions.length ? (
@@ -568,12 +574,14 @@ export default async function EmployeeDetailPage({
             Physical File Movements
           </h2>
           <div className="flex gap-3">
-            <Link
-              href={`/file-movements/new?employeeId=${employee.id}`}
-              className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
-            >
-              Move File
-            </Link>
+            {canMoveFile ? (
+              <Link
+                href={`/file-movements/new?employeeId=${employee.id}`}
+                className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
+              >
+                Move File
+              </Link>
+            ) : null}
             <Link
               href={`/file-movements?employeeId=${employee.id}`}
               className="text-sm font-medium text-neutral-700 hover:text-neutral-900"

@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import RecordForm from "@/components/domain/records/record-form";
 import PageHeader from "@/components/layout/page-header";
+import { requirePermission } from "@/lib/auth/guards";
 import { createRecord } from "@/lib/queries/records";
 import { getEmployeeById } from "@/lib/queries/employees";
 
@@ -21,6 +22,7 @@ function input(formData: FormData, key: string): string {
 }
 
 export default async function NewRecordPage({ searchParams }: NewRecordPageProps) {
+  await requirePermission("records.create");
   const sp = await searchParams;
   const employeeId = firstString(sp.employeeId) ?? "";
   const employee = employeeId ? await getEmployeeById(employeeId) : null;
@@ -30,6 +32,7 @@ export default async function NewRecordPage({ searchParams }: NewRecordPageProps
 
   async function createRecordAction(formData: FormData) {
     "use server";
+    await requirePermission("records.create");
     const employee_id = input(formData, "employee_id");
     await createRecord({
       employee_id,

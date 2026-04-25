@@ -1,11 +1,22 @@
-import CompensationForm from "@/components/domain/compensation/compensation-form";
 import PageHeader from "@/components/layout/page-header";
+import Link from "next/link";
 
 export default function NewCompensationPage() {
   return (
     <main className="min-h-screen bg-neutral-100 p-6"><div className="mx-auto max-w-7xl space-y-6">
-      <PageHeader title="New Compensation" backHref="/compensation/current" />
-      <CompensationForm submitLabel="Create Compensation" />
+      <PageHeader
+        title="New Compensation"
+        description="This module is temporarily disabled in the active application."
+        backHref="/dashboard"
+      />
+      <section className="rounded-2xl border border-neutral-200 bg-white p-6 text-sm text-neutral-700 shadow-sm">
+        New compensation records are temporarily disabled. Data structures remain intact for future reactivation.
+        <div className="mt-4">
+          <Link href="/dashboard" className="font-medium text-neutral-900 underline underline-offset-4">
+            Return to dashboard
+          </Link>
+        </div>
+      </section>
     </div></main>
   );
 }

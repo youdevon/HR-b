@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { writeAuditLog } from "@/lib/queries/audit";
+import type { DashboardAuthContext } from "@/lib/auth/guards";
 
 export type FileMovementRecord = {
   id: string;
@@ -300,7 +301,8 @@ export type CreateFileMovementInput = {
 };
 
 export async function createFileMovement(
-  input: CreateFileMovementInput
+  input: CreateFileMovementInput,
+  actor?: DashboardAuthContext | null
 ): Promise<FileMovementRecord> {
   const supabase = await createClient();
   const movementStatus = input.movement_status ?? statusForAction(input.movement_type);
@@ -340,6 +342,14 @@ export async function createFileMovement(
     new_values: movement,
     reason_for_change: toNull(input.movement_reason),
     changed_fields: Object.keys(data ?? {}),
+    actor: actor
+      ? {
+          user_id: actor.user.id,
+          display_name: `${actor.profile?.first_name ?? ""} ${actor.profile?.last_name ?? ""}`.trim() || actor.profile?.email || actor.user.email || null,
+          role_code: actor.profile?.role_code ?? null,
+          role_name: actor.profile?.role_name ?? null,
+        }
+      : null,
   });
 
   return movement;
@@ -360,7 +370,8 @@ export type ApplyFileMovementActionInput = {
 };
 
 export async function applyFileMovementAction(
-  input: ApplyFileMovementActionInput
+  input: ApplyFileMovementActionInput,
+  actor?: DashboardAuthContext | null
 ): Promise<FileMovementRecord> {
   const supabase = await createClient();
   const previous = await getFileMovementById(input.id);
@@ -410,6 +421,14 @@ export async function applyFileMovementAction(
       "date_received",
       "remarks",
     ],
+    actor: actor
+      ? {
+          user_id: actor.user.id,
+          display_name: `${actor.profile?.first_name ?? ""} ${actor.profile?.last_name ?? ""}`.trim() || actor.profile?.email || actor.user.email || null,
+          role_code: actor.profile?.role_code ?? null,
+          role_name: actor.profile?.role_name ?? null,
+        }
+      : null,
   });
 
   return movement;

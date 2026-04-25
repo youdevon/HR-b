@@ -1,5 +1,11 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import {
+  DASHBOARD_CARD_PERMISSION_KEYS,
+  hasAnyPermissionForContext,
+} from "@/lib/auth/permissions";
+import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { listPriorityAlerts } from "@/lib/queries/alerts";
 import { getDashboardMetrics } from "@/lib/queries/dashboard";
 import { generateAllSystemAlerts } from "@/lib/queries/notifications";
 
@@ -152,6 +158,30 @@ function dashboardSections(metrics: Awaited<ReturnType<typeof getDashboardMetric
   ];
 }
 
+type DashboardCardVisibility = {
+  workforce: boolean;
+  contracts: boolean;
+  leave: boolean;
+  files: boolean;
+  alerts: boolean;
+};
+
+function filterSectionsByPermissions(
+  sections: DashboardSection[],
+  visibility: DashboardCardVisibility
+): DashboardSection[] {
+  return sections
+    .map((section) => {
+      if (section.title === "Workforce Overview" && !visibility.workforce) return null;
+      if (section.title === "Contracts" && !visibility.contracts) return null;
+      if (section.title === "Leave" && !visibility.leave) return null;
+      if (section.title === "Physical Files" && !visibility.files) return null;
+      if (section.title === "Alerts & Action Items" && !visibility.alerts) return null;
+      return section;
+    })
+    .filter((section): section is DashboardSection => Boolean(section));
+}
+
 function DashboardCard({ card }: { card: MetricCard }) {
   return (
     <Link
@@ -187,20 +217,42 @@ function MetricSection({ section }: { section: DashboardSection }) {
 }
 
 export default async function DashboardPage() {
-  // Auth is resolved once in `(dashboard)/layout`; this page only fetches dashboard data.
+  await requirePermission("dashboard.view");
+  const auth = await getDashboardSession();
+  const profile = auth?.profile ?? null;
+  const permissions = auth?.permissions ?? [];
+
+  const visibility: DashboardCardVisibility = {
+    workforce: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.workforce]),
+    contracts: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.contracts]),
+    leave: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.leave]),
+    files: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.files]),
+    alerts: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.alerts]),
+  };
+
+  const hasAnyCards = Object.values(visibility).some(Boolean);
   let metricsError = "";
   let sections: DashboardSection[] = [];
+  let priorityAlerts: Awaited<ReturnType<typeof listPriorityAlerts>> = [];
 
-  await generateAllSystemAlerts().catch(() => 0);
+  if (visibility.alerts) {
+    await generateAllSystemAlerts().catch(() => 0);
+  }
 
-  try {
-    const metrics = await getDashboardMetrics();
-    sections = dashboardSections(metrics);
-  } catch (error) {
-    metricsError =
-      error instanceof Error
-        ? error.message
-        : "Failed to load dashboard metrics.";
+  if (hasAnyCards) {
+    try {
+      const [metrics, alerts] = await Promise.all([
+        getDashboardMetrics(visibility),
+        visibility.alerts ? listPriorityAlerts(8) : Promise.resolve([]),
+      ]);
+      sections = filterSectionsByPermissions(dashboardSections(metrics), visibility);
+      priorityAlerts = alerts;
+    } catch (error) {
+      metricsError =
+        error instanceof Error
+          ? error.message
+          : "Failed to load dashboard metrics.";
+    }
   }
 
   return (
@@ -218,9 +270,56 @@ export default async function DashboardPage() {
         </section>
       ) : null}
 
-      {sections.map((section) => (
-        <MetricSection key={section.title} section={section} />
-      ))}
+      {!hasAnyCards ? (
+        <section className="rounded-2xl border border-neutral-200 bg-white p-8 text-center text-sm text-neutral-600">
+          You do not currently have dashboard card permissions assigned.
+        </section>
+      ) : (
+        sections.map((section) => <MetricSection key={section.title} section={section} />)
+      )}
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-neutral-900">Priority Alerts</h2>
+          <p className="mt-1 text-sm text-neutral-600">
+            Mirrors the active operational alerts queue.
+          </p>
+        </div>
+        <div className="grid gap-3">
+          {!visibility.alerts ? (
+            <div className="rounded-xl border border-neutral-200 bg-white p-4 text-sm text-neutral-600">
+              You do not have permission to view alert cards.
+            </div>
+          ) : priorityAlerts.length ? (
+            priorityAlerts.map((alert) => (
+              <Link
+                key={alert.id}
+                href={alert.related_record_href ?? `/alerts/${alert.id}`}
+                className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:bg-neutral-50"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-neutral-900">
+                    {alert.alert_title ?? "Untitled alert"}
+                  </span>
+                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
+                    {alert.module_name ?? "General"}
+                  </span>
+                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700 capitalize">
+                    {alert.severity_level ?? "info"}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm text-neutral-600">
+                  {alert.alert_message ?? "No details available."}
+                </p>
+              </Link>
+            ))
+          ) : (
+            <div className="rounded-xl border border-neutral-200 bg-white p-4 text-sm text-neutral-600">
+              No active alerts right now.
+            </div>
+          )}
+        </div>
+      </section>
     </main>
   );
 }

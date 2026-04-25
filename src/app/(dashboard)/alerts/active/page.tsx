@@ -6,6 +6,8 @@ import {
   resolveAlert,
   type ActiveAlertFilters,
 } from "@/lib/queries/alerts";
+import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import { generateAllSystemAlerts } from "@/lib/queries/notifications";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -58,10 +60,17 @@ type ActiveAlertsPageProps = {
 };
 
 export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPageProps) {
+  await requirePermission("alerts.view");
+  const auth = await getDashboardSession();
+  const profile = auth?.profile ?? null;
+  const permissions = auth?.permissions ?? [];
+  const canBulkManage = hasAnyPermissionForContext(profile, permissions, ["alerts.bulk_manage"]);
+  const canAcknowledge = hasAnyPermissionForContext(profile, permissions, ["alerts.acknowledge"]);
+  const canResolve = hasAnyPermissionForContext(profile, permissions, ["alerts.resolve"]);
   const sp = await searchParams;
   const filters: ActiveAlertFilters = {
     severity_level: firstString(sp.severity_level),
-    status: firstString(sp.status),
+    status: firstString(sp.status) ?? "active",
     module_name: firstString(sp.module_name),
   };
 
@@ -69,6 +78,7 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
 
   async function refreshAllAlertsAction() {
     "use server";
+    await requirePermission("alerts.bulk_manage");
     await generateAllSystemAlerts();
     revalidatePath("/alerts/active");
     revalidatePath("/dashboard");
@@ -76,6 +86,7 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
 
   async function acknowledgeAction(formData: FormData) {
     "use server";
+    await requirePermission("alerts.acknowledge");
     const id = String(formData.get("id") ?? "").trim();
     if (!id) return;
     const next = String(formData.get("returnTo") ?? "/alerts/active");
@@ -87,6 +98,7 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
 
   async function resolveAction(formData: FormData) {
     "use server";
+    await requirePermission("alerts.resolve");
     const id = String(formData.get("id") ?? "").trim();
     if (!id) return;
     const next = String(formData.get("returnTo") ?? "/alerts/active");
@@ -113,17 +125,19 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
       <div className="mx-auto max-w-7xl space-y-6">
         <PageHeader
           title="Active Alerts"
-          description="Central work queue for alerts with status active or acknowledged."
+          description="Operational HR alert queue across active modules."
           backHref="/dashboard"
           actions={
-            <form action={refreshAllAlertsAction}>
-              <button
-                type="submit"
-                className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 transition hover:bg-neutral-50"
-              >
-                Refresh All Alerts
-              </button>
-            </form>
+            canBulkManage ? (
+              <form action={refreshAllAlertsAction}>
+                <button
+                  type="submit"
+                  className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 transition hover:bg-neutral-50"
+                >
+                  Refresh All Alerts
+                </button>
+              </form>
+            ) : null
           }
         />
 
@@ -195,10 +209,12 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
                   <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
                     <th className="px-4 py-3">Alert</th>
                     <th className="px-4 py-3">Module</th>
+                    <th className="px-4 py-3">Category</th>
                     <th className="px-4 py-3">Severity</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Triggered</th>
                     <th className="px-4 py-3">Employee</th>
+                    <th className="px-4 py-3">File #</th>
                     <th className="px-4 py-3">Actions</th>
                     <th className="px-4 py-3">Open</th>
                   </tr>
@@ -215,6 +231,7 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
                         </p>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">{alert.module_name ?? "—"}</td>
+                      <td className="whitespace-nowrap px-4 py-3 capitalize">{alert.alert_category}</td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${severityBadgeClass(alert.severity_level)}`}>
                           {alert.severity_level ?? "info"}
@@ -226,9 +243,13 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">{formatDate(alert.triggered_at)}</td>
-                      <td className="whitespace-nowrap px-4 py-3">{alert.employee_id ?? "—"}</td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {alert.employee_name ?? "Not linked to employee"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">{alert.employee_file_number ?? "—"}</td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex gap-2">
+                          {canAcknowledge ? (
                           <form action={acknowledgeAction}>
                             <input type="hidden" name="id" value={alert.id} />
                             <input type="hidden" name="returnTo" value={returnTo} />
@@ -239,6 +260,8 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
                               Acknowledge
                             </button>
                           </form>
+                          ) : null}
+                          {canResolve ? (
                           <form action={resolveAction}>
                             <input type="hidden" name="id" value={alert.id} />
                             <input type="hidden" name="returnTo" value={returnTo} />
@@ -249,15 +272,25 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
                               Resolve
                             </button>
                           </form>
+                          ) : null}
                         </div>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
-                        <Link
-                          href={`/alerts/${alert.id}`}
-                          className="text-sm font-medium text-neutral-900 hover:underline"
-                        >
-                          View
-                        </Link>
+                        {alert.related_record_href ? (
+                          <Link
+                            href={alert.related_record_href}
+                            className="text-sm font-medium text-neutral-900 hover:underline"
+                          >
+                            Open Record
+                          </Link>
+                        ) : (
+                          <Link
+                            href={`/alerts/${alert.id}`}
+                            className="text-sm font-medium text-neutral-900 hover:underline"
+                          >
+                            View Alert
+                          </Link>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -268,7 +301,7 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
             <div className="px-6 py-12 text-center text-sm text-neutral-600">
               {hasActiveFilters
                 ? "No alerts match these filters."
-                : "No active or acknowledged alerts in the queue."}
+                : "No active alerts in the queue."}
             </div>
           )}
         </section>

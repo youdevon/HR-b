@@ -38,6 +38,28 @@ export type ContractRecord = {
   created_at: string | null;
 };
 
+export type ContractAllowanceRecord = {
+  id: string;
+  contract_id: string;
+  allowance_name: string;
+  allowance_type: string | null;
+  allowance_amount: number;
+  allowance_frequency: string;
+  is_taxable: boolean;
+  notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ContractAllowanceInput = {
+  allowance_name: string;
+  allowance_type?: string | null;
+  allowance_amount: number;
+  allowance_frequency: "monthly" | "fortnightly" | "weekly" | "daily" | "one_time";
+  is_taxable: boolean;
+  notes?: string | null;
+};
+
 export type ExpiringContractAlertRecord = ContractRecord & {
   days_to_expiry: number;
   is_reviewed: boolean;
@@ -151,6 +173,30 @@ const SALARY_FREQUENCY_VALUES = new Set([
   "weekly",
   "daily",
 ]);
+const ALLOWANCE_FREQUENCY_VALUES = new Set([
+  "monthly",
+  "fortnightly",
+  "weekly",
+  "daily",
+  "one_time",
+]);
+const DAILY_ALLOWANCE_TO_MONTHLY_DAYS = 22;
+
+// SQL guidance:
+// create table if not exists public.contract_allowances (
+//   id uuid primary key default gen_random_uuid(),
+//   contract_id uuid not null references public.contracts(id) on delete cascade,
+//   allowance_name text not null,
+//   allowance_type text,
+//   allowance_amount numeric not null default 0,
+//   allowance_frequency text not null default 'monthly',
+//   is_taxable boolean not null default false,
+//   notes text,
+//   created_at timestamptz not null default now(),
+//   updated_at timestamptz not null default now()
+// );
+// create index if not exists idx_contract_allowances_contract_id
+// on public.contract_allowances(contract_id);
 
 type EmployeeNameRow = {
   id: string;
@@ -299,6 +345,64 @@ function assertRequiredEmployeeId(value: string): string {
   return normalized;
 }
 
+function normalizeAllowanceType(value: string | null | undefined): string | null {
+  const normalized = (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return normalized || null;
+}
+
+function normalizeAllowanceName(value: string): string {
+  const normalized = value.trim();
+  if (!normalized) throw new Error("Allowance name is required.");
+  return normalized;
+}
+
+function normalizeAllowanceFrequency(value: string): ContractAllowanceInput["allowance_frequency"] {
+  const normalized = value.trim().toLowerCase();
+  if (!ALLOWANCE_FREQUENCY_VALUES.has(normalized)) {
+    throw new Error("Allowance frequency must be monthly, fortnightly, weekly, daily, or one_time.");
+  }
+  return normalized as ContractAllowanceInput["allowance_frequency"];
+}
+
+function normalizeAllowanceAmount(value: number): number {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error("Allowance amount must be greater than or equal to 0.");
+  }
+  return Number(value.toFixed(2));
+}
+
+export function toMonthlyAllowanceAmount(
+  amount: number,
+  frequency: string,
+  dailyToMonthlyDays = DAILY_ALLOWANCE_TO_MONTHLY_DAYS
+): number {
+  const normalizedAmount = Number.isFinite(amount) ? amount : 0;
+  const normalizedFrequency = frequency.trim().toLowerCase();
+  if (normalizedFrequency === "monthly") return normalizedAmount;
+  if (normalizedFrequency === "fortnightly") return normalizedAmount * 2;
+  if (normalizedFrequency === "weekly") return normalizedAmount * 4;
+  if (normalizedFrequency === "daily") return normalizedAmount * dailyToMonthlyDays;
+  return 0;
+}
+
+export function calculateTotalMonthlyAllowances(
+  allowances: Array<Pick<ContractAllowanceRecord, "allowance_amount" | "allowance_frequency">>
+): number {
+  return Number(
+    allowances
+      .reduce(
+        (sum, allowance) =>
+          sum + toMonthlyAllowanceAmount(Number(allowance.allowance_amount ?? 0), allowance.allowance_frequency),
+        0
+      )
+      .toFixed(2)
+  );
+}
+
 function assertContractTitleFromEmployeeName(input: {
   employee_first_name: string | null;
   employee_last_name: string | null;
@@ -330,6 +434,7 @@ export type CreateContractInput = {
   is_gratuity_eligible: boolean;
   vacation_leave_days: number | null;
   sick_leave_days: number | null;
+  allowances?: ContractAllowanceInput[];
 };
 
 export async function createContractRecord(
@@ -410,6 +515,7 @@ export async function createContractRecord(
   }
 
   const created = data as ContractDatabaseRow;
+  await replaceContractAllowances(created.id, input.allowances ?? []);
   await upsertContractLeaveEntitlements({
     employee_id: employeeId,
     contract_id: created.id,
@@ -557,6 +663,86 @@ export async function getContractById(
   ]);
 
   return contract ?? null;
+}
+
+export async function listContractAllowancesByContractIds(
+  contractIds: string[]
+): Promise<Map<string, ContractAllowanceRecord[]>> {
+  const uniqueIds = [...new Set(contractIds.filter(Boolean))];
+  const byContractId = new Map<string, ContractAllowanceRecord[]>();
+  if (!uniqueIds.length) return byContractId;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("contract_allowances")
+    .select(
+      "id, contract_id, allowance_name, allowance_type, allowance_amount, allowance_frequency, is_taxable, notes, created_at, updated_at"
+    )
+    .in("contract_id", uniqueIds)
+    .order("created_at", { ascending: true });
+
+  // Graceful fallback when table has not been created yet.
+  if (error) {
+    if ((error as { code?: string }).code === "42P01") return byContractId;
+    throw new Error(`Failed to load contract allowances: ${error.message}`);
+  }
+
+  for (const row of (data ?? []) as ContractAllowanceRecord[]) {
+    const list = byContractId.get(row.contract_id) ?? [];
+    list.push(row);
+    byContractId.set(row.contract_id, list);
+  }
+  return byContractId;
+}
+
+export async function listContractAllowancesByContractId(
+  contractId: string
+): Promise<ContractAllowanceRecord[]> {
+  const map = await listContractAllowancesByContractIds([contractId]);
+  return map.get(contractId) ?? [];
+}
+
+async function replaceContractAllowances(
+  contractId: string,
+  allowances: ContractAllowanceInput[]
+): Promise<void> {
+  const supabase = await createClient();
+
+  const { error: deleteError } = await supabase
+    .from("contract_allowances")
+    .delete()
+    .eq("contract_id", contractId);
+  if (deleteError && (deleteError as { code?: string }).code !== "42P01") {
+    throw new Error(`Failed to clear contract allowances: ${deleteError.message}`);
+  }
+
+  const normalized = allowances
+    .map((allowance) => {
+      const allowanceName = normalizeAllowanceName(allowance.allowance_name);
+      const allowanceAmount = normalizeAllowanceAmount(allowance.allowance_amount);
+      const allowanceFrequency = normalizeAllowanceFrequency(allowance.allowance_frequency);
+      return {
+        contract_id: contractId,
+        allowance_name: allowanceName,
+        allowance_type: normalizeAllowanceType(allowance.allowance_type ?? allowanceName),
+        allowance_amount: allowanceAmount,
+        allowance_frequency: allowanceFrequency,
+        is_taxable: allowance.is_taxable === true,
+        notes: (allowance.notes ?? "").trim() || null,
+      };
+    })
+    .filter((allowance) => allowance.allowance_name);
+
+  if (!normalized.length) return;
+  const { error: insertError } = await supabase.from("contract_allowances").insert(normalized);
+  if (insertError) {
+    if ((insertError as { code?: string }).code === "42P01") {
+      throw new Error(
+        "Contract allowances table is missing. Create public.contract_allowances before saving allowances."
+      );
+    }
+    throw new Error(`Failed to save contract allowances: ${insertError.message}`);
+  }
 }
 
 export async function listContractsByEmployeeId(
@@ -991,6 +1177,7 @@ type UpdateContractDetailsInput = {
   is_gratuity_eligible: boolean;
   vacation_leave_days: number | null;
   sick_leave_days: number | null;
+  allowances?: ContractAllowanceInput[];
 };
 
 export async function updateContractDetails(
@@ -1073,6 +1260,7 @@ export async function updateContractDetails(
   if (error) {
     throw new Error(`Failed to update contract: ${error.message}`);
   }
+  await replaceContractAllowances(input.id, input.allowances ?? []);
 
   await upsertContractLeaveEntitlements({
     employee_id: employeeId,

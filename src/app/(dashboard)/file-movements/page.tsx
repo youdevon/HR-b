@@ -1,5 +1,7 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import {
   generateOverdueCheckedOutFileAlerts,
   listFileMovements,
@@ -33,6 +35,13 @@ function statusTone(status: string | null): string {
 export default async function FileMovementsPage({
   searchParams,
 }: FileMovementsPageProps) {
+  await requirePermission("files.view");
+  const auth = await getDashboardSession();
+  const canMoveFiles = hasAnyPermissionForContext(
+    auth?.profile ?? null,
+    auth?.permissions ?? [],
+    ["files.move", "employee.file.move"]
+  );
   const sp = await searchParams;
   const employeeId = sp.employeeId?.trim() ?? "";
   const query = sp.q?.trim() ?? "";
@@ -80,12 +89,14 @@ export default async function FileMovementsPage({
                   ) : null}
                 </form>
               ) : null}
-              <Link
-                href={employeeId ? `/file-movements/new?employeeId=${employeeId}` : "/file-movements/new"}
-                className="inline-flex w-fit items-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-              >
-                New Movement
-              </Link>
+              {canMoveFiles ? (
+                <Link
+                  href={employeeId ? `/file-movements/new?employeeId=${employeeId}` : "/file-movements/new"}
+                  className="inline-flex w-fit items-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+                >
+                  New Movement
+                </Link>
+              ) : null}
               </>
             }
           />

@@ -2,6 +2,8 @@ import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
 import ClickableTableRow from "@/components/ui/clickable-table-row";
 import ToastMessage from "@/components/ui/toast-message";
+import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import { listEmployees } from "@/lib/queries/employees";
 
 type EmployeesPageProps = {
@@ -15,6 +17,13 @@ type EmployeesPageProps = {
 export default async function EmployeesPage({
   searchParams,
 }: EmployeesPageProps) {
+  await requirePermission("employees.view");
+  const auth = await getDashboardSession();
+  const canCreateEmployee = hasAnyPermissionForContext(
+    auth?.profile ?? null,
+    auth?.permissions ?? [],
+    ["employees.create"]
+  );
   const params = await searchParams;
   const query = params?.q?.trim() ?? "";
   const showAll = params?.show === "all";
@@ -37,12 +46,14 @@ export default async function EmployeesPage({
           >
             Show all
           </Link>
-          <Link
-            href="/employees/new"
-            className="inline-flex min-w-36 items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-          >
-            New Employee
-          </Link>
+          {canCreateEmployee ? (
+            <Link
+              href="/employees/new"
+              className="inline-flex min-w-36 items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+            >
+              New Employee
+            </Link>
+          ) : null}
           </>
         }
       />

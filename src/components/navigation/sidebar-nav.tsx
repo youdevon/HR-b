@@ -66,6 +66,9 @@ export function DashboardNavContent({
 }: DashboardNavContentProps) {
   const isCollapsed = variant === "collapsed";
   const isDrawer = variant === "drawer";
+  const renderableItems = isCollapsed
+    ? items.flatMap((item) => (item.children?.length ? item.children : [item]))
+    : items;
 
   return (
     <>
@@ -115,7 +118,8 @@ export function DashboardNavContent({
         className={cn("min-h-0 flex-1 space-y-1 overflow-y-auto p-4", isDrawer && "touch-pan-y")}
         aria-label="Main navigation"
       >
-        {items.map((item) => {
+        {renderableItems.map((item) => {
+          const itemKey = item.href ?? `group:${item.label}`;
           const linkClass = cn(
             "flex items-center gap-3 rounded-xl text-sm font-medium text-neutral-700 transition hover:bg-neutral-100 hover:text-neutral-900",
             isCollapsed
@@ -123,11 +127,35 @@ export function DashboardNavContent({
               : "px-3 py-2",
             isDrawer && "min-h-11",
           );
+          if (item.children?.length && !isCollapsed) {
+            return (
+              <div key={itemKey} className="space-y-1 rounded-xl border border-neutral-200 bg-neutral-50 p-2">
+                <div className="flex items-center gap-2 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-neutral-600">
+                  <NavIcon name={item.icon} className="h-4 w-4 shrink-0 text-neutral-500" />
+                  <span>{item.label}</span>
+                </div>
+                <div className="space-y-1 pl-2">
+                  {item.children.map((child) => (
+                    <Link
+                      key={child.href ?? `${itemKey}:${child.label}`}
+                      href={child.href ?? "#"}
+                      onClick={onNavLinkClick}
+                      className="flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-neutral-700 transition hover:bg-white hover:text-neutral-900"
+                    >
+                      <NavIcon name={child.icon} className="h-4 w-4 shrink-0 text-neutral-500" />
+                      <span className="min-w-0">{child.label}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+
           if (isCollapsed) {
             return (
               <Link
-                key={item.href}
-                href={item.href}
+                key={itemKey}
+                href={item.href ?? "#"}
                 onClick={onNavLinkClick}
                 title={item.label}
                 className={linkClass}
@@ -145,8 +173,8 @@ export function DashboardNavContent({
           }
           return (
             <Link
-              key={item.href}
-              href={item.href}
+              key={itemKey}
+              href={item.href ?? "#"}
               onClick={onNavLinkClick}
               className={linkClass}
             >

@@ -77,6 +77,20 @@ type UserProfileRow = {
 const USER_PROFILE_SELECT = "id, first_name, last_name, email, phone_number, role_id, account_status, created_at";
 const ROLE_SELECT = "id, role_name, role_code, description, is_system_role, is_active, created_at";
 const PERMISSION_SELECT = "id, permission_key, permission_name, module_name, permission_type, description, is_sensitive, is_active, created_at, updated_at";
+const ACTIVE_ROLE_PERMISSION_MODULES = new Set([
+  "dashboard",
+  "employees",
+  "contracts",
+  "leave",
+  "physical files",
+  "records",
+  "alerts",
+  "reports",
+  "audit",
+  "gratuity",
+  "administration",
+  "settings",
+]);
 
 function toNull(value: string | undefined): string | null {
   const trimmed = value?.trim() ?? "";
@@ -143,6 +157,16 @@ export async function listPermissions(): Promise<AdminPermissionRecord[]> {
   const { data, error } = await supabase.from("permissions").select(PERMISSION_SELECT).order("module_name", { ascending: true }).order("permission_key", { ascending: true });
   if (error) throw new Error(`Failed to load permissions: ${error.message}`);
   return data ?? [];
+}
+
+export async function listAssignablePermissions(): Promise<AdminPermissionRecord[]> {
+  const permissions = await listPermissions();
+  return permissions.filter((permission) => {
+    const moduleName = permission.module_name?.trim().toLowerCase();
+    if (!moduleName) return false;
+    if (permission.is_active === false) return false;
+    return ACTIVE_ROLE_PERMISSION_MODULES.has(moduleName);
+  });
 }
 
 export async function listRolePermissionIds(roleId: string): Promise<string[]> {

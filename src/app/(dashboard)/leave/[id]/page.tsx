@@ -2,6 +2,8 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
+import { assertPermission, getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import {
   applyLeaveAction,
   formatLeaveType,
@@ -29,6 +31,15 @@ export default async function LeaveDetailPage({
   params,
   searchParams,
 }: LeaveDetailPageProps) {
+  await requirePermission("leave.view");
+  const auth = await getDashboardSession();
+  const profile = auth?.profile ?? null;
+  const permissions = auth?.permissions ?? [];
+  const canApprove = hasAnyPermissionForContext(profile, permissions, ["leave.approve"]);
+  const canReject = hasAnyPermissionForContext(profile, permissions, ["leave.reject"]);
+  const canCancel = hasAnyPermissionForContext(profile, permissions, ["leave.cancel"]);
+  const canReturn = hasAnyPermissionForContext(profile, permissions, ["leave.return"]);
+  const canUseWorkflow = canApprove || canReject || canCancel || canReturn;
   const { id } = await params;
   const sp = await searchParams;
   const status = firstString(sp.status);
@@ -48,6 +59,10 @@ export default async function LeaveDetailPage({
   async function workflowAction(formData: FormData) {
     "use server";
     const action = String(formData.get("action") ?? "") as LeaveAction;
+    if (action === "approve_leave") await assertPermission("leave.approve");
+    if (action === "reject_leave") await assertPermission("leave.reject");
+    if (action === "cancel_leave") await assertPermission("leave.cancel");
+    if (action === "return_from_leave") await assertPermission("leave.return");
 
     try {
       await applyLeaveAction({
@@ -117,6 +132,7 @@ export default async function LeaveDetailPage({
           </div>
         </section>
 
+        {canUseWorkflow ? (
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
           <h2 className="text-lg font-semibold text-neutral-900">Workflow Actions</h2>
           <p className="mt-1 text-sm text-neutral-600">
@@ -128,10 +144,10 @@ export default async function LeaveDetailPage({
               defaultValue="approve_leave"
               className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
             >
-              <option value="approve_leave">Approve Leave</option>
-              <option value="reject_leave">Reject Leave</option>
-              <option value="cancel_leave">Cancel Leave</option>
-              <option value="return_from_leave">Return From Leave</option>
+              {canApprove ? <option value="approve_leave">Approve Leave</option> : null}
+              {canReject ? <option value="reject_leave">Reject Leave</option> : null}
+              {canCancel ? <option value="cancel_leave">Cancel Leave</option> : null}
+              {canReturn ? <option value="return_from_leave">Return From Leave</option> : null}
             </select>
             <input
               name="approved_by"
@@ -163,6 +179,7 @@ export default async function LeaveDetailPage({
             </button>
           </form>
         </section>
+        ) : null}
       </div>
     </main>
   );

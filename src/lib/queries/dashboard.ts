@@ -20,6 +20,14 @@ export type DashboardMetrics = {
   criticalAlertsCount: number;
 };
 
+export type DashboardMetricsScope = {
+  workforce?: boolean;
+  contracts?: boolean;
+  leave?: boolean;
+  files?: boolean;
+  alerts?: boolean;
+};
+
 function todayDateString(): string {
   const now = new Date();
   const year = now.getFullYear();
@@ -249,7 +257,15 @@ async function countCriticalAlerts(): Promise<number> {
   return count ?? 0;
 }
 
-export async function getDashboardMetrics(): Promise<DashboardMetrics> {
+export async function getDashboardMetrics(scope: DashboardMetricsScope = {}): Promise<DashboardMetrics> {
+  const {
+    workforce = true,
+    contracts = true,
+    leave = true,
+    files = true,
+    alerts = true,
+  } = scope;
+
   const [
     activeEmployeesCount,
     totalEmployeesCount,
@@ -268,22 +284,22 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     activeAlertsCount,
     criticalAlertsCount,
   ] = await Promise.all([
-    countEmployeesByStatus("active"),
-    countAllEmployees(),
-    countActiveContracts(),
-    countContractsExpiringIn90Days(),
-    countExpiredContracts(),
-    countLowLeaveByType("sick_leave"),
-    countLowLeaveByType("vacation_leave"),
-    countEmployeesOnLeave(),
-    countPendingLeaveApprovals(),
-    countLowLeaveBalanceAlerts(),
-    countFilesByMovementStatus(["checked_out"]),
-    countOverdueFileReturns(),
-    countFilesByMovementStatus(["missing"]),
-    countFilesInTransit(),
-    countActiveAlerts(),
-    countCriticalAlerts(),
+    workforce ? countEmployeesByStatus("active") : Promise.resolve(0),
+    workforce ? countAllEmployees() : Promise.resolve(0),
+    contracts ? countActiveContracts() : Promise.resolve(0),
+    contracts ? countContractsExpiringIn90Days() : Promise.resolve(0),
+    contracts ? countExpiredContracts() : Promise.resolve(0),
+    leave ? countLowLeaveByType("sick_leave") : Promise.resolve(0),
+    leave ? countLowLeaveByType("vacation_leave") : Promise.resolve(0),
+    leave ? countEmployeesOnLeave() : Promise.resolve(0),
+    leave ? countPendingLeaveApprovals() : Promise.resolve(0),
+    leave ? countLowLeaveBalanceAlerts() : Promise.resolve(0),
+    files ? countFilesByMovementStatus(["checked_out"]) : Promise.resolve(0),
+    files ? countOverdueFileReturns() : Promise.resolve(0),
+    files ? countFilesByMovementStatus(["missing"]) : Promise.resolve(0),
+    files ? countFilesInTransit() : Promise.resolve(0),
+    alerts ? countActiveAlerts() : Promise.resolve(0),
+    alerts ? countCriticalAlerts() : Promise.resolve(0),
   ]);
 
   return {

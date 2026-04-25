@@ -1,5 +1,6 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import { requirePermission } from "@/lib/auth/guards";
 import {
   calculateGratuityPayment,
   DEFAULT_GOVERNMENT_TAX_PERCENT,
@@ -33,6 +34,7 @@ export default async function GratuityRulesPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requirePermission("gratuity.rules.manage");
   const sp = await searchParams;
   const gratuityRatePercent = toPercent(
     firstString(sp.gratuity_rate_percent),
@@ -64,7 +66,7 @@ export default async function GratuityRulesPage({
         <PageHeader
           title="Gratuity rules"
           description="Gratuity is controlled by each contract's Eligible for Gratuity checkbox. If unchecked, gratuity is not applicable."
-          backHref="/gratuity/calculations"
+          backHref="/settings"
           actions={
             <Link
               href="/gratuity/calculations"

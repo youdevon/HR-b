@@ -44,9 +44,9 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
     <main className="min-h-screen bg-neutral-100 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <PageHeader
-          title="User Management"
-          description="Public user profiles joined to roles with account state and reset visibility."
-          backHref="/dashboard"
+          title="Users"
+          description="Manage system user accounts and access."
+          backHref="/settings"
           actions={
             <Link
               href="/admin/users/new"

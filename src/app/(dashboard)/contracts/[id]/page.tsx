@@ -3,9 +3,13 @@ import {
   applyContractLifecycleAction,
   getEffectiveContractStatus,
   calculateContractYearCount,
+  calculateTotalMonthlyAllowances,
+  listContractAllowancesByContractId,
 } from "@/lib/queries/contracts";
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import { assertPermission, getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import {
@@ -45,6 +49,7 @@ function redirectWithActionMessage(
 
 async function renewContractServerAction(contractId: string, formData: FormData) {
   "use server";
+  await assertPermission("contracts.renew");
   try {
     await applyContractLifecycleAction({
       id: contractId,
@@ -74,6 +79,7 @@ async function renewContractServerAction(contractId: string, formData: FormData)
 
 async function confirmEmployeeServerAction(contractId: string, formData: FormData) {
   "use server";
+  await assertPermission("contracts.approve");
   try {
     await applyContractLifecycleAction({
       id: contractId,
@@ -98,6 +104,7 @@ async function confirmEmployeeServerAction(contractId: string, formData: FormDat
 
 async function extendProbationServerAction(contractId: string, formData: FormData) {
   "use server";
+  await assertPermission("contracts.edit");
   try {
     await applyContractLifecycleAction({
       id: contractId,
@@ -126,6 +133,14 @@ export default async function ContractDetailPage({
   params,
   searchParams,
 }: ContractDetailPageProps) {
+  await requirePermission("contracts.view");
+  const auth = await getDashboardSession();
+  const profile = auth?.profile ?? null;
+  const permissions = auth?.permissions ?? [];
+  const canEditContract = hasAnyPermissionForContext(profile, permissions, ["contracts.edit"]);
+  const canRenewContract = hasAnyPermissionForContext(profile, permissions, ["contracts.renew"]);
+  const canApproveContract = hasAnyPermissionForContext(profile, permissions, ["contracts.approve"]);
+  const canViewSalary = hasAnyPermissionForContext(profile, permissions, ["contracts.salary.view"]);
   const { id } = await params;
   const sp = await searchParams;
   const status = firstString(sp.status);
@@ -139,6 +154,7 @@ export default async function ContractDetailPage({
     contract_start_date: contract.start_date,
     contract_end_date: contract.end_date,
   });
+  const allowances = await listContractAllowancesByContractId(contract.id);
   const effectiveStatus = getEffectiveContractStatus(contract);
   const contractYears = calculateContractYearCount(contract.start_date, contract.end_date);
   const annualVacationEntitlement = Number(contract.vacation_leave_days ?? 0);
@@ -159,6 +175,9 @@ export default async function ContractDetailPage({
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);
+  const totalMonthlyAllowances = calculateTotalMonthlyAllowances(allowances);
+  const totalMonthlyCompensation =
+    Number(contract.salary_amount ?? 0) + Number(totalMonthlyAllowances ?? 0);
 
   const renewContractAction = renewContractServerAction.bind(null, id);
   const confirmEmployeeAction = confirmEmployeeServerAction.bind(null, id);
@@ -180,12 +199,14 @@ export default async function ContractDetailPage({
                 View Employee Profile
               </Link>
             ) : null}
-            <Link
-              href={`/contracts/${id}/edit`}
-              className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-            >
-              Edit Contract
-            </Link>
+            {canEditContract ? (
+              <Link
+                href={`/contracts/${id}/edit`}
+                className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+              >
+                Edit Contract
+              </Link>
+            ) : null}
           </>
         }
       />
@@ -220,15 +241,60 @@ export default async function ContractDetailPage({
                 : "Not applicable"
             }
           />
-          <Info
-            label="Vacation Leave Days"
-            value={String(Number(contract.vacation_leave_days ?? 0))}
-          />
-          <Info
-            label="Sick Leave Days"
-            value={String(Number(contract.sick_leave_days ?? 0))}
-          />
+          <Info label="Vacation Leave Days" value={String(Number(contract.vacation_leave_days ?? 0))} />
+          <Info label="Sick Leave Days" value={String(Number(contract.sick_leave_days ?? 0))} />
+          {canViewSalary ? (
+            <Info label="Salary" value={formatCurrency(Number(contract.salary_amount ?? 0))} />
+          ) : (
+            <Info label="Salary" value="Restricted" />
+          )}
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-neutral-900">Allowances</h2>
+        {allowances.length === 0 ? (
+          <p className="mt-2 text-sm text-neutral-600">No allowances recorded for this contract.</p>
+        ) : (
+          <>
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-600">
+                  <tr>
+                    <th className="px-3 py-2">Allowance Name</th>
+                    <th className="px-3 py-2">Amount</th>
+                    <th className="px-3 py-2">Frequency</th>
+                    <th className="px-3 py-2">Taxable</th>
+                    <th className="px-3 py-2">Notes</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {allowances.map((allowance) => (
+                    <tr key={allowance.id}>
+                      <td className="px-3 py-2">{allowance.allowance_name}</td>
+                      <td className="px-3 py-2">
+                        {canViewSalary ? formatCurrency(Number(allowance.allowance_amount ?? 0)) : "Restricted"}
+                      </td>
+                      <td className="px-3 py-2">{allowance.allowance_frequency}</td>
+                      <td className="px-3 py-2">{allowance.is_taxable ? "Yes" : "No"}</td>
+                      <td className="px-3 py-2">{allowance.notes || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Info
+                label="Total Monthly Allowances"
+                value={canViewSalary ? formatCurrency(totalMonthlyAllowances) : "Restricted"}
+              />
+              <Info
+                label="Total Monthly Compensation"
+                value={canViewSalary ? formatCurrency(totalMonthlyCompensation) : "Restricted"}
+              />
+            </div>
+          </>
+        )}
       </section>
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
@@ -319,41 +385,44 @@ export default async function ContractDetailPage({
         </section>
       ) : null}
 
-      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-neutral-900">Renew Contract</h2>
-        <p className="mt-1 text-sm text-neutral-600">
-          Enter new contract dates and renewal details.
-        </p>
-        <form action={renewContractAction} className="mt-4 grid gap-3 md:grid-cols-2">
-          <input name="start_date" type="date" required className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-          <input name="end_date" type="date" required className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-          <input
-            name="renewal_due_date"
-            type="date"
-            required
-            defaultValue={contract.renewal_due_date ?? ""}
-            className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-          />
-          <input
-            name="hr_owner"
-            defaultValue={contract.hr_owner ?? ""}
-            placeholder="HR owner"
-            className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-          />
-          <textarea
-            name="renewal_notes"
-            defaultValue={contract.renewal_notes ?? ""}
-            placeholder="Renewal notes"
-            required
-            rows={4}
-            className="md:col-span-2 rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-          />
-          <button type="submit" className="w-fit rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
-            Renew Contract
-          </button>
-        </form>
-      </section>
+      {canRenewContract ? (
+        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-neutral-900">Renew Contract</h2>
+          <p className="mt-1 text-sm text-neutral-600">
+            Enter new contract dates and renewal details.
+          </p>
+          <form action={renewContractAction} className="mt-4 grid gap-3 md:grid-cols-2">
+            <input name="start_date" type="date" required className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+            <input name="end_date" type="date" required className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+            <input
+              name="renewal_due_date"
+              type="date"
+              required
+              defaultValue={contract.renewal_due_date ?? ""}
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            />
+            <input
+              name="hr_owner"
+              defaultValue={contract.hr_owner ?? ""}
+              placeholder="HR owner"
+              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            />
+            <textarea
+              name="renewal_notes"
+              defaultValue={contract.renewal_notes ?? ""}
+              placeholder="Renewal notes"
+              required
+              rows={4}
+              className="md:col-span-2 rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            />
+            <button type="submit" className="w-fit rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
+              Renew Contract
+            </button>
+          </form>
+        </section>
+      ) : null}
 
+      {canApproveContract ? (
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-neutral-900">Confirm Employee</h2>
         <p className="mt-1 text-sm text-neutral-600">
@@ -371,7 +440,9 @@ export default async function ContractDetailPage({
           </button>
         </form>
       </section>
+      ) : null}
 
+      {canEditContract ? (
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-neutral-900">Extend Probation</h2>
         <p className="mt-1 text-sm text-neutral-600">
@@ -402,6 +473,7 @@ export default async function ContractDetailPage({
           </button>
         </form>
       </section>
+      ) : null}
     </main>
   );
 }

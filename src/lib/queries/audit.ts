@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUserProfile } from "@/lib/auth/permissions";
+import { headers as nextHeaders } from "next/headers";
 import "server-only";
 
 type AuditSupabase = Awaited<ReturnType<typeof createClient>>;
@@ -24,6 +24,11 @@ export type AuditRecord = {
   correlation_id: string | null;
   is_sensitive: boolean | null;
   changed_fields: string[] | null;
+  employee_id: string | null;
+  ip_address: string | null;
+  device_name: string | null;
+  computer_name: string | null;
+  user_agent: string | null;
   created_at: string | null;
 };
 
@@ -31,7 +36,13 @@ export type AuditRecord = {
 export type AuditLogWithContext = AuditRecord & {
   related_employee_name: string | null;
   related_employee_number: string | null;
+  related_employee_file_number: string | null;
+  related_employee_department: string | null;
+  related_employee_job_title: string | null;
+  related_employee_id: string | null;
+  performed_for_display: string;
   performed_by_display_name: string;
+  performed_by_email: string | null;
 };
 
 export function summarizeChangedFields(
@@ -48,7 +59,9 @@ type EmployeeAuditJoinRow = {
   id: string;
   first_name: string | null;
   last_name: string | null;
-  employee_number: string | null;
+  file_number: string | null;
+  department: string | null;
+  job_title: string | null;
 };
 
 type UserProfileAuditJoinRow = {
@@ -62,13 +75,7 @@ export type WriteAuditLogInput = {
   module_name: string;
   entity_type: string;
   entity_id: string;
-  action_type:
-    | "employee_created"
-    | "employee_updated"
-    | "file_movement_created"
-    | "file_movement_updated"
-    | "alert_acknowledged"
-    | "alert_resolved";
+  action_type: string;
   action_summary: string;
   old_values?: AuditJson;
   new_values?: AuditJson;
@@ -81,10 +88,29 @@ export type WriteAuditLogInput = {
   correlation_id?: string | null;
   is_sensitive?: boolean | null;
   changed_fields?: string[] | null;
+  employee_id?: string | null;
   created_at?: string | null;
+  actor?: {
+    user_id?: string | null;
+    display_name?: string | null;
+    role_code?: string | null;
+    role_name?: string | null;
+  } | null;
+  ip_address?: string | null;
+  device_name?: string | null;
+  computer_name?: string | null;
+  user_agent?: string | null;
 };
+// SQL guidance for optional metadata columns:
+// alter table public.audit_logs
+// add column if not exists ip_address text,
+// add column if not exists device_name text,
+// add column if not exists user_agent text;
+// Optional employee context guidance:
+// alter table public.audit_logs
+// add column if not exists employee_id uuid references public.employees(id) on delete set null;
 
-const AUDIT_SELECT = `
+const AUDIT_BASE_SELECT = `
   id,
   module_name,
   entity_type,
@@ -105,6 +131,16 @@ const AUDIT_SELECT = `
   created_at
 `;
 
+type AuditColumnSupport = {
+  employee_id: boolean;
+  ip_address: boolean;
+  device_name: boolean;
+  computer_name: boolean;
+  user_agent: boolean;
+};
+
+let auditColumnSupportCache: AuditColumnSupport | null = null;
+
 function formatEmployeeDisplayName(row: EmployeeAuditJoinRow): string | null {
   const name = [row.first_name, row.last_name].filter(Boolean).join(" ").trim();
   return name || null;
@@ -119,6 +155,117 @@ function formatUserProfileDisplayName(
   return full || null;
 }
 
+async function hasAuditColumn(supabase: AuditSupabase, column: keyof AuditColumnSupport): Promise<boolean> {
+  const { error } = await supabase.from("audit_logs").select(column).limit(1);
+  return !error;
+}
+
+async function getAuditColumnSupport(supabase: AuditSupabase): Promise<AuditColumnSupport> {
+  if (auditColumnSupportCache) return auditColumnSupportCache;
+  const [employee_id, ip_address, device_name, computer_name, user_agent] = await Promise.all([
+    hasAuditColumn(supabase, "employee_id"),
+    hasAuditColumn(supabase, "ip_address"),
+    hasAuditColumn(supabase, "device_name"),
+    hasAuditColumn(supabase, "computer_name"),
+    hasAuditColumn(supabase, "user_agent"),
+  ]);
+  auditColumnSupportCache = {
+    employee_id,
+    ip_address,
+    device_name,
+    computer_name,
+    user_agent,
+  };
+  return auditColumnSupportCache;
+}
+
+function getAuditSelectClause(columns: AuditColumnSupport): string {
+  const optional = [
+    columns.employee_id ? "employee_id" : null,
+    columns.ip_address ? "ip_address" : null,
+    columns.device_name ? "device_name" : null,
+    columns.computer_name ? "computer_name" : null,
+    columns.user_agent ? "user_agent" : null,
+  ]
+    .filter(Boolean)
+    .join(",\n  ");
+  return optional ? `${AUDIT_BASE_SELECT},\n  ${optional}` : AUDIT_BASE_SELECT;
+}
+
+function normalizeIpAddress(raw: string | null | undefined): string | null {
+  const value = raw?.trim();
+  if (!value) return null;
+  const first = value.split(",")[0]?.trim();
+  return first || null;
+}
+
+function toObject(value: AuditJson): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
+function inferRelatedEmployeeId(log: AuditRecord): string | null {
+  if (log.employee_id) return log.employee_id;
+  if (log.entity_type?.toLowerCase() === "employee" && log.entity_id) return log.entity_id;
+  const oldObject = toObject(log.old_values);
+  const newObject = toObject(log.new_values);
+  const fromNew = typeof newObject.employee_id === "string" ? newObject.employee_id : null;
+  if (fromNew) return fromNew;
+  const fromOld = typeof oldObject.employee_id === "string" ? oldObject.employee_id : null;
+  return fromOld;
+}
+
+function buildDeviceLabelFromUserAgent(userAgent: string | null): string | null {
+  const ua = (userAgent ?? "").toLowerCase();
+  if (!ua) return null;
+  const browser = ua.includes("edg/")
+    ? "Edge"
+    : ua.includes("chrome/")
+      ? "Chrome"
+      : ua.includes("safari/") && !ua.includes("chrome/")
+        ? "Safari"
+        : ua.includes("firefox/")
+          ? "Firefox"
+          : "Browser";
+  const device = ua.includes("iphone")
+    ? "iPhone"
+    : ua.includes("ipad")
+      ? "iPad"
+      : ua.includes("android")
+        ? "Android"
+        : ua.includes("mac os")
+          ? "macOS"
+          : ua.includes("windows")
+            ? "Windows"
+            : ua.includes("linux")
+              ? "Linux"
+              : "Device";
+  return `${browser} on ${device}`;
+}
+
+export function getAuditRequestContext(input?: { headers?: Headers | null }): {
+  ip_address: string | null;
+  user_agent: string | null;
+  device_name: string | null;
+} {
+  const headers = input?.headers;
+  const forwardedFor = headers?.get("x-forwarded-for");
+  const realIp = headers?.get("x-real-ip");
+  const cloudflareIp = headers?.get("cf-connecting-ip");
+  const userAgent = headers?.get("user-agent")?.trim() || null;
+  const ipAddress =
+    normalizeIpAddress(forwardedFor) ??
+    normalizeIpAddress(realIp) ??
+    normalizeIpAddress(cloudflareIp);
+  return {
+    ip_address: ipAddress,
+    user_agent: userAgent,
+    // Browser apps cannot reliably read the real Windows device name;
+    // use a UA-derived label as a safe device name fallback.
+    device_name: buildDeviceLabelFromUserAgent(userAgent) ?? userAgent,
+  };
+}
+
 async function attachRelatedEmployeeContext(
   supabase: AuditSupabase,
   logs: AuditRecord[]
@@ -126,8 +273,8 @@ async function attachRelatedEmployeeContext(
   const employeeIds = [
     ...new Set(
       logs
-        .filter((log) => log.entity_type?.toLowerCase() === "employee" && log.entity_id)
-        .map((log) => log.entity_id)
+        .map((log) => inferRelatedEmployeeId(log))
+        .filter((value): value is string => Boolean(value))
     ),
   ];
 
@@ -135,7 +282,7 @@ async function attachRelatedEmployeeContext(
   if (employeeIds.length > 0) {
     const { data, error } = await supabase
       .from("employees")
-      .select("id, first_name, last_name, employee_number")
+      .select("id, first_name, last_name, file_number, department, job_title")
       .in("id", employeeIds);
 
     if (error) {
@@ -172,8 +319,8 @@ async function attachRelatedEmployeeContext(
   }
 
   return logs.map((log) => {
-    const isEmployee = log.entity_type?.toLowerCase() === "employee";
-    const emp = isEmployee ? byId.get(log.entity_id) : undefined;
+    const relatedEmployeeId = inferRelatedEmployeeId(log);
+    const emp = relatedEmployeeId ? byId.get(relatedEmployeeId) : undefined;
     const performer = log.performed_by_user_id
       ? performersById.get(log.performed_by_user_id)
       : undefined;
@@ -188,8 +335,16 @@ async function attachRelatedEmployeeContext(
     return {
       ...log,
       related_employee_name: emp ? formatEmployeeDisplayName(emp) : null,
-      related_employee_number: emp?.employee_number ?? null,
+      related_employee_number: emp?.file_number ?? null,
+      related_employee_file_number: emp?.file_number ?? null,
+      related_employee_department: emp?.department ?? null,
+      related_employee_job_title: emp?.job_title ?? null,
+      related_employee_id: relatedEmployeeId,
+      performed_for_display: emp
+        ? `${formatEmployeeDisplayName(emp) ?? "Unknown"} — File #${emp.file_number ?? "—"}`
+        : "Not employee-specific",
       performed_by_display_name: performedByDisplayName,
+      performed_by_email: performer?.email?.trim() ?? null,
     };
   });
 }
@@ -204,13 +359,13 @@ function sortAuditLogsByEventTimeDesc(logs: AuditRecord[]): AuditRecord[] {
 
 export async function writeAuditLog(input: WriteAuditLogInput): Promise<AuditRecord> {
   const supabase = await createClient();
-  const currentProfile =
-    (await getCurrentUserProfile().catch(() => null)) ?? null;
-  const currentProfileDisplayName = currentProfile
-    ? formatUserProfileDisplayName(currentProfile)
-    : null;
+  const supportedColumns = await getAuditColumnSupport(supabase);
+  const auditSelect = getAuditSelectClause(supportedColumns);
+  const actorUserId = input.actor?.user_id ?? null;
+  const actorDisplayName = input.actor?.display_name?.trim() || null;
+  const actorRole = input.actor?.role_code ?? input.actor?.role_name ?? null;
 
-  const payload = {
+  const payload: Record<string, unknown> = {
     module_name: input.module_name,
     entity_type: input.entity_type,
     entity_id: input.entity_id,
@@ -219,21 +374,51 @@ export async function writeAuditLog(input: WriteAuditLogInput): Promise<AuditRec
     old_values: input.old_values ?? null,
     new_values: input.new_values ?? null,
     source_type: input.source_type ?? "application",
-    performed_by_name: input.performed_by_name ?? currentProfileDisplayName ?? null,
-    performed_by_user_id: input.performed_by_user_id ?? currentProfile?.id ?? null,
-    role_at_time: input.role_at_time ?? null,
+    performed_by_name: input.performed_by_name ?? actorDisplayName ?? null,
+    performed_by_user_id: input.performed_by_user_id ?? actorUserId,
+    role_at_time: input.role_at_time ?? actorRole,
     event_timestamp: input.event_timestamp ?? new Date().toISOString(),
     reason_for_change: input.reason_for_change ?? null,
     correlation_id: input.correlation_id ?? null,
     is_sensitive: input.is_sensitive ?? false,
     changed_fields: input.changed_fields ?? null,
+    employee_id: input.employee_id ?? null,
     created_at: input.created_at ?? null,
   };
+  if (!supportedColumns.employee_id) {
+    delete payload.employee_id;
+  }
+  let autoContext: ReturnType<typeof getAuditRequestContext> | null = null;
+  if (!input.ip_address || !input.user_agent || !input.device_name) {
+    try {
+      autoContext = getAuditRequestContext({ headers: await nextHeaders() });
+    } catch {
+      autoContext = null;
+    }
+  }
+  if (supportedColumns.ip_address) {
+    payload.ip_address = normalizeIpAddress(input.ip_address ?? autoContext?.ip_address);
+  }
+  if (supportedColumns.device_name) {
+    payload.device_name =
+      input.device_name?.trim() ||
+      autoContext?.device_name?.trim() ||
+      buildDeviceLabelFromUserAgent(input.user_agent ?? autoContext?.user_agent ?? null) ||
+      input.user_agent?.trim() ||
+      autoContext?.user_agent?.trim() ||
+      null;
+  }
+  if (supportedColumns.computer_name) {
+    payload.computer_name = input.computer_name?.trim() || null;
+  }
+  if (supportedColumns.user_agent) {
+    payload.user_agent = input.user_agent?.trim() || autoContext?.user_agent?.trim() || null;
+  }
 
   const { data, error } = await supabase
     .from("audit_logs")
     .insert(payload)
-    .select(AUDIT_SELECT)
+    .select(auditSelect)
     .single();
 
   if (error) {
@@ -241,7 +426,7 @@ export async function writeAuditLog(input: WriteAuditLogInput): Promise<AuditRec
     throw new Error(`Failed to write audit log: ${error.message}`);
   }
 
-  return data;
+  return data as unknown as AuditRecord;
 }
 
 /** Recent audit logs, newest event first, with optional employee scoping. */
@@ -250,9 +435,11 @@ export async function listRecentAuditLogs(
   employeeId?: string
 ): Promise<AuditLogWithContext[]> {
   const supabase = await createClient();
+  const supportedColumns = await getAuditColumnSupport(supabase);
+  const auditSelect = getAuditSelectClause(supportedColumns);
   let query = supabase
     .from("audit_logs")
-    .select(AUDIT_SELECT)
+    .select(auditSelect)
     .order("event_timestamp", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -269,16 +456,18 @@ export async function listRecentAuditLogs(
     throw new Error(`Failed to load audit activity: ${error.message}`);
   }
 
-  const sorted = sortAuditLogsByEventTimeDesc(data ?? []);
+  const sorted = sortAuditLogsByEventTimeDesc((data ?? []) as unknown as AuditRecord[]);
   return attachRelatedEmployeeContext(supabase, sorted);
 }
 
 /** Single audit log with related employee context when applicable. */
 export async function getAuditLogById(id: string): Promise<AuditLogWithContext | null> {
   const supabase = await createClient();
+  const supportedColumns = await getAuditColumnSupport(supabase);
+  const auditSelect = getAuditSelectClause(supportedColumns);
   const { data, error } = await supabase
     .from("audit_logs")
-    .select(AUDIT_SELECT)
+    .select(auditSelect)
     .eq("id", id)
     .maybeSingle();
 
@@ -288,7 +477,9 @@ export async function getAuditLogById(id: string): Promise<AuditLogWithContext |
   }
 
   if (!data) return null;
-  const enriched = await attachRelatedEmployeeContext(supabase, [data]);
+  const enriched = await attachRelatedEmployeeContext(supabase, [
+    data as unknown as AuditRecord,
+  ]);
   return enriched[0] ?? null;
 }
 
@@ -299,9 +490,11 @@ export async function listAuditTimelineForEntity(
   limit = 100
 ): Promise<AuditLogWithContext[]> {
   const supabase = await createClient();
+  const supportedColumns = await getAuditColumnSupport(supabase);
+  const auditSelect = getAuditSelectClause(supportedColumns);
   const { data, error } = await supabase
     .from("audit_logs")
-    .select(AUDIT_SELECT)
+    .select(auditSelect)
     .eq("entity_type", entityType)
     .eq("entity_id", entityId)
     .order("event_timestamp", { ascending: false, nullsFirst: false })
@@ -313,7 +506,7 @@ export async function listAuditTimelineForEntity(
     throw new Error(`Failed to load audit timeline: ${error.message}`);
   }
 
-  const sorted = sortAuditLogsByEventTimeDesc(data ?? []);
+  const sorted = sortAuditLogsByEventTimeDesc((data ?? []) as unknown as AuditRecord[]);
   return attachRelatedEmployeeContext(supabase, sorted);
 }
 
@@ -322,9 +515,11 @@ export async function listAuditLogsByEmployeeId(
   employeeId: string
 ): Promise<AuditLogWithContext[]> {
   const supabase = await createClient();
+  const supportedColumns = await getAuditColumnSupport(supabase);
+  const auditSelect = getAuditSelectClause(supportedColumns);
   const { data, error } = await supabase
     .from("audit_logs")
-    .select(AUDIT_SELECT)
+    .select(auditSelect)
     .eq("entity_type", "employee")
     .eq("entity_id", employeeId)
     .order("created_at", { ascending: false });
@@ -334,7 +529,7 @@ export async function listAuditLogsByEmployeeId(
     throw new Error(`Failed to load employee audit history: ${error.message}`);
   }
 
-  const sorted = sortAuditLogsByEventTimeDesc(data ?? []);
+  const sorted = sortAuditLogsByEventTimeDesc((data ?? []) as unknown as AuditRecord[]);
   return attachRelatedEmployeeContext(supabase, sorted);
 }
 

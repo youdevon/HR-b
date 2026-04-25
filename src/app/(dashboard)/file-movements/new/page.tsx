@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
+import { assertPermission, requireDashboardAuth, requirePermission } from "@/lib/auth/guards";
 import { getEmployeeById } from "@/lib/queries/employees";
 import { createFileMovement, type FileMovementAction } from "@/lib/queries/file-movements";
 
@@ -26,6 +27,7 @@ function toNull(value: string): string | null {
 export default async function NewFileMovementPage({
   searchParams,
 }: NewFileMovementPageProps) {
+  await requirePermission("files.move");
   const sp = await searchParams;
   const employeeId = firstString(sp.employeeId) ?? "";
   const employee = employeeId ? await getEmployeeById(employeeId) : null;
@@ -37,6 +39,8 @@ export default async function NewFileMovementPage({
 
   async function createFileMovementAction(formData: FormData) {
     "use server";
+    await assertPermission("files.move");
+    const auth = await requireDashboardAuth();
     const employee_id = input(formData, "employee_id");
     const movement_type = input(formData, "movement_type") as FileMovementAction;
     await createFileMovement({
@@ -53,7 +57,7 @@ export default async function NewFileMovementPage({
       date_sent: toNull(input(formData, "date_sent")),
       date_received: toNull(input(formData, "date_received")),
       remarks: toNull(input(formData, "remarks")),
-    });
+    }, auth);
 
     revalidatePath("/file-movements");
     if (employee_id) {

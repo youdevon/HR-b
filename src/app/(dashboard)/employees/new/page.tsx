@@ -1,14 +1,17 @@
 import EmployeeForm from "@/components/domain/employees/employee-form";
 import PageHeader from "@/components/layout/page-header";
+import { assertPermission, requireDashboardAuth, requirePermission } from "@/lib/auth/guards";
 import { createEmployee } from "@/lib/queries/employees";
 import type { EmployeeInput } from "@/lib/validators/employee";
 import { redirect } from "next/navigation";
 
-export default function NewEmployeePage() {
+export default async function NewEmployeePage() {
+  await requirePermission("employees.create");
   async function createEmployeeAction(data: EmployeeInput) {
     "use server";
-
-    await createEmployee(data);
+    await assertPermission("employees.create");
+    const auth = await requireDashboardAuth();
+    await createEmployee(data, auth);
     redirect("/employees?created=1");
   }
 

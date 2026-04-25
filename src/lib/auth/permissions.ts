@@ -36,6 +36,121 @@ type PermissionRow = {
   permission_key: string | null;
 };
 
+export const ACTIVE_NAV_PERMISSION_KEYS = {
+  dashboard: ["dashboard.view"],
+  employees: [
+    "employees.view",
+    "employees.create",
+    "employees.edit",
+    "employees.archive",
+    "employees.restore",
+    "employees.export",
+    "employee.file.view",
+    "employee.file.move",
+  ],
+  contracts: [
+    "contracts.view",
+    "contracts.create",
+    "contracts.edit",
+    "contracts.renew",
+    "contracts.approve",
+    "contracts.archive",
+    "contracts.restore",
+    "contracts.export",
+    "contracts.expiring.view",
+    "contracts.expired.view",
+    "contracts.gratuity.set",
+    "contracts.salary.view",
+    "contracts.salary.edit",
+    "contracts.leave_entitlement.edit",
+  ],
+  leave: [
+    "leave.view",
+    "leave.create",
+    "leave.edit",
+    "leave.approve",
+    "leave.reject",
+    "leave.cancel",
+    "leave.return",
+    "leave.adjust",
+    "leave.balances.view",
+    "leave.transactions.view",
+    "leave.export",
+  ],
+  physicalFiles: [
+    "files.view",
+    "files.move",
+    "files.archive",
+    "files.mark_missing",
+    "files.export",
+  ],
+  records: [
+    "records.view",
+    "records.create",
+    "records.edit",
+    "records.archive",
+    "records.export",
+  ],
+  alerts: [
+    "alerts.view",
+    "alerts.acknowledge",
+    "alerts.resolve",
+    "alerts.clear",
+    "alerts.bulk_manage",
+    "alerts.rules.manage",
+    "alerts.export",
+  ],
+  reports: [
+    "reports.view",
+    "reports.employees.view",
+    "reports.contracts.view",
+    "reports.leave.view",
+    "reports.files.view",
+    "reports.audit.view",
+    "reports.users.view",
+    "reports.gratuity.view",
+    "reports.export",
+  ],
+  audit: [
+    "audit.view",
+    "audit.export",
+    "audit.record_history.view",
+    "audit.view_sensitive",
+  ],
+  gratuity: [
+    "gratuity.view",
+    "gratuity.calculate",
+    "gratuity.edit",
+    "gratuity.approve",
+    "gratuity.override",
+    "gratuity.rules.manage",
+    "gratuity.export",
+  ],
+  settings: [
+    "admin.users.view",
+    "admin.users.create",
+    "admin.users.edit",
+    "admin.users.manage",
+    "admin.roles.view",
+    "admin.roles.manage",
+    "admin.permissions.view",
+    "admin.permissions.manage",
+    "alerts.rules.manage",
+    "gratuity.rules.manage",
+    "admin.settings.manage",
+    "settings.manage",
+  ],
+} as const;
+
+export const DASHBOARD_CARD_PERMISSION_KEYS = {
+  workforce: ["dashboard.cards.workforce.view", "employees.view"],
+  contracts: ["dashboard.cards.contracts.view", "contracts.view"],
+  leave: ["dashboard.cards.leave.view", "leave.view"],
+  files: ["dashboard.cards.files.view", "files.view"],
+  alerts: ["dashboard.cards.alerts.view", "alerts.view"],
+  gratuity: ["dashboard.cards.gratuity.view", "gratuity.view"],
+} as const;
+
 export function profileDisplayName(profile: CurrentUserProfile | null): string {
   const fullName = `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim();
   return fullName || profile?.email || "User";
@@ -153,6 +268,16 @@ export function hasPermissionForContext(
 ): boolean {
   if (isSuperUser(profile)) return true;
   return permissions.includes("*") || permissions.includes(permissionKey);
+}
+
+export function hasAllPermissionsForContext(
+  profile: CurrentUserProfile | null,
+  permissions: string[],
+  permissionKeys: string[]
+): boolean {
+  if (isSuperUser(profile)) return true;
+  if (permissions.includes("*")) return true;
+  return permissionKeys.every((key) => permissions.includes(key));
 }
 
 export function hasAnyPermissionForContext(

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
+import { requireDashboardAuth } from "@/lib/auth/guards";
 import { getEmployeeById } from "@/lib/queries/employees";
 import {
   createFileMovement,
@@ -35,6 +36,7 @@ export default async function NewFileMovementPage({
 
   async function createFileMovementAction(formData: FormData) {
     "use server";
+    const auth = await requireDashboardAuth();
     const employee_id = input(formData, "employee_id");
     if (!employee_id) redirect("/files/movements");
 
@@ -45,7 +47,7 @@ export default async function NewFileMovementPage({
       to_custodian: input(formData, "current_holder"),
       to_location: input(formData, "current_location"),
       movement_reason: input(formData, "movement_reason"),
-    });
+    }, auth);
 
     revalidatePath("/files/movements");
     revalidatePath(`/employees/${employee_id}`);

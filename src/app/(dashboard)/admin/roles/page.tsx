@@ -19,8 +19,8 @@ export default async function AdminRolesPage() {
       <div className="mx-auto max-w-6xl space-y-6">
         <PageHeader
           title="Roles"
-          description="Roles loaded from public.roles."
-          backHref="/dashboard"
+          description="Manage roles and assigned permissions."
+          backHref="/settings"
           actions={
             <>
               <span className="inline-flex h-fit rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-700">

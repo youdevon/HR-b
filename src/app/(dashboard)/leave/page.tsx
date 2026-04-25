@@ -1,5 +1,7 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import {
   countEmployeesOnLeave,
   countPendingLeaveApprovals,
@@ -26,6 +28,13 @@ function statusClass(status: string | null): string {
 }
 
 export default async function LeavePage() {
+  await requirePermission("leave.view");
+  const auth = await getDashboardSession();
+  const profile = auth?.profile ?? null;
+  const permissions = auth?.permissions ?? [];
+  const canCreateLeave = hasAnyPermissionForContext(profile, permissions, ["leave.create"]);
+  const canViewTransactions = hasAnyPermissionForContext(profile, permissions, ["leave.transactions.view"]);
+  const canViewBalances = hasAnyPermissionForContext(profile, permissions, ["leave.balances.view"]);
   await generateLeaveWorkflowAlerts().catch(() => 0);
   const [transactions, balances, pendingCount, onLeaveCount] = await Promise.all([
     listLeaveTransactions(),
@@ -67,24 +76,30 @@ export default async function LeavePage() {
           backHref="/dashboard"
           actions={
             <>
+              {canViewTransactions ? (
               <Link
                 href="/leave/transactions"
                 className="inline-flex w-fit items-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
               >
                 View Transactions
               </Link>
+              ) : null}
+              {canViewBalances ? (
               <Link
                 href="/leave/balances"
                 className="inline-flex w-fit items-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
               >
                 View Balances
               </Link>
+              ) : null}
+              {canCreateLeave ? (
               <Link
                 href="/leave/new"
                 className="inline-flex w-fit items-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
               >
                 Apply Leave
               </Link>
+              ) : null}
             </>
           }
         />

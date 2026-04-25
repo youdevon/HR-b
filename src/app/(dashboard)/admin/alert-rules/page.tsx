@@ -8,7 +8,7 @@ import {
 } from "@/lib/queries/alert-rules";
 import { revalidatePath } from "next/cache";
 import PageHeader from "@/components/layout/page-header";
-import { requirePermission } from "@/lib/auth/guards";
+import { requireAnyPermission } from "@/lib/auth/guards";
 
 function display(value: string | number | boolean | null): string {
   if (typeof value === "boolean") return value ? "Yes" : "No";
@@ -18,6 +18,7 @@ function display(value: string | number | boolean | null): string {
 
 async function updateRuleAction(formData: FormData) {
   "use server";
+  await requireAnyPermission(["alerts.rules.manage", "settings.manage", "admin.settings.manage"]);
   await updateAlertRule(alertRuleInputFromFormData(formData));
   revalidatePath("/admin/alert-rules");
   revalidatePath("/alerts/rules");
@@ -26,7 +27,7 @@ async function updateRuleAction(formData: FormData) {
 }
 
 export default async function AdminAlertRulesPage() {
-  await requirePermission("settings.manage");
+  await requireAnyPermission(["alerts.rules.manage", "settings.manage", "admin.settings.manage"]);
   const rules = await listAlertRules();
 
   return (
@@ -34,7 +35,7 @@ export default async function AdminAlertRulesPage() {
       <PageHeader
         title="Alert Rules Settings"
         description="Configure alert timing, thresholds, severity, and automation status by module."
-        backHref="/admin/permissions"
+        backHref="/settings"
       />
 
       <RuleCards rules={rules} />
