@@ -517,6 +517,18 @@ export function formatLeaveType(value: string | null | undefined): string {
     .join(" ");
 }
 
+export function formatReadableDate(value: string | null | undefined): string {
+  const dateText = (value ?? "").trim();
+  if (!dateText) return "-";
+  const parsed = new Date(`${dateText}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dateText;
+  return parsed.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function includesText(value: string | null | undefined, query: string): boolean {
   if (!value) return false;
   return value.toLowerCase().includes(query);

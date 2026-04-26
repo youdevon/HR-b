@@ -15,11 +15,12 @@ import {
 import {
   countEmployeesOnLeave,
   countPendingLeaveApprovals,
+  formatReadableDate,
   formatLeaveType,
   generateLeaveWorkflowAlerts,
-  listLeaveBalances,
+  listLowSickLeave,
+  listLowVacationLeave,
   listLeaveTransactions,
-  normalizeLeaveType,
 } from "@/lib/queries/leave";
 
 function display(value: string | number | null | undefined): string {
@@ -37,6 +38,11 @@ function statusClass(status: string | null): string {
   return "bg-neutral-100 text-neutral-700";
 }
 
+function dayWord(count: number, leaveType: "vacation" | "sick"): string {
+  const unit = leaveType === "vacation" ? "vacation" : "sick";
+  return count === 1 ? `1 more ${unit} day remaining.` : `${count} more ${unit} days remaining.`;
+}
+
 export default async function LeavePage() {
   await requirePermission("leave.view");
   const auth = await getDashboardSession();
@@ -46,36 +52,38 @@ export default async function LeavePage() {
   const canViewTransactions = hasAnyPermissionForContext(profile, permissions, ["leave.transactions.view"]);
   const canViewBalances = hasAnyPermissionForContext(profile, permissions, ["leave.balances.view"]);
   await generateLeaveWorkflowAlerts().catch(() => 0);
-  const [transactions, balances, pendingCount, onLeaveCount] = await Promise.all([
+  const [transactions, pendingCount, onLeaveCount, lowSickRows, lowVacationRows] = await Promise.all([
     listLeaveTransactions(),
-    listLeaveBalances(),
     countPendingLeaveApprovals(),
     countEmployeesOnLeave(),
+    listLowSickLeave(),
+    listLowVacationLeave(),
   ]);
 
   const today = new Date().toISOString().slice(0, 10);
   const pendingApprovals = transactions
     .filter((row) => row.approval_status === "pending")
     .slice(0, 6);
-  const employeesOnLeave = transactions
+  const allEmployeesOnLeave = transactions
     .filter(
       (row) =>
         row.approval_status === "approved" &&
         (row.start_date ?? "") <= today &&
         (row.end_date ?? "") >= today
-    )
+    );
+  const employeesOnLeave = allEmployeesOnLeave
     .slice(0, 6);
   const recentTransactions = transactions.slice(0, 8);
-  const lowSickCount = balances.filter((row) => {
-    const remaining = Number(row.remaining_days ?? 0);
-    const threshold = Number(row.warning_threshold_days ?? 0);
-    return normalizeLeaveType(row.leave_type ?? "") === "sick_leave" && row.low_balance_warning_enabled !== false && remaining <= threshold;
-  }).length;
-  const lowVacationCount = balances.filter((row) => {
-    const remaining = Number(row.remaining_days ?? 0);
-    const threshold = Number(row.warning_threshold_days ?? 0);
-    return normalizeLeaveType(row.leave_type ?? "") === "vacation_leave" && row.low_balance_warning_enabled !== false && remaining <= threshold;
-  }).length;
+  const lowSickCount = lowSickRows.length;
+  const lowVacationCount = lowVacationRows.length;
+  const sampleLowVacation = lowVacationRows[0];
+  const sampleLowSick = lowSickRows[0];
+  const lowVacationMessage = sampleLowVacation
+    ? `${sampleLowVacation.employee_name ?? "Employee"} has ${dayWord(Number(sampleLowVacation.remaining_days ?? 0), "vacation")}`
+    : "No current records.";
+  const lowSickMessage = sampleLowSick
+    ? `${sampleLowSick.employee_name ?? "Employee"} has ${dayWord(Number(sampleLowSick.remaining_days ?? 0), "sick")}`
+    : "No current records.";
 
   return (
     <main className="space-y-6">
@@ -104,11 +112,12 @@ export default async function LeavePage() {
         }
       />
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label="Pending Approvals" value={pendingCount} href="/leave/transactions?q=pending" />
-          <MetricCard label="Employees Currently On Leave" value={onLeaveCount} href="/leave/transactions?q=approved" />
-          <MetricCard label="Low Sick Leave" value={lowSickCount} href="/leave/low-sick" />
-          <MetricCard label="Low Vacation Leave" value={lowVacationCount} href="/leave/low-vacation" />
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <MetricCard label="Pending Approvals" value={pendingCount} href="/leave/transactions?q=pending" emptyText="No current records." />
+          <MetricCard label="Currently on Leave" value={onLeaveCount} href="/leave/transactions?q=approved" emptyText="No current records." />
+          <MetricCard label="Low Vacation Leave" value={lowVacationCount} href="/leave/low-vacation" detail={lowVacationMessage} emptyText="No current records." />
+          <MetricCard label="Low Sick Leave" value={lowSickCount} href="/leave/low-sick" detail={lowSickMessage} emptyText="No current records." />
+          <MetricCard label="Recent Leave Transactions" value={transactions.length} href="/leave/transactions" emptyText="No current records." />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
@@ -131,11 +140,24 @@ export default async function LeavePage() {
   );
 }
 
-function MetricCard({ label, value, href }: { label: string; value: number; href: string }) {
+function MetricCard({
+  label,
+  value,
+  href,
+  detail,
+  emptyText,
+}: {
+  label: string;
+  value: number;
+  href: string;
+  detail?: string;
+  emptyText?: string;
+}) {
   return (
     <Link href={href} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 transition hover:-translate-y-0.5 hover:shadow-md">
       <p className="text-sm font-medium text-neutral-600">{label}</p>
-      <p className="mt-3 text-3xl font-semibold text-neutral-900">{value}</p>
+      <p className="mt-3 text-2xl font-semibold text-neutral-900">{value}</p>
+      <p className="mt-2 text-xs text-neutral-600">{value > 0 ? (detail ?? "Current records available.") : (emptyText ?? "No current records.")}</p>
     </Link>
   );
 }
@@ -178,7 +200,7 @@ function OverviewTable({
                     {formatLeaveType(row.leave_type)}
                   </td>
                   <td className={`whitespace-nowrap ${dashboardTableCellClass}`}>
-                    {display(row.start_date)} - {display(row.end_date)}
+                    {formatReadableDate(row.start_date)} - {formatReadableDate(row.end_date)}
                   </td>
                   <td className={`whitespace-nowrap ${dashboardTableCellClass}`}>{display(row.total_days)}</td>
                   <td className={`whitespace-nowrap ${dashboardTableCellClass}`}>
