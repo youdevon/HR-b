@@ -83,8 +83,7 @@ export default async function AuditDetailPage({
   );
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-4xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Audit Event"
           description={record.action_summary}
@@ -308,7 +307,7 @@ export default async function AuditDetailPage({
             </div>
           </div>
         </section>
-      </div>
+    
     </main>
   );
 }

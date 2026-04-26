@@ -84,6 +84,7 @@ export const ACTIVE_NAV_PERMISSION_KEYS = {
     "files.mark_missing",
     "files.export",
   ],
+  /** Record Keeping module; keys stay defined while UI may be hidden via `RECORD_KEEPING_UI_ENABLED`. */
   records: [
     "records.view",
     "records.create",

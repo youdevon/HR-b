@@ -87,8 +87,7 @@ export default async function LeaveDetailPage({
   }
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-5xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Leave Request"
           description={`${leave.employee_name ?? leave.employee_id ?? "Unlinked employee"} • Employee #: ${leave.employee_number ?? "—"} • ID: ${leave.employee_id ?? "—"}`}
@@ -180,7 +179,6 @@ export default async function LeaveDetailPage({
           </form>
         </section>
         ) : null}
-      </div>
     </main>
   );
 }

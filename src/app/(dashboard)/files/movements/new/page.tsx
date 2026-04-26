@@ -55,8 +55,7 @@ export default async function NewFileMovementPage({
   }
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Move Physical File"
           description={
@@ -132,7 +131,7 @@ export default async function NewFileMovementPage({
             </button>
           </div>
         </form>
-      </div>
+    
     </main>
   );
 }

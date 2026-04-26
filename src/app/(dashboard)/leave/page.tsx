@@ -1,7 +1,17 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import { cn } from "@/lib/utils/cn";
 import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
 import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
+import {
+  dashboardButtonPrimaryClass,
+  dashboardButtonSecondaryClass,
+  dashboardPanelMdClass,
+  dashboardTableBodyRowClass,
+  dashboardTableCellClass,
+  dashboardTableHeadCellClass,
+  dashboardTableHeadRowClass,
+} from "@/lib/ui/dashboard-styles";
 import {
   countEmployeesOnLeave,
   countPendingLeaveApprovals,
@@ -68,66 +78,55 @@ export default async function LeavePage() {
   }).length;
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <PageHeader
-          title="Leave Management"
-          description="Monitor leave approvals, active absences, balances, and recent activity."
-          backHref="/dashboard"
-          actions={
-            <>
-              {canViewTransactions ? (
-              <Link
-                href="/leave/transactions"
-                className="inline-flex w-fit items-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
-              >
+    <main className="space-y-6">
+      <PageHeader
+        title="Leave Management"
+        description="Monitor leave approvals, active absences, balances, and recent activity."
+        backHref="/dashboard"
+        actions={
+          <>
+            {canViewTransactions ? (
+              <Link href="/leave/transactions" className={cn(dashboardButtonSecondaryClass, "w-full sm:w-auto")}>
                 View Transactions
               </Link>
-              ) : null}
-              {canViewBalances ? (
-              <Link
-                href="/leave/balances"
-                className="inline-flex w-fit items-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
-              >
+            ) : null}
+            {canViewBalances ? (
+              <Link href="/leave/balances" className={cn(dashboardButtonSecondaryClass, "w-full sm:w-auto")}>
                 View Balances
               </Link>
-              ) : null}
-              {canCreateLeave ? (
-              <Link
-                href="/leave/new"
-                className="inline-flex w-fit items-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-              >
+            ) : null}
+            {canCreateLeave ? (
+              <Link href="/leave/new" className={cn(dashboardButtonPrimaryClass, "w-full sm:w-auto")}>
                 Apply Leave
               </Link>
-              ) : null}
-            </>
-          }
-        />
+            ) : null}
+          </>
+        }
+      />
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard label="Pending Approvals" value={pendingCount} href="/leave/transactions?q=pending" />
           <MetricCard label="Employees Currently On Leave" value={onLeaveCount} href="/leave/transactions?q=approved" />
           <MetricCard label="Low Sick Leave" value={lowSickCount} href="/leave/low-sick" />
           <MetricCard label="Low Vacation Leave" value={lowVacationCount} href="/leave/low-vacation" />
-        </section>
+      </section>
 
-        <section className="grid gap-6 xl:grid-cols-2">
+      <section className="grid gap-6 xl:grid-cols-2">
           <OverviewTable title="Pending Approvals" rows={pendingApprovals} empty="No pending leave approvals." />
           <OverviewTable title="Employees Currently On Leave" rows={employeesOnLeave} empty="No employees are currently on leave." />
-        </section>
+      </section>
 
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-neutral-900">Recent Leave Transactions</h2>
-            <Link href="/leave/transactions" className="text-sm font-medium text-neutral-700 hover:text-neutral-900">
-              View all
-            </Link>
-          </div>
-          <div className="mt-4">
-            <OverviewTable rows={recentTransactions} empty="No recent leave transactions." compact />
-          </div>
-        </section>
-      </div>
+      <section className={dashboardPanelMdClass}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-neutral-900">Recent Leave Transactions</h2>
+          <Link href="/leave/transactions" className="text-sm font-medium text-neutral-700 hover:text-neutral-900">
+            View all
+          </Link>
+        </div>
+        <div className="mt-4">
+          <OverviewTable rows={recentTransactions} empty="No recent leave transactions." compact />
+        </div>
+      </section>
     </main>
   );
 }
@@ -153,34 +152,36 @@ function OverviewTable({
   compact?: boolean;
 }) {
   return (
-    <div className={compact ? "" : "rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6"}>
+    <div className={compact ? "" : dashboardPanelMdClass}>
       {title ? <h2 className="text-lg font-semibold text-neutral-900">{title}</h2> : null}
       {rows.length ? (
         <div className={title ? "mt-4 overflow-x-auto" : "overflow-x-auto"}>
           <table className="min-w-full divide-y divide-neutral-200 text-sm">
-            <thead className="bg-neutral-50">
-              <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
-                <th className="px-4 py-3">Employee</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Dates</th>
-                <th className="px-4 py-3">Days</th>
-                <th className="px-4 py-3">Status</th>
+            <thead>
+              <tr className={dashboardTableHeadRowClass}>
+                <th className={dashboardTableHeadCellClass}>Employee</th>
+                <th className={dashboardTableHeadCellClass}>Type</th>
+                <th className={dashboardTableHeadCellClass}>Dates</th>
+                <th className={dashboardTableHeadCellClass}>Days</th>
+                <th className={dashboardTableHeadCellClass}>Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
               {rows.map((row) => (
-                <tr key={row.id} className="hover:bg-neutral-50">
-                  <td className="whitespace-nowrap px-4 py-3 font-medium text-neutral-900">
+                <tr key={row.id} className={dashboardTableBodyRowClass}>
+                  <td className={`whitespace-nowrap ${dashboardTableCellClass} font-medium text-neutral-900`}>
                     <Link href={`/leave/${row.id}`} className="hover:underline">
                       {row.employee_name ?? row.employee_number ?? row.employee_id ?? "-"}
                     </Link>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3">{formatLeaveType(row.leave_type)}</td>
-                  <td className="whitespace-nowrap px-4 py-3">
+                  <td className={`whitespace-nowrap ${dashboardTableCellClass}`}>
+                    {formatLeaveType(row.leave_type)}
+                  </td>
+                  <td className={`whitespace-nowrap ${dashboardTableCellClass}`}>
                     {display(row.start_date)} - {display(row.end_date)}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3">{display(row.total_days)}</td>
-                  <td className="whitespace-nowrap px-4 py-3">
+                  <td className={`whitespace-nowrap ${dashboardTableCellClass}`}>{display(row.total_days)}</td>
+                  <td className={`whitespace-nowrap ${dashboardTableCellClass}`}>
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(row.approval_status)}`}>
                       {row.approval_status ?? "unknown"}
                     </span>

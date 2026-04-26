@@ -1,6 +1,7 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
 import { listRecentAuditLogs } from "@/lib/queries/audit";
+import { dashboardButtonSecondaryClass } from "@/lib/ui/dashboard-styles";
 
 function formatDate(value: string | null): string {
   if (!value) return "—";
@@ -28,33 +29,27 @@ export default async function AuditActivityPage({ searchParams }: AuditActivityP
     : "/audit/activity";
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="space-y-3">
-          <PageHeader
-            title="Audit Activity"
-            description="Recent changes across the system. Employee-related rows show the affected person when the audit target is an employee record."
-            backHref="/dashboard"
-            actions={
-              employeeId ? (
-              <Link
-                href="/audit/activity"
-                className="inline-flex rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50"
-              >
-                Clear employee filter
-              </Link>
-            ) : null
-            }
-          />
-          {employeeId ? (
-            <p className="mt-3 text-sm text-neutral-700">
-              Showing audit history for employee ID:
-              <span className="ml-1 font-mono text-xs text-neutral-900">{employeeId}</span>
-            </p>
-          ) : null}
-        </section>
+    <main className="space-y-6">
+      <PageHeader
+        title="Audit Activity"
+        description="Recent changes across the system. Employee-related rows show the affected person when the audit target is an employee record."
+        backHref="/dashboard"
+        actions={
+          employeeId ? (
+            <Link href="/audit/activity" className={dashboardButtonSecondaryClass}>
+              Clear employee filter
+            </Link>
+          ) : null
+        }
+      />
+      {employeeId ? (
+        <p className="text-sm text-neutral-700">
+          Showing audit history for employee ID:
+          <span className="ml-1 font-mono text-xs text-neutral-900">{employeeId}</span>
+        </p>
+      ) : null}
 
-        <section className="rounded-2xl border border-neutral-200/80 bg-white p-1 shadow-sm sm:p-2">
+      <section className="rounded-2xl border border-neutral-200/80 bg-white p-1 shadow-sm sm:p-2">
           {logs.length === 0 ? (
             <div className="px-6 py-14 text-center text-sm text-neutral-600">
               {employeeId
@@ -141,8 +136,7 @@ export default async function AuditActivityPage({ searchParams }: AuditActivityP
               </table>
             </div>
           )}
-        </section>
-      </div>
+      </section>
     </main>
   );
 }

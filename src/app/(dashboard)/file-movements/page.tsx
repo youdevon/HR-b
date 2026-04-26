@@ -1,11 +1,23 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import ClickableTableRow from "@/components/ui/clickable-table-row";
+import EmptyStateCard from "@/components/ui/empty-state-card";
 import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
 import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import {
   generateOverdueCheckedOutFileAlerts,
   listFileMovements,
 } from "@/lib/queries/file-movements";
+import {
+  dashboardButtonPrimaryClass,
+  dashboardButtonSecondaryClass,
+  dashboardFieldClass,
+  dashboardPanelClass,
+  dashboardTableCellClass,
+  dashboardTableHeadCellClass,
+  dashboardTableHeadRowClass,
+} from "@/lib/ui/dashboard-styles";
+import { cn } from "@/lib/utils/cn";
 
 type FileMovementsPageProps = {
   searchParams: Promise<{
@@ -52,80 +64,73 @@ export default async function FileMovementsPage({
   ]);
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="space-y-3">
-          <PageHeader
-            title="Physical File Movements"
-            description={
-              employeeId
-                ? `End-to-end workflow for check out, transfer, return, archive, and missing-file actions. Filtered by employee: ${employeeId}`
-                : "End-to-end workflow for check out, transfer, return, archive, and missing-file actions."
-            }
-            backHref="/dashboard"
-            actions={
-              <>
-              {!employeeId ? (
-                <form action="/file-movements" className="flex flex-col gap-2 sm:flex-row">
-                  <input
-                    name="q"
-                    defaultValue={query}
-                    placeholder="Search employee, file, location, status..."
-                    className="min-w-72 rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                  />
-                  <button
-                    type="submit"
-                    className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-50"
-                  >
-                    Search
-                  </button>
-                  {query ? (
-                    <Link
-                      href="/file-movements"
-                      className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-center text-sm font-medium text-neutral-900 hover:bg-neutral-50"
-                    >
-                      Clear
-                    </Link>
-                  ) : null}
-                </form>
-              ) : null}
-              {canMoveFiles ? (
-                <Link
-                  href={employeeId ? `/file-movements/new?employeeId=${employeeId}` : "/file-movements/new"}
-                  className="inline-flex w-fit items-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-                >
-                  New Movement
-                </Link>
-              ) : null}
-              </>
-            }
-          />
-          {overdueCount > 0 ? (
-            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              {overdueCount} overdue checked-out file alert(s) generated.
-            </p>
-          ) : null}
-        </section>
+    <main className="space-y-6">
+      <PageHeader
+        title="Physical File Movements"
+        description={
+          employeeId
+            ? `End-to-end workflow for check out, transfer, return, archive, and missing-file actions. Filtered by employee: ${employeeId}`
+            : "End-to-end workflow for check out, transfer, return, archive, and missing-file actions."
+        }
+        backHref="/dashboard"
+        actions={
+          <>
+            {!employeeId ? (
+              <form action="/file-movements" className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  name="q"
+                  defaultValue={query}
+                  placeholder="Search employee, file, location, status..."
+                  className={cn(dashboardFieldClass, "min-w-72")}
+                />
+                <button type="submit" className={dashboardButtonSecondaryClass}>
+                  Search
+                </button>
+                {query ? (
+                  <Link href="/file-movements" className={dashboardButtonSecondaryClass}>
+                    Clear
+                  </Link>
+                ) : null}
+              </form>
+            ) : null}
+            {canMoveFiles ? (
+              <Link
+                href={employeeId ? `/file-movements/new?employeeId=${employeeId}` : "/file-movements/new"}
+                className={cn(dashboardButtonPrimaryClass, "w-full sm:w-auto")}
+              >
+                New Movement
+              </Link>
+            ) : null}
+          </>
+        }
+      />
+      {overdueCount > 0 ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {overdueCount} overdue checked-out file alert(s) generated.
+        </p>
+      ) : null}
 
-        <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
+      {movements.length === 0 ? (
+        <EmptyStateCard>No records found for the selected criteria.</EmptyStateCard>
+      ) : (
+        <section className={cn(dashboardPanelClass, "overflow-hidden p-0")}>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-neutral-200 text-sm">
-              <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-600">
-                <tr>
-                  <th className="px-4 py-3 text-left">Employee</th>
-                  <th className="px-4 py-3 text-left">File #</th>
-                  <th className="px-4 py-3 text-left">Holder</th>
-                  <th className="px-4 py-3 text-left">Location</th>
-                  <th className="px-4 py-3 text-left">Sent</th>
-                  <th className="px-4 py-3 text-left">Received</th>
-                  <th className="px-4 py-3 text-left">Status</th>
-                  <th className="px-4 py-3 text-left">View</th>
+              <thead>
+                <tr className={dashboardTableHeadRowClass}>
+                  <th className={`${dashboardTableHeadCellClass} text-left`}>Employee</th>
+                  <th className={`${dashboardTableHeadCellClass} text-left`}>File #</th>
+                  <th className={`${dashboardTableHeadCellClass} text-left`}>Holder</th>
+                  <th className={`${dashboardTableHeadCellClass} text-left`}>Location</th>
+                  <th className={`${dashboardTableHeadCellClass} text-left`}>Sent</th>
+                  <th className={`${dashboardTableHeadCellClass} text-left`}>Received</th>
+                  <th className={`${dashboardTableHeadCellClass} text-left`}>Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
                 {movements.map((movement) => (
-                  <tr key={movement.id} className="align-top">
-                    <td className="px-4 py-3">
+                  <ClickableTableRow key={movement.id} href={`/file-movements/${movement.id}`} className="align-top">
+                    <td className={dashboardTableCellClass}>
                       <div className="font-medium text-neutral-900">
                         {movement.employee_name ?? movement.employee_id ?? "—"}
                       </div>
@@ -133,12 +138,12 @@ export default async function FileMovementsPage({
                         {movement.employee_number ?? "No employee #"}
                       </div>
                     </td>
-                    <td className="px-4 py-3">{movement.file_number ?? "—"}</td>
-                    <td className="px-4 py-3">{movement.current_holder ?? "—"}</td>
-                    <td className="px-4 py-3">{movement.current_location ?? "—"}</td>
-                    <td className="px-4 py-3">{movement.date_sent ?? "—"}</td>
-                    <td className="px-4 py-3">{movement.date_received ?? "—"}</td>
-                    <td className="px-4 py-3">
+                    <td className={dashboardTableCellClass}>{movement.file_number ?? "—"}</td>
+                    <td className={dashboardTableCellClass}>{movement.current_holder ?? "—"}</td>
+                    <td className={dashboardTableCellClass}>{movement.current_location ?? "—"}</td>
+                    <td className={dashboardTableCellClass}>{movement.date_sent ?? "—"}</td>
+                    <td className={dashboardTableCellClass}>{movement.date_received ?? "—"}</td>
+                    <td className={dashboardTableCellClass}>
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusTone(
                           movement.movement_status
@@ -147,26 +152,13 @@ export default async function FileMovementsPage({
                         {movement.movement_status ?? "unknown"}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/file-movements/${movement.id}`}
-                        className="text-sm font-medium text-neutral-900 underline-offset-2 hover:underline"
-                      >
-                        Open
-                      </Link>
-                    </td>
-                  </tr>
+                  </ClickableTableRow>
                 ))}
               </tbody>
             </table>
           </div>
-          {!movements.length ? (
-            <div className="px-6 py-10 text-center text-sm text-neutral-600">
-              No file movement records found.
-            </div>
-          ) : null}
         </section>
-      </div>
+      )}
     </main>
   );
 }

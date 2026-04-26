@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FormErrorAlert, FormHelperText, FormLabel } from "@/components/ui/form-primitives";
 import type { EmployeeLookupRecord } from "@/lib/queries/employees";
+import { formInputClass, formReadOnlyInputClass } from "@/lib/ui/form-styles";
 
 type EmployeeOption = EmployeeLookupRecord & { full_name: string };
 
@@ -103,7 +105,7 @@ export default function EmployeeContractSelector({
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="space-y-1.5">
-          <span className="text-sm font-medium text-neutral-700">Employee Name</span>
+          <FormLabel>Employee Name</FormLabel>
           <input
             value={nameInput}
             onChange={(event) => {
@@ -115,11 +117,11 @@ export default function EmployeeContractSelector({
             }}
             onBlur={handleNameBlur}
             placeholder="Search by employee name"
-            className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            className={formInputClass}
           />
         </label>
         <label className="space-y-1.5">
-          <span className="text-sm font-medium text-neutral-700">File Number</span>
+          <FormLabel>File Number</FormLabel>
           <input
             value={fileInput}
             onChange={(event) => {
@@ -134,7 +136,7 @@ export default function EmployeeContractSelector({
             }}
             onBlur={handleFileBlur}
             placeholder="Search by file number"
-            className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+            className={formInputClass}
           />
         </label>
       </div>
@@ -168,11 +170,7 @@ export default function EmployeeContractSelector({
         </div>
       </div>
 
-      {lookupError ? (
-        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {lookupError}
-        </p>
-      ) : null}
+      {lookupError ? <FormErrorAlert className="mt-3">{lookupError}</FormErrorAlert> : null}
 
       {selected ? (
         <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
@@ -192,13 +190,9 @@ export default function EmployeeContractSelector({
             </p>
           </div>
           <label className="mt-3 block space-y-1.5">
-            <span className="text-sm font-medium text-neutral-700">Contract Title</span>
-            <input
-              name="contract_title"
-              readOnly
-              value={selected.full_name}
-              className="w-full rounded-xl border border-neutral-200 bg-neutral-100 px-3 py-2 text-sm text-neutral-700"
-            />
+            <FormLabel>Contract Title</FormLabel>
+            <input name="contract_title" readOnly value={selected.full_name} className={formReadOnlyInputClass} />
+            <FormHelperText>Filled automatically from the selected employee.</FormHelperText>
           </label>
           <button
             type="button"
@@ -210,14 +204,15 @@ export default function EmployeeContractSelector({
         </div>
       ) : (
         <label className="mt-4 block space-y-1.5">
-          <span className="text-sm font-medium text-neutral-700">Contract Title</span>
+          <FormLabel>Contract Title</FormLabel>
           <input
             name="contract_title"
             readOnly
             value=""
             placeholder="Auto-filled after selecting an employee"
-            className="w-full rounded-xl border border-neutral-200 bg-neutral-100 px-3 py-2 text-sm text-neutral-500"
+            className={formReadOnlyInputClass}
           />
+          <FormHelperText>Select an employee above to populate the contract title.</FormHelperText>
         </label>
       )}
     </section>

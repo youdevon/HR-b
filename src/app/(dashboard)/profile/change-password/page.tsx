@@ -1,6 +1,13 @@
 import { redirect } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
+import { FormActions, FormLabel } from "@/components/ui/form-primitives";
 import { changePasswordWithCurrentPassword } from "@/lib/auth/user";
+import {
+  formErrorAlertClass,
+  formInputClass,
+  formPrimaryButtonClass,
+  formSuccessAlertClass,
+} from "@/lib/ui/form-styles";
 
 type ChangePasswordPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -38,8 +45,7 @@ export default async function ChangePasswordPage({
   }
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-2xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Change Password"
           description="Update your account password securely."
@@ -47,15 +53,7 @@ export default async function ChangePasswordPage({
         />
 
         {message ? (
-          <section
-            className={`rounded-2xl border p-4 text-sm ${
-              status === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border-red-200 bg-red-50 text-red-700"
-            }`}
-          >
-            {message}
-          </section>
+          <section className={status === "success" ? formSuccessAlertClass : formErrorAlertClass}>{message}</section>
         ) : null}
 
         <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
@@ -87,7 +85,7 @@ export default async function ChangePasswordPage({
             </div>
           </form>
         </section>
-      </div>
+    
     </main>
   );
 }
@@ -105,14 +103,14 @@ function Field({
 }) {
   return (
     <label className="block space-y-1.5">
-      <span className="text-sm font-medium text-neutral-700">{label}</span>
+      <FormLabel required>{label}</FormLabel>
       <input
         type="password"
         name={name}
         required
         minLength={minLength}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-neutral-300 px-3 py-2.5 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+        className={formInputClass}
       />
     </label>
   );

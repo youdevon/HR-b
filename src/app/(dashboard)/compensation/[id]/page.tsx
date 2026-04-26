@@ -9,8 +9,7 @@ export default async function CompensationDetailPage({ params }: CompensationDet
   await params;
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Compensation"
           description="This module is temporarily disabled in the active application."
@@ -24,7 +23,7 @@ export default async function CompensationDetailPage({ params }: CompensationDet
             </Link>
           </div>
         </section>
-      </div>
+    
     </main>
   );
 }

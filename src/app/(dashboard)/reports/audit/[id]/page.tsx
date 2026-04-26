@@ -103,7 +103,7 @@ export default async function Page({ params }: PageProps) {
       <PageHeader
         title="Audit Detail"
         description="Detailed view of one audit event."
-        backHref="/reports/audit"
+        backHref="/reports"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link

@@ -69,9 +69,7 @@ export default function AppShell({ children, navItems, currentYear, topbarUser }
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <TopbarClient user={topbarUser} onOpenMobileNav={() => setMobileOpen(true)} />
-          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-            <div className="mx-auto w-full min-w-0 max-w-7xl p-4 sm:p-6">{children}</div>
-          </main>
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</main>
         </div>
       </div>
     </div>

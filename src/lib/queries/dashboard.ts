@@ -18,6 +18,8 @@ export type DashboardMetrics = {
   filesInTransitCount: number;
   activeAlertsCount: number;
   criticalAlertsCount: number;
+  pendingGratuityCalculationsCount: number;
+  approvedUnpaidGratuityCount: number;
 };
 
 export type DashboardMetricsScope = {
@@ -26,6 +28,7 @@ export type DashboardMetricsScope = {
   leave?: boolean;
   files?: boolean;
   alerts?: boolean;
+  gratuity?: boolean;
 };
 
 function todayDateString(): string {
@@ -257,6 +260,35 @@ async function countCriticalAlerts(): Promise<number> {
   return count ?? 0;
 }
 
+async function countPendingGratuityCalculations(): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("gratuity_calculations")
+    .select("id", { head: true, count: "exact" })
+    .in("calculation_status", ["calculated", "under_review"]);
+
+  if (error) {
+    throw new Error(`Failed to count pending gratuity calculations: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
+async function countApprovedUnpaidGratuity(): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("gratuity_calculations")
+    .select("id", { head: true, count: "exact" })
+    .in("calculation_status", ["approved", "overridden"])
+    .not("approved_amount", "is", null);
+
+  if (error) {
+    throw new Error(`Failed to count approved unpaid gratuity: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
 export async function getDashboardMetrics(scope: DashboardMetricsScope = {}): Promise<DashboardMetrics> {
   const {
     workforce = true,
@@ -264,6 +296,7 @@ export async function getDashboardMetrics(scope: DashboardMetricsScope = {}): Pr
     leave = true,
     files = true,
     alerts = true,
+    gratuity = true,
   } = scope;
 
   const [
@@ -283,6 +316,8 @@ export async function getDashboardMetrics(scope: DashboardMetricsScope = {}): Pr
     filesInTransitCount,
     activeAlertsCount,
     criticalAlertsCount,
+    pendingGratuityCalculationsCount,
+    approvedUnpaidGratuityCount,
   ] = await Promise.all([
     workforce ? countEmployeesByStatus("active") : Promise.resolve(0),
     workforce ? countAllEmployees() : Promise.resolve(0),
@@ -300,6 +335,8 @@ export async function getDashboardMetrics(scope: DashboardMetricsScope = {}): Pr
     files ? countFilesInTransit() : Promise.resolve(0),
     alerts ? countActiveAlerts() : Promise.resolve(0),
     alerts ? countCriticalAlerts() : Promise.resolve(0),
+    gratuity ? countPendingGratuityCalculations() : Promise.resolve(0),
+    gratuity ? countApprovedUnpaidGratuity() : Promise.resolve(0),
   ]);
 
   return {
@@ -319,5 +356,7 @@ export async function getDashboardMetrics(scope: DashboardMetricsScope = {}): Pr
     filesInTransitCount,
     activeAlertsCount,
     criticalAlertsCount,
+    pendingGratuityCalculationsCount,
+    approvedUnpaidGratuityCount,
   };
 }

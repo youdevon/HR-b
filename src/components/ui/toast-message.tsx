@@ -11,7 +11,7 @@ type ToastMessageProps = {
 export default function ToastMessage({
   message,
   autoHideMs = 4500,
-  className = "border-green-200 bg-green-50 text-green-700",
+  className = "border-emerald-200 bg-emerald-50 text-emerald-800",
 }: ToastMessageProps) {
   const [visible, setVisible] = useState(true);
 
@@ -25,7 +25,7 @@ export default function ToastMessage({
   if (!visible) return null;
 
   return (
-    <div className={`rounded-2xl border p-4 text-sm shadow-sm ${className}`} role="status">
+    <div className={`rounded-xl border p-4 text-sm shadow-sm ${className}`} role="status">
       {message}
     </div>
   );

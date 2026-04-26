@@ -18,8 +18,7 @@ export default async function FileMovementsPage({ searchParams }: FileMovementsP
     : await listFileMovements({ query });
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="File Movements"
           description={
@@ -88,7 +87,7 @@ export default async function FileMovementsPage({ searchParams }: FileMovementsP
             </div>
           ) : null}
         </section>
-      </div>
+    
     </main>
   );
 }

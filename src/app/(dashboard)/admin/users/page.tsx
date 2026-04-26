@@ -7,6 +7,19 @@ import {
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
 import { requirePermission } from "@/lib/auth/guards";
+import ClickableTableRow from "@/components/ui/clickable-table-row";
+import EmptyStateCard from "@/components/ui/empty-state-card";
+import {
+  dashboardAlertErrorClass,
+  dashboardAlertSuccessClass,
+  dashboardButtonPrimaryClass,
+  dashboardPanelClass,
+  dashboardTableBodyRowClass,
+  dashboardTableCellClass,
+  dashboardTableHeadCellClass,
+  dashboardTableHeadRowClass,
+} from "@/lib/ui/dashboard-styles";
+import { cn } from "@/lib/utils/cn";
 
 type AdminUsersPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -30,6 +43,14 @@ function displayFullName(user: AdminUserRecord): string {
   return fullName || "—";
 }
 
+function accountStatusBadgeClass(status: string | null): string {
+  const normalized = (status ?? "").trim().toLowerCase();
+  if (normalized === "active") return "bg-emerald-100 text-emerald-800";
+  if (normalized === "pending") return "bg-amber-100 text-amber-800";
+  if (normalized === "disabled" || normalized === "locked") return "bg-neutral-100 text-neutral-700";
+  return "bg-neutral-100 text-neutral-700";
+}
+
 export default async function AdminUsersPage({ searchParams }: AdminUsersPageProps) {
   const sp = await searchParams;
   await requirePermission("admin.users.view");
@@ -43,8 +64,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
   ]);
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Users"
           description="Manage system user accounts and access."
@@ -52,7 +72,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
           actions={
             <Link
               href="/admin/users/new"
-              className="inline-flex w-fit rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+              className={dashboardButtonPrimaryClass}
             >
               New User
             </Link>
@@ -60,49 +80,42 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
         />
 
         {deleted === "1" ? (
-          <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+          <section className={dashboardAlertSuccessClass}>
             User account deleted successfully.
           </section>
         ) : null}
         {deactivated === "1" ? (
-          <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+          <section className={dashboardAlertSuccessClass}>
             User account deactivated successfully.
           </section>
         ) : null}
 
         {message ? (
-          <section
-            className={`rounded-2xl border p-4 text-sm ${
-              status === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border-red-200 bg-red-50 text-red-700"
-            }`}
-          >
+          <section className={status === "success" ? dashboardAlertSuccessClass : dashboardAlertErrorClass}>
             {message}
           </section>
         ) : null}
 
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 overflow-x-auto">
+        <section className={cn(dashboardPanelClass, "overflow-x-auto")}>
           <h2 className="mb-4 text-lg font-semibold text-neutral-900">Users</h2>
-          <table className="min-w-full text-sm">
-            <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-600">
-              <tr>
-                <th className="p-2 text-left">Full name</th>
-                <th className="p-2 text-left">Email</th>
-                <th className="p-2 text-left">Role</th>
-                <th className="p-2 text-left">Account Status</th>
-                <th className="p-2 text-left">Edit</th>
+          <table className="min-w-full">
+            <thead>
+              <tr className={dashboardTableHeadRowClass}>
+                <th className={dashboardTableHeadCellClass}>Full name</th>
+                <th className={dashboardTableHeadCellClass}>Email</th>
+                <th className={dashboardTableHeadCellClass}>Role</th>
+                <th className={dashboardTableHeadCellClass}>Account Status</th>
               </tr>
             </thead>
             <tbody>
               {users.length ? (
                 users.map((user: AdminUserRecord) => (
-                  <tr key={user.id} className="border-t border-neutral-100">
-                    <td className="p-2 font-medium text-neutral-900">
+                  <ClickableTableRow key={user.id} href={`/admin/users/${user.id}/edit`}>
+                    <td className={cn(dashboardTableCellClass, "font-medium text-neutral-900")}>
                       {displayFullName(user)}
                     </td>
-                    <td className="p-2 text-neutral-700">{user.email ?? "—"}</td>
-                    <td className="p-2">
+                    <td className={dashboardTableCellClass}>{user.email ?? "—"}</td>
+                    <td className={dashboardTableCellClass}>
                       {user.role_name || user.role_code ? (
                         <span className="font-medium text-neutral-900">
                           {user.role_name ?? user.role_code}
@@ -111,25 +124,17 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
                         <span className="text-neutral-400">Unassigned</span>
                       )}
                     </td>
-                    <td className="p-2">
-                      <span className="inline-flex rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
+                    <td className={dashboardTableCellClass}>
+                      <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-medium", accountStatusBadgeClass(user.account_status))}>
                         {user.account_status ?? "Unknown"}
                       </span>
                     </td>
-                    <td className="p-2">
-                      <Link
-                        href={`/admin/users/${user.id}/edit`}
-                        className="text-sm font-medium text-neutral-900 underline-offset-2 hover:underline"
-                      >
-                        Edit
-                      </Link>
-                    </td>
-                  </tr>
+                  </ClickableTableRow>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-sm text-neutral-500">
-                    No users found in <code>public.user_profiles</code>.
+                  <td colSpan={4} className="p-8 text-center text-sm text-neutral-500">
+                    No records found for the selected criteria.
                   </td>
                 </tr>
               )}
@@ -137,40 +142,40 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
           </table>
         </section>
 
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 overflow-x-auto">
+        <section className={cn(dashboardPanelClass, "overflow-x-auto")}>
           <h2 className="mb-4 text-lg font-semibold text-neutral-900">Login Activity</h2>
-          <table className="min-w-full text-sm">
-            <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-600">
-              <tr>
-                <th className="p-2 text-left">User ID</th>
-                <th className="p-2 text-left">Email</th>
-                <th className="p-2 text-left">Activity</th>
-                <th className="p-2 text-left">IP Address</th>
-                <th className="p-2 text-left">Created At</th>
+          <table className="min-w-full">
+            <thead>
+              <tr className={dashboardTableHeadRowClass}>
+                <th className={dashboardTableHeadCellClass}>User ID</th>
+                <th className={dashboardTableHeadCellClass}>Email</th>
+                <th className={dashboardTableHeadCellClass}>Activity</th>
+                <th className={dashboardTableHeadCellClass}>IP Address</th>
+                <th className={dashboardTableHeadCellClass}>Created At</th>
               </tr>
             </thead>
             <tbody>
               {loginActivity.length ? (
                 loginActivity.map((entry: LoginActivityRecord) => (
-                  <tr key={entry.id} className="border-t border-neutral-100">
-                    <td className="p-2 font-mono text-xs text-neutral-800">{entry.user_id ?? "—"}</td>
-                    <td className="p-2 text-neutral-700">{entry.user_email ?? "—"}</td>
-                    <td className="p-2">{entry.activity_type ?? "login"}</td>
-                    <td className="p-2 font-mono text-xs text-neutral-700">{entry.ip_address ?? "—"}</td>
-                    <td className="p-2">{formatDate(entry.created_at)}</td>
+                  <tr key={entry.id} className={dashboardTableBodyRowClass}>
+                    <td className={cn(dashboardTableCellClass, "font-mono text-xs text-neutral-800")}>{entry.user_id ?? "—"}</td>
+                    <td className={dashboardTableCellClass}>{entry.user_email ?? "—"}</td>
+                    <td className={dashboardTableCellClass}>{entry.activity_type ?? "login"}</td>
+                    <td className={cn(dashboardTableCellClass, "font-mono text-xs text-neutral-700")}>{entry.ip_address ?? "—"}</td>
+                    <td className={dashboardTableCellClass}>{formatDate(entry.created_at)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
                   <td colSpan={5} className="p-6 text-center text-sm text-neutral-500">
-                    Login activity placeholder: no rows available yet.
+                    No records found for the selected criteria.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </section>
-      </div>
+    
     </main>
   );
 }

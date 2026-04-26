@@ -55,8 +55,7 @@ export default async function NewRecordPage({ searchParams }: NewRecordPageProps
   }
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="New HR Record"
           description={
@@ -70,7 +69,7 @@ export default async function NewRecordPage({ searchParams }: NewRecordPageProps
         <form action={createRecordAction} className="space-y-6">
           <RecordForm employeeId={employeeId} submitLabel="Create Record" />
         </form>
-      </div>
+    
     </main>
   );
 }

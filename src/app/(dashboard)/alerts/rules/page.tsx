@@ -23,7 +23,7 @@ export default async function AlertRulesPage() {
       <PageHeader
         title="Alert Rules"
         description="Review automation rules used by system notification generation."
-        backHref="/alerts/active"
+        backHref="/settings"
         actions={
           <Link
             href="/admin/alert-rules"

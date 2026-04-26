@@ -22,8 +22,7 @@ export default async function RecordDetailPage({ params }: RecordDetailPageProps
   }
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-4xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title={show(record.record_title)}
           description={`${show(record.record_type)} • ${show(record.record_category)}`}
@@ -44,7 +43,7 @@ export default async function RecordDetailPage({ params }: RecordDetailPageProps
             <TextBlock label="Notes" value={record.notes} />
           </div>
         </section>
-      </div>
+    
     </main>
   );
 }

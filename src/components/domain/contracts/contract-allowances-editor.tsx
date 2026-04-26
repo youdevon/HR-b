@@ -1,6 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FormLabel } from "@/components/ui/form-primitives";
+import {
+  formCheckboxClass,
+  formInputClass,
+  formSecondaryButtonClass,
+  formSelectClass,
+} from "@/lib/ui/form-styles";
+import { cn } from "@/lib/utils/cn";
 
 export type ContractAllowanceDraft = {
   allowance_name: string;
@@ -87,11 +95,7 @@ export default function ContractAllowancesEditor({
             enter a custom allowance.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setRows((prev) => [...prev, createEmptyDraft()])}
-          className="h-10 rounded-xl border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-900"
-        >
+        <button type="button" onClick={() => setRows((prev) => [...prev, createEmptyDraft()])} className={formSecondaryButtonClass}>
           Add Allowance
         </button>
       </div>
@@ -107,8 +111,8 @@ export default function ContractAllowancesEditor({
           {rows.map((row, index) => (
             <article key={`allowance-${index}`} className="rounded-xl border border-neutral-200 bg-neutral-50 p-3">
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-                <label className="space-y-1">
-                  <span className="text-xs font-medium text-neutral-600">Allowance Name</span>
+                <label className="space-y-1.5">
+                  <FormLabel>Allowance Name</FormLabel>
                   <select
                     value={PRESET_ALLOWANCE_NAMES.includes(row.allowance_name as never) ? row.allowance_name : "Custom Allowance"}
                     onChange={(event) => {
@@ -119,7 +123,7 @@ export default function ContractAllowancesEditor({
                       }
                       updateRow(index, { allowance_name: selected, allowance_type: normalizeType(selected) });
                     }}
-                    className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                    className={formSelectClass}
                   >
                     {PRESET_ALLOWANCE_NAMES.map((option) => (
                       <option key={option} value={option}>
@@ -129,8 +133,8 @@ export default function ContractAllowancesEditor({
                   </select>
                 </label>
 
-                <label className="space-y-1">
-                  <span className="text-xs font-medium text-neutral-600">Custom Name (optional)</span>
+                <label className="space-y-1.5">
+                  <FormLabel>Custom Name (optional)</FormLabel>
                   <input
                     value={row.allowance_name}
                     onChange={(event) =>
@@ -140,12 +144,12 @@ export default function ContractAllowancesEditor({
                       })
                     }
                     placeholder="Custom allowance name"
-                    className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                    className={formInputClass}
                   />
                 </label>
 
-                <label className="space-y-1">
-                  <span className="text-xs font-medium text-neutral-600">Amount</span>
+                <label className="space-y-1.5">
+                  <FormLabel>Amount</FormLabel>
                   <input
                     type="number"
                     min="0"
@@ -153,12 +157,12 @@ export default function ContractAllowancesEditor({
                     value={row.allowance_amount}
                     onChange={(event) => updateRow(index, { allowance_amount: event.target.value })}
                     disabled={!canEditAmounts}
-                    className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm disabled:bg-neutral-100"
+                    className={formInputClass}
                   />
                 </label>
 
-                <label className="space-y-1">
-                  <span className="text-xs font-medium text-neutral-600">Frequency</span>
+                <label className="space-y-1.5">
+                  <FormLabel>Frequency</FormLabel>
                   <select
                     value={row.allowance_frequency}
                     onChange={(event) =>
@@ -166,7 +170,7 @@ export default function ContractAllowancesEditor({
                         allowance_frequency: event.target.value as ContractAllowanceDraft["allowance_frequency"],
                       })
                     }
-                    className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                    className={formSelectClass}
                   >
                     {FREQUENCY_OPTIONS.map((option) => (
                       <option key={option} value={option}>
@@ -181,18 +185,18 @@ export default function ContractAllowancesEditor({
                     type="checkbox"
                     checked={row.is_taxable}
                     onChange={(event) => updateRow(index, { is_taxable: event.target.checked })}
-                    className="mr-2 h-4 w-4 rounded border-neutral-300"
+                    className={cn(formCheckboxClass, "mr-2")}
                   />
                   Taxable
                 </label>
 
-                <label className="space-y-1 xl:col-span-2">
-                  <span className="text-xs font-medium text-neutral-600">Notes</span>
+                <label className="space-y-1.5 xl:col-span-2">
+                  <FormLabel>Notes</FormLabel>
                   <input
                     value={row.notes}
                     onChange={(event) => updateRow(index, { notes: event.target.value })}
                     placeholder="Optional notes"
-                    className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                    className={formInputClass}
                   />
                 </label>
               </div>
@@ -201,7 +205,7 @@ export default function ContractAllowancesEditor({
                 <button
                   type="button"
                   onClick={() => setRows((prev) => prev.filter((_, idx) => idx !== index))}
-                  className="h-9 rounded-xl border border-neutral-300 bg-white px-3 text-xs font-medium text-neutral-800"
+                  className={cn(formSecondaryButtonClass, "h-9 text-xs")}
                 >
                   Remove row
                 </button>

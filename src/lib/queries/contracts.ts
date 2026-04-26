@@ -71,7 +71,9 @@ export type ExpiredContractAlertRecord = ContractRecord & {
 
 export type ContractSearchParams = {
   query?: string;
-  status?: "all" | "active";
+  status?: "all" | "active" | "expiring" | "expired";
+  days?: number;
+  employeeId?: string;
 };
 
 export function normalizeExpiringContractDays(days?: number): 30 | 60 | 90 {
@@ -598,12 +600,26 @@ export async function listContracts(
 ): Promise<ContractRecord[]> {
   const supabase = await createClient();
   const queryText = params?.query?.trim();
-  const statusFilter = params?.status === "active" ? "active" : "all";
+  const requestedStatus = (params?.status ?? "all").trim().toLowerCase();
+  const statusFilter: "all" | "active" | "expiring" | "expired" =
+    requestedStatus === "active" ||
+    requestedStatus === "expiring" ||
+    requestedStatus === "expired"
+      ? requestedStatus
+      : "all";
+  const normalizedDays = normalizeExpiringContractDays(params?.days);
+  const employeeId = params?.employeeId?.trim() ?? "";
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("contracts")
     .select(CONTRACT_LIST_SELECT)
     .order("created_at", { ascending: false });
+
+  if (employeeId) {
+    query = query.eq("employee_id", employeeId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("listContracts error:", JSON.stringify(error, null, 2));
@@ -613,10 +629,26 @@ export async function listContracts(
   const contracts = await enrichContractsWithEmployeeNames(
     (data ?? []) as ContractDatabaseRow[]
   );
-  const scopedContracts =
-    statusFilter === "active"
-      ? contracts.filter((contract) => contract.effective_contract_status === "active")
-      : contracts;
+  const todayText = todayDateString();
+  const expiringLimit = plusDaysDateString(normalizedDays);
+  const scopedContracts = contracts.filter((contract) => {
+    if (statusFilter === "active") {
+      return contract.effective_contract_status === "active";
+    }
+    if (statusFilter === "expired") {
+      return contract.effective_contract_status === "expired";
+    }
+    if (statusFilter === "expiring") {
+      const endDate = (contract.end_date ?? "").trim();
+      return (
+        contract.effective_contract_status === "active" &&
+        Boolean(endDate) &&
+        endDate >= todayText &&
+        endDate <= expiringLimit
+      );
+    }
+    return true;
+  });
 
   if (!queryText) {
     return scopedContracts;

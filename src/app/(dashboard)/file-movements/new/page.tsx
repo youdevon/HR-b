@@ -2,9 +2,18 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
+import { FormActions, FormLabel } from "@/components/ui/form-primitives";
 import { assertPermission, requireDashboardAuth, requirePermission } from "@/lib/auth/guards";
 import { getEmployeeById } from "@/lib/queries/employees";
 import { createFileMovement, type FileMovementAction } from "@/lib/queries/file-movements";
+import {
+  formHelperClass,
+  formInputClass,
+  formPrimaryButtonClass,
+  formReadOnlyInputClass,
+  formSelectClass,
+  formTextareaClass,
+} from "@/lib/ui/form-styles";
 
 type NewFileMovementPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -68,8 +77,7 @@ export default async function NewFileMovementPage({
   }
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Move Physical File"
           description={
@@ -85,69 +93,80 @@ export default async function NewFileMovementPage({
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Employee ID</span>
+                <FormLabel>Employee ID</FormLabel>
+                <input value={employeeId} readOnly placeholder="Optional" className={formReadOnlyInputClass} />
+                <p className={formHelperClass}>Prefilled from the link you used; not editable here.</p>
+              </label>
+              <label className="space-y-1.5">
+                <FormLabel>File Number</FormLabel>
+                <input name="file_number" defaultValue={employee?.file_number ?? ""} placeholder="File number" className={formInputClass} />
+              </label>
+              <label className="space-y-1.5">
+                <FormLabel>Movement Type</FormLabel>
+                <select name="movement_type" defaultValue="check_out" className={formSelectClass}>
+                  <option value="check_out">Check Out</option>
+                  <option value="transfer">Transfer</option>
+                  <option value="return">Return</option>
+                  <option value="archive">Archive</option>
+                  <option value="mark_missing">Mark Missing</option>
+                </select>
+              </label>
+              <label className="space-y-1.5">
+                <FormLabel>From Department</FormLabel>
+                <input name="from_department" placeholder="From department" className={formInputClass} />
+              </label>
+              <label className="space-y-1.5">
+                <FormLabel>To Department</FormLabel>
+                <input name="to_department" placeholder="To department" className={formInputClass} />
+              </label>
+              <label className="space-y-1.5">
+                <FormLabel>From Location</FormLabel>
                 <input
-                  value={employeeId}
-                  readOnly
-                  placeholder="Optional"
-                  className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700 placeholder:text-neutral-400"
+                  name="from_location"
+                  defaultValue={employee?.file_location ?? ""}
+                  placeholder="From location"
+                  className={formInputClass}
                 />
               </label>
-              <input name="file_number" defaultValue={employee?.file_number ?? ""} placeholder="File Number" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              <select
-                name="movement_type"
-                defaultValue="check_out"
-                className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-              >
-                <option value="check_out">Check Out</option>
-                <option value="transfer">Transfer</option>
-                <option value="return">Return</option>
-                <option value="archive">Archive</option>
-                <option value="mark_missing">Mark Missing</option>
-              </select>
-              <input name="from_department" placeholder="From Department" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              <input name="to_department" placeholder="To Department" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              <input name="from_location" defaultValue={employee?.file_location ?? ""} placeholder="From Location" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              <input name="to_location" placeholder="To Location" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              <input name="from_custodian" placeholder="From Custodian" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              <input name="to_custodian" placeholder="To Custodian / Holder" className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              <input
-                name="date_sent"
-                type="date"
-                className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-              />
-              <input
-                name="date_received"
-                type="date"
-                className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-              />
+              <label className="space-y-1.5">
+                <FormLabel>To Location</FormLabel>
+                <input name="to_location" placeholder="To location" className={formInputClass} />
+              </label>
+              <label className="space-y-1.5">
+                <FormLabel>From Custodian</FormLabel>
+                <input name="from_custodian" placeholder="From custodian" className={formInputClass} />
+              </label>
+              <label className="space-y-1.5">
+                <FormLabel>To Custodian / Holder</FormLabel>
+                <input name="to_custodian" placeholder="To custodian or holder" className={formInputClass} />
+              </label>
+              <label className="space-y-1.5">
+                <FormLabel>Date Sent</FormLabel>
+                <input name="date_sent" type="date" className={formInputClass} />
+              </label>
+              <label className="space-y-1.5">
+                <FormLabel>Date Received</FormLabel>
+                <input name="date_received" type="date" className={formInputClass} />
+              </label>
             </div>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <textarea
-                name="movement_reason"
-                required
-                rows={3}
-                placeholder="Movement Reason"
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-              />
-              <textarea
-                name="remarks"
-                rows={3}
-                placeholder="Remarks"
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-              />
+              <label className="space-y-1.5">
+                <FormLabel required>Movement Reason</FormLabel>
+                <textarea name="movement_reason" required placeholder="Why is this file moving?" className={formTextareaClass} />
+              </label>
+              <label className="space-y-1.5">
+                <FormLabel>Remarks</FormLabel>
+                <textarea name="remarks" placeholder="Optional remarks" className={formTextareaClass} />
+              </label>
             </div>
           </section>
-          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200">
-            <button
-              type="submit"
-              className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-            >
+          <FormActions>
+            <button type="submit" className={formPrimaryButtonClass}>
               Create Movement
             </button>
-          </div>
+          </FormActions>
         </form>
-      </div>
+    
     </main>
   );
 }

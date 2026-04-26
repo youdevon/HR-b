@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
+import { FormActions, FormLabel } from "@/components/ui/form-primitives";
 import ToastMessage from "@/components/ui/toast-message";
 import EmployeeContractSelector from "@/components/domain/contracts/employee-contract-selector";
 import ContractAllowancesEditor, {
@@ -11,6 +12,16 @@ import { assertPermission, getDashboardSession, requirePermission } from "@/lib/
 import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import { getEmployeeById, listEmployeeLookupOptions } from "@/lib/queries/employees";
 import { createContractRecord, type ContractAllowanceInput } from "@/lib/queries/contracts";
+import {
+  formCheckboxClass,
+  formCheckboxRowClass,
+  formErrorAlertClass,
+  formInputClass,
+  formPrimaryButtonClass,
+  formSelectClass,
+  formSuccessAlertClass,
+} from "@/lib/ui/form-styles";
+import { cn } from "@/lib/utils/cn";
 
 type NewContractPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -220,8 +231,7 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
   }
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="New Contract"
           description={
@@ -237,15 +247,7 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
         ) : null}
 
         {message ? (
-          <section
-            className={`rounded-2xl border p-4 text-sm ${
-              status === "error"
-                ? "border-red-200 bg-red-50 text-red-700"
-                : "border-emerald-200 bg-emerald-50 text-emerald-800"
-            }`}
-          >
-            {message}
-          </section>
+          <section className={status === "error" ? formErrorAlertClass : formSuccessAlertClass}>{message}</section>
         ) : null}
 
         <form action={createContractAction} className="space-y-6">
@@ -261,17 +263,12 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
             </p>
             <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Contract Number</span>
-                <input name="contract_number" required className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+                <FormLabel required>Contract Number</FormLabel>
+                <input name="contract_number" required className={formInputClass} />
               </label>
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Contract Type</span>
-                <select
-                  name="contract_type"
-                  required
-                  defaultValue="fixed_term"
-                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                >
+                <FormLabel required>Contract Type</FormLabel>
+                <select name="contract_type" required defaultValue="fixed_term" className={formSelectClass}>
                   {CONTRACT_TYPE_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -280,13 +277,8 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
                 </select>
               </label>
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Contract Status</span>
-                <select
-                  name="contract_status"
-                  required
-                  defaultValue="active"
-                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                >
+                <FormLabel required>Contract Status</FormLabel>
+                <select name="contract_status" required defaultValue="active" className={formSelectClass}>
                   {CONTRACT_STATUS_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -295,33 +287,33 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
                 </select>
               </label>
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Start Date</span>
-                <input name="start_date" type="date" required className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+                <FormLabel required>Start Date</FormLabel>
+                <input name="start_date" type="date" required className={formInputClass} />
               </label>
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">End Date</span>
-                <input name="end_date" type="date" required className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+                <FormLabel required>End Date</FormLabel>
+                <input name="end_date" type="date" required className={formInputClass} />
               </label>
               {canViewSalary ? (
                 <>
                   <label className="space-y-1.5">
-                    <span className="text-sm font-medium text-neutral-700">Monthly Salary</span>
+                    <FormLabel>Monthly Salary</FormLabel>
                     <input
                       name="salary_amount"
                       type="number"
                       min="0"
                       step="0.01"
                       disabled={!canEditSalary}
-                      className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm disabled:bg-neutral-100"
+                      className={formInputClass}
                     />
                   </label>
                   <label className="space-y-1.5">
-                    <span className="text-sm font-medium text-neutral-700">Salary Frequency</span>
+                    <FormLabel>Salary Frequency</FormLabel>
                     <select
                       name="salary_frequency"
                       defaultValue="monthly"
                       disabled={!canEditSalary}
-                      className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm disabled:bg-neutral-100"
+                      className={formSelectClass}
                     >
                       {SALARY_FREQUENCY_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -333,12 +325,12 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
                 </>
               ) : null}
             </div>
-            <label className="mt-4 flex items-start gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+            <label className={cn("mt-4", formCheckboxRowClass)}>
               <input
                 type="checkbox"
                 name="is_gratuity_eligible"
                 disabled={!canSetGratuity}
-                className="mt-1 h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-300"
+                className={formCheckboxClass}
               />
               <span>
                 <span className="block text-sm font-medium text-neutral-900">Eligible for Gratuity</span>
@@ -357,25 +349,25 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
             </p>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Vacation Leave Days</span>
+                <FormLabel>Vacation Leave Days</FormLabel>
                 <input
                   name="vacation_leave_days"
                   type="number"
                   min="0"
                   step="0.01"
                   defaultValue="0"
-                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  className={formInputClass}
                 />
               </label>
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Sick Leave Days</span>
+                <FormLabel>Sick Leave Days</FormLabel>
                 <input
                   name="sick_leave_days"
                   type="number"
                   min="0"
                   step="0.01"
                   defaultValue="0"
-                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  className={formInputClass}
                 />
               </label>
             </div>
@@ -393,13 +385,13 @@ export default async function NewContractPage({ searchParams }: NewContractPageP
             </section>
           )}
 
-          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200">
-            <button type="submit" className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
+          <FormActions>
+            <button type="submit" className={formPrimaryButtonClass}>
               Create Contract
             </button>
-          </div>
+          </FormActions>
         </form>
-      </div>
+    
     </main>
   );
 }

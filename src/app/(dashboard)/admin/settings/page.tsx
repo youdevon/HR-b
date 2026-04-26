@@ -8,9 +8,8 @@ const settings = [
 
 export default function AdminSettingsPage() {
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <PageHeader title="Settings" backHref="/admin" />
+    <main className="space-y-6">
+        <PageHeader title="Settings" backHref="/settings" />
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {settings.map((s) => (
             <article key={s.id} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200">
@@ -19,7 +18,7 @@ export default function AdminSettingsPage() {
             </article>
           ))}
         </section>
-      </div>
+    
     </main>
   );
 }

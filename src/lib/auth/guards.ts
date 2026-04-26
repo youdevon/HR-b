@@ -9,6 +9,7 @@ import {
   type CurrentUserProfile,
 } from "@/lib/auth/permissions";
 import { getUser } from "@/lib/auth/session";
+import { RECORD_KEEPING_UI_ENABLED } from "@/lib/features/record-keeping-ui";
 export {
   requireAnyPermission,
   hasAnyPermissionForContext,
@@ -115,7 +116,9 @@ export function getFirstAccessibleModuleHref(
     { key: "settings", href: "/settings" },
   ];
 
-  for (const candidate of candidates) {
+  const ordered = RECORD_KEEPING_UI_ENABLED ? candidates : candidates.filter((c) => c.key !== "records");
+
+  for (const candidate of ordered) {
     if (canViewNavItem(profile, permissions, candidate.key)) return candidate.href;
   }
   return null;

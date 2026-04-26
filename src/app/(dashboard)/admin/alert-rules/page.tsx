@@ -8,7 +8,16 @@ import {
 } from "@/lib/queries/alert-rules";
 import { revalidatePath } from "next/cache";
 import PageHeader from "@/components/layout/page-header";
+import { FormActions, FormLabel } from "@/components/ui/form-primitives";
 import { requireAnyPermission } from "@/lib/auth/guards";
+import {
+  formCheckboxClass,
+  formCheckboxRowClass,
+  formInputClass,
+  formPrimaryButtonClass,
+  formSelectClass,
+} from "@/lib/ui/form-styles";
+import { cn } from "@/lib/utils/cn";
 
 function display(value: string | number | boolean | null): string {
   if (typeof value === "boolean") return value ? "Yes" : "No";
@@ -118,34 +127,39 @@ function RuleForm({ rule }: { rule: AlertRuleRecord }) {
     <form action={updateRuleAction} className="mt-5 space-y-4">
       <input type="hidden" name="id" value={rule.id} />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <label className="flex min-h-[66px] items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700">
-          <input name="is_active" type="checkbox" defaultChecked={rule.is_active !== false} />
-          Active
+        <label className={formCheckboxRowClass}>
+          <input name="is_active" type="checkbox" defaultChecked={rule.is_active !== false} className={formCheckboxClass} />
+          <span className="text-sm font-medium text-neutral-700">Active</span>
         </label>
         <Field label="Threshold days" name="threshold_days" type="number" defaultValue={rule.threshold_days} />
         <Field label="Threshold value" name="threshold_value" type="number" step="0.01" defaultValue={rule.threshold_value} />
-        <label className="text-xs font-medium text-neutral-600">
-          Severity
-          <select name="severity_level" defaultValue={rule.severity_level ?? "warning"} className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm">
+        <label className="space-y-1.5">
+          <FormLabel>Severity</FormLabel>
+          <select name="severity_level" defaultValue={rule.severity_level ?? "warning"} className={formSelectClass}>
             {ALERT_RULE_SEVERITIES.map((severity) => <option key={severity} value={severity}>{severity}</option>)}
           </select>
         </label>
         <Field label="Repeat interval" name="repeat_interval_days" type="number" defaultValue={rule.repeat_interval_days} />
         <Field label="Alert time" name="alert_time" type="time" defaultValue={(rule.alert_time ?? "").slice(0, 5)} />
-        <label className="text-xs font-medium text-neutral-600 sm:col-span-2 lg:col-span-3">
-          Applies to status
-          <input name="applies_to_status" defaultValue={rule.applies_to_status ?? ""} placeholder="active, pending, missing" className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm" />
+        <label className="space-y-1.5 sm:col-span-2 lg:col-span-3">
+          <FormLabel>Applies to status</FormLabel>
+          <input
+            name="applies_to_status"
+            defaultValue={rule.applies_to_status ?? ""}
+            placeholder="active, pending, missing"
+            className={formInputClass}
+          />
         </label>
       </div>
-      <div className="flex justify-end">
+      <FormActions>
         <button
           type="submit"
           disabled={!rule.is_persisted}
-          className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300"
+          className={cn(formPrimaryButtonClass, "disabled:bg-neutral-300 disabled:text-neutral-700")}
         >
           Save Rule
         </button>
-      </div>
+      </FormActions>
     </form>
   );
 }
@@ -164,15 +178,15 @@ function Field({
   defaultValue: string | number | null;
 }) {
   return (
-    <label className="text-xs font-medium text-neutral-600">
-      {label}
+    <label className="space-y-1.5">
+      <FormLabel>{label}</FormLabel>
       <input
         name={name}
         type={type}
         min={type === "number" ? "0" : undefined}
         step={step}
         defaultValue={defaultValue ?? ""}
-        className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+        className={formInputClass}
       />
     </label>
   );

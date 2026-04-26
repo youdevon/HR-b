@@ -6,8 +6,7 @@ export default async function GratuityPaymentsPage() {
   const rows = await listGratuityPayments();
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Gratuity payments"
           description="Payment records linked to gratuity calculations."
@@ -67,7 +66,7 @@ export default async function GratuityPaymentsPage() {
             <div className="px-4 py-10 text-center text-sm text-neutral-600">No gratuity payments recorded yet.</div>
           ) : null}
         </section>
-      </div>
+    
     </main>
   );
 }

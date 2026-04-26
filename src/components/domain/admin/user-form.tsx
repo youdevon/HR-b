@@ -1,3 +1,11 @@
+import { FormActions, FormLabel } from "@/components/ui/form-primitives";
+import {
+  formHelperClass,
+  formInputClass,
+  formPrimaryButtonClass,
+  formSelectClass,
+} from "@/lib/ui/form-styles";
+import { cn } from "@/lib/utils/cn";
 import type { AdminRoleRecord, AdminUserRecord } from "@/lib/queries/admin";
 
 type UserFormProps = {
@@ -33,14 +41,14 @@ export default function UserForm({
           />
           <Field label="Phone Number" name="phone_number" defaultValue={user?.phone_number} />
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-neutral-700">Role</span>
+          <label className="space-y-1.5">
+            <FormLabel required>Role</FormLabel>
             <select
               name="role_id"
               defaultValue={user?.role_id ?? ""}
               required
               disabled={roles.length === 0}
-              className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
+              className={cn(formSelectClass, roles.length === 0 && "cursor-not-allowed")}
             >
               <option value="">{roles.length ? "Select role" : "No roles available"}</option>
               {roles.map((role) => (
@@ -51,13 +59,9 @@ export default function UserForm({
             </select>
           </label>
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-neutral-700">Account Status</span>
-            <select
-              name="account_status"
-              defaultValue={user?.account_status ?? "Active"}
-              className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
-            >
+          <label className="space-y-1.5">
+            <FormLabel>Account Status</FormLabel>
+            <select name="account_status" defaultValue={user?.account_status ?? "Active"} className={formSelectClass}>
               {accountStatuses.map((status) => (
                 <option key={status} value={status}>
                   {status}
@@ -68,26 +72,14 @@ export default function UserForm({
 
           {mode === "create" ? (
             <>
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-neutral-700">Password</span>
-                <input
-                  name="password"
-                  type="password"
-                  required
-                  minLength={8}
-                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
-                />
-                <p className="text-xs text-neutral-500">Password must be at least 8 characters.</p>
+              <label className="space-y-1.5">
+                <FormLabel required>Password</FormLabel>
+                <input name="password" type="password" required minLength={8} className={formInputClass} />
+                <p className={formHelperClass}>Password must be at least 8 characters.</p>
               </label>
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-neutral-700">Confirm Password</span>
-                <input
-                  name="confirm_password"
-                  type="password"
-                  required
-                  minLength={8}
-                  className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
-                />
+              <label className="space-y-1.5">
+                <FormLabel required>Confirm Password</FormLabel>
+                <input name="confirm_password" type="password" required minLength={8} className={formInputClass} />
               </label>
             </>
           ) : null}
@@ -101,37 +93,24 @@ export default function UserForm({
             Leave blank if you do not want to change this user&apos;s password.
           </p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-neutral-700">New Password</span>
-              <input
-                name="new_password"
-                type="password"
-                minLength={8}
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
-              />
-              <p className="text-xs text-neutral-500">Password must be at least 8 characters.</p>
+            <label className="space-y-1.5">
+              <FormLabel>New Password</FormLabel>
+              <input name="new_password" type="password" minLength={8} className={formInputClass} />
+              <p className={formHelperClass}>Leave blank to keep the current password. Otherwise use at least 8 characters.</p>
             </label>
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-neutral-700">Confirm New Password</span>
-              <input
-                name="confirm_new_password"
-                type="password"
-                minLength={8}
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
-              />
+            <label className="space-y-1.5">
+              <FormLabel>Confirm New Password</FormLabel>
+              <input name="confirm_new_password" type="password" minLength={8} className={formInputClass} />
             </label>
           </div>
         </section>
       ) : null}
 
-      <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200">
-        <button
-          type="submit"
-          className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-        >
+      <FormActions>
+        <button type="submit" className={formPrimaryButtonClass}>
           {submitLabel}
         </button>
-      </div>
+      </FormActions>
     </form>
   );
 }
@@ -150,15 +129,9 @@ function Field({
   required?: boolean;
 }) {
   return (
-    <label className="space-y-2">
-      <span className="text-sm font-medium text-neutral-700">{label}</span>
-      <input
-        name={name}
-        type={type}
-        required={required}
-        defaultValue={defaultValue ?? ""}
-        className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
-      />
+    <label className="space-y-1.5">
+      <FormLabel required={required}>{label}</FormLabel>
+      <input name={name} type={type} required={required} defaultValue={defaultValue ?? ""} className={formInputClass} />
     </label>
   );
 }

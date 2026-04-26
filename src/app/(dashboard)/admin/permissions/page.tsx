@@ -1,24 +1,27 @@
 import PageHeader from "@/components/layout/page-header";
 import { requireAnyPermission } from "@/lib/auth/guards";
+import { RECORD_KEEPING_UI_ENABLED } from "@/lib/features/record-keeping-ui";
 import { listPermissions, type AdminPermissionRecord } from "@/lib/queries/admin";
 
-const ACTIVE_MODULES = new Set([
-  "dashboard",
-  "employees",
-  "contracts",
-  "leave",
-  "physical files",
-  "records",
-  "alerts",
-  "reports",
-  "audit",
-  "gratuity",
-  "admin users",
-  "admin roles",
-  "admin permissions",
-  "administration",
-  "settings",
-]);
+const ACTIVE_MODULES = new Set(
+  [
+    "dashboard",
+    "employees",
+    "contracts",
+    "leave",
+    "physical files",
+    "records",
+    "alerts",
+    "reports",
+    "audit",
+    "gratuity",
+    "admin users",
+    "admin roles",
+    "admin permissions",
+    "administration",
+    "settings",
+  ].filter((m) => RECORD_KEEPING_UI_ENABLED || m !== "records")
+);
 
 const INACTIVE_MODULES = new Set(["documents", "compensation"]);
 
@@ -48,8 +51,7 @@ export default async function AdminPermissionsPage() {
   const grouped = groupedPermissions(permissions);
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-6xl space-y-6">
+    <main className="space-y-6">
       <PageHeader
         title="Permissions"
         description="Review available system permissions."
@@ -122,7 +124,7 @@ export default async function AdminPermissionsPage() {
           </div>
         </section>
       ) : null}
-    </div>
+    
     </main>
   );
 }

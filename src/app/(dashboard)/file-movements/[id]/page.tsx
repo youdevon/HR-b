@@ -88,8 +88,7 @@ export default async function FileMovementDetailPage({
   }
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-6xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Physical File Movement"
           description={`${movement.employee_name ?? movement.employee_id ?? "Unlinked employee"} • File #${display(movement.file_number)} • Status ${display(movement.movement_status)}`}
@@ -167,7 +166,7 @@ export default async function FileMovementDetailPage({
             </button>
           </form>
         </section>
-      </div>
+    
     </main>
   );
 }

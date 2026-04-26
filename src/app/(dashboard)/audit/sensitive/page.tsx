@@ -7,9 +7,9 @@ const events = [
 
 export default function AuditSensitivePage() {
   return (
-    <main className="min-h-screen bg-neutral-100 p-6"><div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
       <PageHeader title="Sensitive Audit Actions" backHref="/audit/activity" />
       <AuditHistoryPanel title="Sensitive Events" events={events} />
-    </div></main>
+    </main>
   );
 }

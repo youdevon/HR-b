@@ -6,8 +6,7 @@ export default async function MissingFilesPage() {
   const rows = await listMissingFiles();
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Missing files"
           description="Movements with status missing."
@@ -50,7 +49,7 @@ export default async function MissingFilesPage() {
             <div className="px-4 py-10 text-center text-sm text-neutral-600">No missing file movements.</div>
           ) : null}
         </section>
-      </div>
+    
     </main>
   );
 }

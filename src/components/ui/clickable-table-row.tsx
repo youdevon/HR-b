@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import type { KeyboardEvent, ReactNode } from "react";
+import { dashboardTableBodyRowClass } from "@/lib/ui/dashboard-styles";
+import { cn } from "@/lib/utils/cn";
 
 type ClickableTableRowProps = {
   href: string;
@@ -29,7 +31,11 @@ export default function ClickableTableRow({
       tabIndex={0}
       onClick={() => router.push(href)}
       onKeyDown={handleKeyDown}
-      className={`border-b border-neutral-100 transition hover:bg-neutral-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300 ${className ?? ""}`}
+      className={cn(
+        dashboardTableBodyRowClass,
+        "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300",
+        className,
+      )}
     >
       {children}
     </tr>

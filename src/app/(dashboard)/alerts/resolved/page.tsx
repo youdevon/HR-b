@@ -20,8 +20,7 @@ export default async function ResolvedAlertsPage() {
   const alerts = await listResolvedAlerts();
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Resolved Alerts"
           description="Historical alerts resolved by HR or operations teams."
@@ -86,7 +85,7 @@ export default async function ResolvedAlertsPage() {
             </div>
           )}
         </section>
-      </div>
+    
     </main>
   );
 }

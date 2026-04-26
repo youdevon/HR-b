@@ -1,5 +1,6 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import { FormLabel } from "@/components/ui/form-primitives";
 import { requirePermission } from "@/lib/auth/guards";
 import {
   calculateGratuityPayment,
@@ -7,6 +8,7 @@ import {
   DEFAULT_GRATUITY_RATE_PERCENT,
   listGratuityRules,
 } from "@/lib/queries/gratuity";
+import { formHelperClass, formInputClass, formPrimaryButtonClass } from "@/lib/ui/form-styles";
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -92,7 +94,7 @@ export default async function GratuityRulesPage({
           </div>
           <form className="mt-4 grid gap-4 md:grid-cols-2">
             <label className="space-y-1.5">
-              <span className="text-sm font-medium text-neutral-700">Gratuity Rate (%)</span>
+              <FormLabel>Gratuity Rate (%)</FormLabel>
               <input
                 type="number"
                 name="gratuity_rate_percent"
@@ -100,14 +102,14 @@ export default async function GratuityRulesPage({
                 max="100"
                 step="0.01"
                 defaultValue={gratuityRatePercent}
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                className={formInputClass}
               />
-              <p className="text-xs text-neutral-500">
+              <p className={formHelperClass}>
                 Portion of total earned salary used for gratuity (shown as decimal {gratuityRateDecimal.toFixed(2)}).
               </p>
             </label>
             <label className="space-y-1.5">
-              <span className="text-sm font-medium text-neutral-700">Government Tax Deduction (%)</span>
+              <FormLabel>Government Tax Deduction (%)</FormLabel>
               <input
                 type="number"
                 name="government_tax_percent"
@@ -115,17 +117,14 @@ export default async function GratuityRulesPage({
                 max="100"
                 step="0.01"
                 defaultValue={governmentTaxPercent}
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                className={formInputClass}
               />
-              <p className="text-xs text-neutral-500">
+              <p className={formHelperClass}>
                 Tax deducted from gratuity before payout (decimal {governmentTaxDecimal.toFixed(2)}). Employee receives {payableAfterTaxPercent.toFixed(2)}% ({payableAfterTaxDecimal.toFixed(2)}).
               </p>
             </label>
-            <div className="md:col-span-2">
-              <button
-                type="submit"
-                className="inline-flex items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
-              >
+            <div className="mt-4 flex flex-wrap gap-3 md:col-span-2">
+              <button type="submit" className={formPrimaryButtonClass}>
                 Update Example
               </button>
             </div>

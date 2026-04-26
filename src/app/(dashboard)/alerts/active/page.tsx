@@ -11,6 +11,18 @@ import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import { generateAllSystemAlerts } from "@/lib/queries/notifications";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import {
+  dashboardButtonPrimaryClass,
+  dashboardButtonSecondaryClass,
+  dashboardEmptyCardClass,
+  dashboardFieldClass,
+  dashboardPanelMdClass,
+  dashboardTableBodyRowClass,
+  dashboardTableCellClass,
+  dashboardTableHeadCellClass,
+  dashboardTableHeadRowClass,
+} from "@/lib/ui/dashboard-styles";
+import { cn } from "@/lib/utils/cn";
 
 function formatDate(value: string | null): string {
   if (!value) return "—";
@@ -121,108 +133,93 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
   const moduleValue = filters.module_name ?? "";
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <PageHeader
-          title="Active Alerts"
-          description="Operational HR alert queue across active modules."
-          backHref="/dashboard"
-          actions={
-            canBulkManage ? (
-              <form action={refreshAllAlertsAction}>
-                <button
-                  type="submit"
-                  className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 transition hover:bg-neutral-50"
-                >
-                  Refresh All Alerts
-                </button>
-              </form>
-            ) : null
-          }
-        />
-
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200">
-          <h2 className="text-sm font-semibold text-neutral-900">Filters</h2>
-          <p className="mt-1 text-xs text-neutral-500">
-            Uses URL query params: <code className="rounded bg-neutral-100 px-1">severity_level</code>,{" "}
-            <code className="rounded bg-neutral-100 px-1">status</code>,{" "}
-            <code className="rounded bg-neutral-100 px-1">module_name</code>.
-          </p>
-          <form method="get" className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-            <label className="flex min-w-[140px] flex-1 flex-col gap-1 text-xs font-medium text-neutral-600">
-              Severity
-              <select
-                name="severity_level"
-                defaultValue={severityValue}
-                className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900"
-              >
-                <option value="">Any</option>
-                <option value="critical">critical</option>
-                <option value="warning">warning</option>
-                <option value="info">info</option>
-              </select>
-            </label>
-            <label className="flex min-w-[140px] flex-1 flex-col gap-1 text-xs font-medium text-neutral-600">
-              Status
-              <select
-                name="status"
-                defaultValue={statusValue}
-                className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900"
-              >
-                <option value="">Any</option>
-                <option value="active">active</option>
-                <option value="acknowledged">acknowledged</option>
-              </select>
-            </label>
-            <label className="flex min-w-[180px] flex-[2] flex-col gap-1 text-xs font-medium text-neutral-600">
-              Module name
-              <input
-                type="text"
-                name="module_name"
-                defaultValue={moduleValue}
-                placeholder="e.g. Contracts"
-                className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400"
-              />
-            </label>
-            <div className="flex gap-2">
+    <main className="space-y-6">
+      <PageHeader
+        title="Active Alerts"
+        description="Operational HR alert queue across active modules."
+        backHref="/dashboard"
+        actions={
+          canBulkManage ? (
+            <form action={refreshAllAlertsAction}>
               <button
                 type="submit"
-                className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
-              >
-                Apply
-              </button>
-              <Link
-                href="/alerts/active"
                 className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 transition hover:bg-neutral-50"
               >
-                Clear
-              </Link>
-            </div>
-          </form>
-        </section>
+                Refresh All Alerts
+              </button>
+            </form>
+          ) : null
+        }
+      />
 
-        <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
-          {alerts.length ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-neutral-200 text-sm">
-                <thead className="bg-neutral-50">
-                  <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
-                    <th className="px-4 py-3">Alert</th>
-                    <th className="px-4 py-3">Module</th>
-                    <th className="px-4 py-3">Category</th>
-                    <th className="px-4 py-3">Severity</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Triggered</th>
-                    <th className="px-4 py-3">Employee</th>
-                    <th className="px-4 py-3">File #</th>
-                    <th className="px-4 py-3">Actions</th>
-                    <th className="px-4 py-3">Open</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
-                  {alerts.map((alert) => (
-                    <tr key={alert.id} className="hover:bg-neutral-50">
-                      <td className="max-w-[360px] px-4 py-3">
+      <section className={dashboardPanelMdClass}>
+        <h2 className="text-sm font-semibold text-neutral-900">Filters</h2>
+        <p className="mt-1 text-xs text-neutral-500">
+          Uses URL query params: <code className="rounded bg-neutral-100 px-1">severity_level</code>,{" "}
+          <code className="rounded bg-neutral-100 px-1">status</code>,{" "}
+          <code className="rounded bg-neutral-100 px-1">module_name</code>.
+        </p>
+        <form method="get" className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <label className="flex min-w-[140px] flex-1 flex-col gap-1.5 text-sm font-medium text-neutral-700">
+            Severity
+            <select name="severity_level" defaultValue={severityValue} className={dashboardFieldClass}>
+              <option value="">Any</option>
+              <option value="critical">critical</option>
+              <option value="warning">warning</option>
+              <option value="info">info</option>
+            </select>
+          </label>
+          <label className="flex min-w-[140px] flex-1 flex-col gap-1.5 text-sm font-medium text-neutral-700">
+            Status
+            <select name="status" defaultValue={statusValue} className={dashboardFieldClass}>
+              <option value="">Any</option>
+              <option value="active">active</option>
+              <option value="acknowledged">acknowledged</option>
+            </select>
+          </label>
+          <label className="flex min-w-[180px] flex-[2] flex-col gap-1.5 text-sm font-medium text-neutral-700">
+            Module name
+            <input
+              type="text"
+              name="module_name"
+              defaultValue={moduleValue}
+              placeholder="e.g. Contracts"
+              className={dashboardFieldClass}
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className={dashboardButtonPrimaryClass}>
+              Apply
+            </button>
+            <Link href="/alerts/active" className={dashboardButtonSecondaryClass}>
+              Clear
+            </Link>
+          </div>
+        </form>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+        {alerts.length ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-neutral-200 text-sm">
+              <thead>
+                <tr className={dashboardTableHeadRowClass}>
+                  <th className={dashboardTableHeadCellClass}>Alert</th>
+                  <th className={dashboardTableHeadCellClass}>Module</th>
+                  <th className={dashboardTableHeadCellClass}>Category</th>
+                  <th className={dashboardTableHeadCellClass}>Severity</th>
+                  <th className={dashboardTableHeadCellClass}>Status</th>
+                  <th className={dashboardTableHeadCellClass}>Triggered</th>
+                  <th className={dashboardTableHeadCellClass}>Employee</th>
+                  <th className={dashboardTableHeadCellClass}>File #</th>
+                  <th className={dashboardTableHeadCellClass}>Actions</th>
+                  <th className={dashboardTableHeadCellClass}>Open</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
+                {alerts.map((alert) => (
+                  <tr key={alert.id} className={dashboardTableBodyRowClass}>
+                    <td className={cn("max-w-[360px]", dashboardTableCellClass)}>
                         <Link href={`/alerts/${alert.id}`} className="font-medium text-neutral-900 hover:underline">
                           {alert.alert_title ?? "Untitled alert"}
                         </Link>
@@ -230,24 +227,24 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
                           {alert.alert_message ?? "—"}
                         </p>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3">{alert.module_name ?? "—"}</td>
-                      <td className="whitespace-nowrap px-4 py-3 capitalize">{alert.alert_category}</td>
-                      <td className="whitespace-nowrap px-4 py-3">
+                      <td className={cn("whitespace-nowrap", dashboardTableCellClass)}>{alert.module_name ?? "—"}</td>
+                      <td className={cn("whitespace-nowrap capitalize", dashboardTableCellClass)}>{alert.alert_category}</td>
+                      <td className={cn("whitespace-nowrap", dashboardTableCellClass)}>
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${severityBadgeClass(alert.severity_level)}`}>
                           {alert.severity_level ?? "info"}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3">
+                      <td className={cn("whitespace-nowrap", dashboardTableCellClass)}>
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusBadgeClass(alert.status)}`}>
                           {alert.status ?? "—"}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3">{formatDate(alert.triggered_at)}</td>
-                      <td className="whitespace-nowrap px-4 py-3">
+                      <td className={cn("whitespace-nowrap", dashboardTableCellClass)}>{formatDate(alert.triggered_at)}</td>
+                      <td className={cn("whitespace-nowrap", dashboardTableCellClass)}>
                         {alert.employee_name ?? "Not linked to employee"}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3">{alert.employee_file_number ?? "—"}</td>
-                      <td className="whitespace-nowrap px-4 py-3">
+                      <td className={cn("whitespace-nowrap", dashboardTableCellClass)}>{alert.employee_file_number ?? "—"}</td>
+                      <td className={cn("whitespace-nowrap", dashboardTableCellClass)}>
                         <div className="flex gap-2">
                           {canAcknowledge ? (
                           <form action={acknowledgeAction}>
@@ -275,7 +272,7 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
                           ) : null}
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3">
+                      <td className={cn("whitespace-nowrap", dashboardTableCellClass)}>
                         {alert.related_record_href ? (
                           <Link
                             href={alert.related_record_href}
@@ -298,14 +295,13 @@ export default async function ActiveAlertsPage({ searchParams }: ActiveAlertsPag
               </table>
             </div>
           ) : (
-            <div className="px-6 py-12 text-center text-sm text-neutral-600">
+            <div className={dashboardEmptyCardClass}>
               {hasActiveFilters
-                ? "No alerts match these filters."
-                : "No active alerts in the queue."}
+                ? "No records found for the selected criteria."
+                : "Use search or select a filter to view records."}
             </div>
           )}
-        </section>
-      </div>
+      </section>
     </main>
   );
 }

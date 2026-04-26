@@ -1,6 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FormActions, FormFieldError, FormLabel, FormSuccessAlert } from "@/components/ui/form-primitives";
+import {
+  formCheckboxClass,
+  formCheckboxRowClass,
+  formInputClass,
+  formSelectClass,
+  formTextareaClass,
+  formPrimaryButtonClass,
+} from "@/lib/ui/form-styles";
 import { leaveSchema, leaveTypes, type LeaveInput } from "@/lib/validators/leave";
 
 type LeaveFormProps = {
@@ -43,17 +52,17 @@ function InputField({
   placeholder?: string;
 }) {
   return (
-    <label className="space-y-2">
-      <span className="text-sm font-medium text-neutral-700">{label}</span>
+    <label className="space-y-1.5">
+      <FormLabel>{label}</FormLabel>
       <input
         name={name}
         type={type}
         value={value ?? ""}
         onChange={(event) => onChange(name, event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+        className={formInputClass}
       />
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      {error ? <FormFieldError>{error}</FormFieldError> : null}
     </label>
   );
 }
@@ -103,12 +112,12 @@ export default function LeaveForm({ initialValues, submitLabel = "Save Leave Rec
         <p className="mt-1 text-sm text-neutral-600">Employee, leave type, and transaction details.</p>
         <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <InputField label="Employee ID" name="employee_id" value={values.employee_id} onChange={handleChange} error={errors.employee_id} placeholder="emp_001" />
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-neutral-700">Leave Type</span>
+          <label className="space-y-1.5">
+            <FormLabel>Leave Type</FormLabel>
             <select
               value={values.leave_type}
               onChange={(event) => handleChange("leave_type", event.target.value)}
-              className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              className={formSelectClass}
             >
               {leaveTypes.map((item) => (
                 <option key={item} value={item}>
@@ -116,7 +125,7 @@ export default function LeaveForm({ initialValues, submitLabel = "Save Leave Rec
                 </option>
               ))}
             </select>
-            {errors.leave_type ? <p className="text-xs text-red-600">{errors.leave_type}</p> : null}
+            {errors.leave_type ? <FormFieldError>{errors.leave_type}</FormFieldError> : null}
           </label>
           <InputField label="Transaction Type" name="transaction_type" value={values.transaction_type} onChange={handleChange} error={errors.transaction_type} placeholder="debit / credit / adjustment" />
           <InputField label="Status" name="status" value={values.status} onChange={handleChange} error={errors.status} placeholder="Pending / Approved" />
@@ -138,25 +147,23 @@ export default function LeaveForm({ initialValues, submitLabel = "Save Leave Rec
         <h2 className="text-lg font-semibold text-neutral-900">Reason & Notes</h2>
         <p className="mt-1 text-sm text-neutral-600">Document reason, context, and supporting notes.</p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-neutral-700">Reason</span>
+          <label className="space-y-1.5">
+            <FormLabel>Reason</FormLabel>
             <textarea
-              rows={4}
               value={values.reason ?? ""}
               onChange={(event) => handleChange("reason", event.target.value)}
-              className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              className={formTextareaClass}
             />
-            {errors.reason ? <p className="text-xs text-red-600">{errors.reason}</p> : null}
+            {errors.reason ? <FormFieldError>{errors.reason}</FormFieldError> : null}
           </label>
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-neutral-700">Notes</span>
+          <label className="space-y-1.5">
+            <FormLabel>Notes</FormLabel>
             <textarea
-              rows={4}
               value={values.notes ?? ""}
               onChange={(event) => handleChange("notes", event.target.value)}
-              className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              className={formTextareaClass}
             />
-            {errors.notes ? <p className="text-xs text-red-600">{errors.notes}</p> : null}
+            {errors.notes ? <FormFieldError>{errors.notes}</FormFieldError> : null}
           </label>
         </div>
       </section>
@@ -165,45 +172,38 @@ export default function LeaveForm({ initialValues, submitLabel = "Save Leave Rec
         <h2 className="text-lg font-semibold text-neutral-900">Medical Certificate</h2>
         <p className="mt-1 text-sm text-neutral-600">Track whether a certificate is needed and received.</p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <label className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
+          <label className={formCheckboxRowClass}>
             <input
               type="checkbox"
               checked={values.medical_certificate_required}
               onChange={(event) => handleChange("medical_certificate_required", event.target.checked)}
-              className="h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-400"
+              className={formCheckboxClass}
             />
             <span className="text-sm font-medium text-neutral-700">Medical certificate required</span>
           </label>
-          <label className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
+          <label className={formCheckboxRowClass}>
             <input
               type="checkbox"
               checked={values.medical_certificate_received}
               onChange={(event) => handleChange("medical_certificate_received", event.target.checked)}
-              className="h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-400"
+              className={formCheckboxClass}
             />
             <span className="text-sm font-medium text-neutral-700">Medical certificate received</span>
           </label>
           {errors.medical_certificate_received ? (
-            <p className="text-xs text-red-600">{errors.medical_certificate_received}</p>
+            <FormFieldError>{errors.medical_certificate_received}</FormFieldError>
           ) : null}
         </div>
       </section>
 
-      <div className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200">
-        <p className="text-sm text-neutral-600">Required fields are validated before submission.</p>
-        <button
-          type="submit"
-          className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
-        >
+      <p className="text-sm text-neutral-600">Required fields are validated before submission.</p>
+      <FormActions>
+        <button type="submit" className={formPrimaryButtonClass}>
           {submitLabel}
         </button>
-      </div>
+      </FormActions>
 
-      {successMessage ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {successMessage}
-        </div>
-      ) : null}
+      {successMessage ? <FormSuccessAlert>{successMessage}</FormSuccessAlert> : null}
     </form>
   );
 }

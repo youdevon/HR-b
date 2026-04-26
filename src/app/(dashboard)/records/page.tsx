@@ -1,8 +1,19 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import EmptyStateCard from "@/components/ui/empty-state-card";
 import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
 import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import { listRecords, listRecordsByEmployeeId } from "@/lib/queries/records";
+import {
+  dashboardButtonPrimaryClass,
+  dashboardFieldClass,
+  dashboardPanelClass,
+  dashboardTableBodyRowClass,
+  dashboardTableCellClass,
+  dashboardTableHeadCellClass,
+  dashboardTableHeadRowClass,
+} from "@/lib/ui/dashboard-styles";
+import { cn } from "@/lib/utils/cn";
 
 type RecordsPageProps = {
   searchParams: Promise<{ q?: string; employeeId?: string }>;
@@ -25,87 +36,86 @@ export default async function RecordsPage({ searchParams }: RecordsPageProps) {
     : await listRecords({ query });
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <PageHeader
-          title="Record Keeping"
-          description={
-            employeeId
-              ? `General HR records across employee files, compliance, and operational notes. Filtered by employee: ${employeeId}`
-              : "General HR records across employee files, compliance, and operational notes."
-          }
-          backHref="/dashboard"
-          actions={
-            <>
+    <main className="space-y-6">
+      <PageHeader
+        title="Record Keeping"
+        description={
+          employeeId
+            ? `General HR records across employee files, compliance, and operational notes. Filtered by employee: ${employeeId}`
+            : "General HR records across employee files, compliance, and operational notes."
+        }
+        backHref="/dashboard"
+        actions={
+          <>
             {!employeeId ? (
-              <form className="w-full sm:w-80" method="get">
+              <form className="w-full sm:max-w-md" method="get">
                 <input
                   name="q"
                   defaultValue={query}
                   placeholder="Search title, type, category, reference..."
-                  className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                  className={dashboardFieldClass}
                 />
               </form>
             ) : null}
             {canCreateRecord ? (
               <Link
                 href={employeeId ? `/records/new?employeeId=${employeeId}` : "/records/new"}
-                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+                className={cn(dashboardButtonPrimaryClass, "w-full sm:w-auto")}
               >
                 New Record
               </Link>
             ) : null}
-            </>
-          }
-        />
+          </>
+        }
+      />
 
-        <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
+      {records.length === 0 ? (
+        <EmptyStateCard>
+          {query ? "No records match your search." : "No records found yet."}
+        </EmptyStateCard>
+      ) : (
+        <section className={cn(dashboardPanelClass, "overflow-hidden p-0")}>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-neutral-200">
-              <thead className="bg-neutral-50">
-                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
-                  <th className="px-4 py-3">Title</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Category</th>
-                  <th className="px-4 py-3">Employee</th>
-                  <th className="px-4 py-3">Record Date</th>
-                  <th className="px-4 py-3">Reference #</th>
-                  <th className="px-4 py-3">Status</th>
+            <table className="min-w-full divide-y divide-neutral-200 text-sm">
+              <thead>
+                <tr className={dashboardTableHeadRowClass}>
+                  <th className={dashboardTableHeadCellClass}>Title</th>
+                  <th className={dashboardTableHeadCellClass}>Type</th>
+                  <th className={dashboardTableHeadCellClass}>Category</th>
+                  <th className={dashboardTableHeadCellClass}>Employee</th>
+                  <th className={dashboardTableHeadCellClass}>Record Date</th>
+                  <th className={dashboardTableHeadCellClass}>Reference #</th>
+                  <th className={dashboardTableHeadCellClass}>Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100 bg-white text-sm text-neutral-700">
+              <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
                 {records.map((row) => (
-                  <tr key={row.id} className="transition hover:bg-neutral-50">
+                  <tr key={row.id} className={dashboardTableBodyRowClass}>
                     <td
-                      className="max-w-[260px] truncate px-4 py-3 font-medium text-neutral-900"
+                      className={cn("max-w-[260px] truncate font-medium text-neutral-900", dashboardTableCellClass)}
                       title={row.record_title ?? undefined}
                     >
                       <Link href={`/records/${row.id}`} className="hover:underline">
                         {row.record_title ?? "-"}
                       </Link>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3">{row.record_type ?? "-"}</td>
-                    <td className="whitespace-nowrap px-4 py-3">
+                    <td className={`whitespace-nowrap ${dashboardTableCellClass}`}>{row.record_type ?? "-"}</td>
+                    <td className={`whitespace-nowrap ${dashboardTableCellClass}`}>
                       {row.record_category ?? "-"}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3">{row.employee_id ?? "-"}</td>
-                    <td className="whitespace-nowrap px-4 py-3">{row.record_date ?? "-"}</td>
-                    <td className="whitespace-nowrap px-4 py-3">
+                    <td className={`whitespace-nowrap ${dashboardTableCellClass}`}>{row.employee_id ?? "-"}</td>
+                    <td className={`whitespace-nowrap ${dashboardTableCellClass}`}>{row.record_date ?? "-"}</td>
+                    <td className={`whitespace-nowrap ${dashboardTableCellClass}`}>
                       {row.reference_number ?? "-"}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3">{row.status ?? "-"}</td>
+                    <td className={`whitespace-nowrap ${dashboardTableCellClass}`}>{row.status ?? "-"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {!records.length ? (
-            <div className="px-4 py-10 text-center text-sm text-neutral-600">
-              {query ? "No records match your search." : "No records found yet."}
-            </div>
-          ) : null}
         </section>
-      </div>
+      )}
     </main>
   );
 }

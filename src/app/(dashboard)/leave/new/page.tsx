@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
+import { FormActions, FormLabel } from "@/components/ui/form-primitives";
 import { assertPermission, requirePermission } from "@/lib/auth/guards";
 import { getEmployeeById } from "@/lib/queries/employees";
 import {
@@ -9,6 +10,17 @@ import {
   formatLeaveType,
   LEAVE_TYPES,
 } from "@/lib/queries/leave";
+import {
+  formCheckboxClass,
+  formCheckboxRowClass,
+  formErrorAlertClass,
+  formInputClass,
+  formPrimaryButtonClass,
+  formReadOnlyInputClass,
+  formSelectClass,
+  formSuccessAlertClass,
+  formTextareaClass,
+} from "@/lib/ui/form-styles";
 
 type NewLeavePageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -88,8 +100,7 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
   }
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Apply Leave"
           description={
@@ -117,12 +128,12 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Employee ID</span>
-                <input value={employeeId} readOnly placeholder="Optional" className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700 placeholder:text-neutral-400" />
+                <FormLabel>Employee ID</FormLabel>
+                <input value={employeeId} readOnly placeholder="Optional" className={formReadOnlyInputClass} />
               </label>
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Leave Type</span>
-                <select name="leave_type" defaultValue="vacation_leave" className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm">
+                <FormLabel>Leave Type</FormLabel>
+                <select name="leave_type" defaultValue="vacation_leave" className={formSelectClass}>
                   {LEAVE_TYPES.map((leaveType) => (
                     <option key={leaveType} value={leaveType}>
                       {formatLeaveType(leaveType)}
@@ -131,44 +142,50 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
                 </select>
               </label>
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Total Days</span>
-                <input name="total_days" type="number" step="0.5" className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+                <FormLabel>Total Days</FormLabel>
+                <input name="total_days" type="number" step="0.5" className={formInputClass} />
               </label>
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Start Date</span>
-                <input name="start_date" type="date" className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+                <FormLabel>Start Date</FormLabel>
+                <input name="start_date" type="date" className={formInputClass} />
               </label>
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">End Date</span>
-                <input name="end_date" type="date" className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+                <FormLabel>End Date</FormLabel>
+                <input name="end_date" type="date" className={formInputClass} />
               </label>
               <label className="space-y-1.5">
-                <span className="text-sm font-medium text-neutral-700">Return to Work Date</span>
-                <input name="return_to_work_date" type="date" className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
+                <FormLabel>Return to Work Date</FormLabel>
+                <input name="return_to_work_date" type="date" className={formInputClass} />
               </label>
             </div>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <textarea name="reason" placeholder="Reason" rows={3} className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-              <textarea name="notes" placeholder="Notes" rows={3} className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-            </div>
-            <div className="mt-4 flex flex-wrap gap-4">
-              <label className="inline-flex items-center gap-2 text-sm text-neutral-700">
-                <input type="checkbox" name="medical_certificate_required" />
-                Medical certificate required
+              <label className="space-y-1.5">
+                <FormLabel>Reason</FormLabel>
+                <textarea name="reason" placeholder="Reason for leave" className={formTextareaClass} />
               </label>
-              <label className="inline-flex items-center gap-2 text-sm text-neutral-700">
-                <input type="checkbox" name="medical_certificate_received" />
-                Medical certificate received
+              <label className="space-y-1.5">
+                <FormLabel>Notes</FormLabel>
+                <textarea name="notes" placeholder="Optional notes" className={formTextareaClass} />
+              </label>
+            </div>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <label className={formCheckboxRowClass}>
+                <input type="checkbox" name="medical_certificate_required" className={formCheckboxClass} />
+                <span className="text-sm font-medium text-neutral-700">Medical certificate required</span>
+              </label>
+              <label className={formCheckboxRowClass}>
+                <input type="checkbox" name="medical_certificate_received" className={formCheckboxClass} />
+                <span className="text-sm font-medium text-neutral-700">Medical certificate received</span>
               </label>
             </div>
           </section>
-          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200">
-            <button type="submit" className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
+          <FormActions>
+            <button type="submit" className={formPrimaryButtonClass}>
               Apply Leave
             </button>
-          </div>
+          </FormActions>
         </form>
-      </div>
+    
     </main>
   );
 }

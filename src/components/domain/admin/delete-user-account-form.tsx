@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { formCheckboxClass, formDangerButtonClass } from "@/lib/ui/form-styles";
+import { cn } from "@/lib/utils/cn";
 
 type Props = {
   action: (formData: FormData) => void | Promise<void>;
@@ -17,9 +19,9 @@ export default function DeleteUserAccountForm({
   confirmFieldName = "confirm_delete",
   confirmLabel = "I understand this will remove the user's login access.",
   buttonLabel = "Delete User Account",
-  buttonClassName = "rounded-xl border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-60",
-  checkboxClassName = "mt-0.5 h-4 w-4 rounded border-red-300 text-red-700",
-  labelClassName = "flex items-start gap-2 text-sm text-red-800",
+  buttonClassName = formDangerButtonClass,
+  checkboxClassName = cn(formCheckboxClass, "mt-0.5 border-red-400 text-red-700"),
+  labelClassName = "flex items-start gap-2 text-sm font-medium text-red-800",
 }: Props) {
   const [confirmed, setConfirmed] = useState(false);
 

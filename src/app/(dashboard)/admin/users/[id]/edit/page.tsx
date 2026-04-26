@@ -15,6 +15,7 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { assertPermission, requirePermission } from "@/lib/auth/guards";
 import { getCurrentUserId } from "@/lib/auth/session";
+import { dashboardAlertErrorClass, dashboardAlertSuccessClass } from "@/lib/ui/dashboard-styles";
 
 type EditAdminUserPageProps = {
   params: Promise<{ id: string }>;
@@ -155,8 +156,7 @@ export default async function EditAdminUserPage({
   }
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-4xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Edit User"
           description="Update profile fields stored in public.user_profiles."
@@ -164,13 +164,7 @@ export default async function EditAdminUserPage({
         />
 
         {message ? (
-          <section
-            className={`rounded-2xl border p-4 text-sm ${
-              status === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border-red-200 bg-red-50 text-red-700"
-            }`}
-          >
+          <section className={status === "success" ? dashboardAlertSuccessClass : dashboardAlertErrorClass}>
             {message}
           </section>
         ) : null}
@@ -212,7 +206,7 @@ export default async function EditAdminUserPage({
             </div>
           )}
         </section>
-      </div>
+    
     </main>
   );
 }

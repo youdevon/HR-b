@@ -63,8 +63,7 @@ export default async function AlertDetailPage({
   }
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title={alert.alert_title ?? "Alert Details"}
           description={`Alert ID: ${id}`}
@@ -176,7 +175,7 @@ export default async function AlertDetailPage({
             </form>
           </div>
         </section>
-      </div>
+    
     </main>
   );
 }

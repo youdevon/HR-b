@@ -8,6 +8,7 @@ import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
 import { listPriorityAlerts } from "@/lib/queries/alerts";
 import { getDashboardMetrics } from "@/lib/queries/dashboard";
 import { generateAllSystemAlerts } from "@/lib/queries/notifications";
+import { dashboardAlertErrorClass, dashboardEmptyCardClass, dashboardPanelClass } from "@/lib/ui/dashboard-styles";
 
 type MetricTone = "critical" | "warning" | "normal" | "success";
 
@@ -69,26 +70,26 @@ function dashboardSections(metrics: Awaited<ReturnType<typeof getDashboardMetric
           label: "Contracts Expiring in 90 Days",
           value: metrics.contractsExpiringIn90DaysCount,
           hint: "Contracts ending within 90 days",
-          href: "/contracts/expiring?days=90",
+          href: "/contracts?status=expiring&days=90",
           tone: metrics.contractsExpiringIn90DaysCount > 0 ? "warning" : "normal",
         },
         {
           label: "Expired Contracts",
           value: metrics.expiredContractsCount,
           hint: "Contracts already past end date",
-          href: "/contracts/expired",
+          href: "/contracts?status=expired",
           tone: metrics.expiredContractsCount > 0 ? "critical" : "normal",
         },
       ],
     },
     {
-      title: "Workforce Overview",
+      title: "Employees",
       description: "Current workforce size and active employee population.",
       cards: [
         {
           label: "Total Employees",
           value: metrics.totalEmployeesCount,
-          hint: "All employee records in the system",
+          hint: "All employees in the system",
           href: "/employees",
           tone: "normal",
         },
@@ -155,6 +156,26 @@ function dashboardSections(metrics: Awaited<ReturnType<typeof getDashboardMetric
         },
       ],
     },
+    {
+      title: "Gratuity",
+      description: "Calculation review and payout readiness.",
+      cards: [
+        {
+          label: "Pending Review",
+          value: metrics.pendingGratuityCalculationsCount,
+          hint: "Calculations awaiting review",
+          href: "/gratuity/pending-review",
+          tone: metrics.pendingGratuityCalculationsCount > 0 ? "warning" : "normal",
+        },
+        {
+          label: "Approved Unpaid",
+          value: metrics.approvedUnpaidGratuityCount,
+          hint: "Approved gratuity awaiting payout",
+          href: "/gratuity/approved-unpaid",
+          tone: metrics.approvedUnpaidGratuityCount > 0 ? "critical" : "normal",
+        },
+      ],
+    },
   ];
 }
 
@@ -164,6 +185,7 @@ type DashboardCardVisibility = {
   leave: boolean;
   files: boolean;
   alerts: boolean;
+  gratuity: boolean;
 };
 
 function filterSectionsByPermissions(
@@ -172,11 +194,12 @@ function filterSectionsByPermissions(
 ): DashboardSection[] {
   return sections
     .map((section) => {
-      if (section.title === "Workforce Overview" && !visibility.workforce) return null;
+      if (section.title === "Employees" && !visibility.workforce) return null;
       if (section.title === "Contracts" && !visibility.contracts) return null;
       if (section.title === "Leave" && !visibility.leave) return null;
       if (section.title === "Physical Files" && !visibility.files) return null;
       if (section.title === "Alerts & Action Items" && !visibility.alerts) return null;
+      if (section.title === "Gratuity" && !visibility.gratuity) return null;
       return section;
     })
     .filter((section): section is DashboardSection => Boolean(section));
@@ -186,7 +209,7 @@ function DashboardCard({ card }: { card: MetricCard }) {
   return (
     <Link
       href={card.href}
-      className={`group rounded-2xl border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300 ${toneClasses[card.tone]}`}
+      className={`group flex min-h-36 flex-col justify-between rounded-2xl border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300 ${toneClasses[card.tone]}`}
     >
       <div className="flex items-start justify-between gap-4">
         <p className="text-sm font-medium text-neutral-600">{card.label}</p>
@@ -202,12 +225,12 @@ function DashboardCard({ card }: { card: MetricCard }) {
 
 function MetricSection({ section }: { section: DashboardSection }) {
   return (
-    <section className="space-y-4">
+    <section className="space-y-3">
       <div>
         <h2 className="text-lg font-semibold text-neutral-900">{section.title}</h2>
         <p className="mt-1 text-sm text-neutral-600">{section.description}</p>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {section.cards.map((card) => (
           <DashboardCard key={`${section.title}-${card.label}`} card={card} />
         ))}
@@ -228,6 +251,7 @@ export default async function DashboardPage() {
     leave: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.leave]),
     files: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.files]),
     alerts: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.alerts]),
+    gratuity: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.gratuity]),
   };
 
   const hasAnyCards = Object.values(visibility).some(Boolean);
@@ -257,69 +281,68 @@ export default async function DashboardPage() {
 
   return (
     <main className="space-y-6">
-      <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
-        <PageHeader
-          title="Dashboard"
-          description="Monitor employee coverage, contract exposure, leave pressure, files, and priority alerts from one dashboard."
-        />
-      </section>
+      <PageHeader
+        title="Dashboard"
+        description="Monitor employee coverage, contract exposure, leave pressure, files, and priority alerts from one dashboard."
+      />
 
       {metricsError ? (
-        <section className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <section className={dashboardAlertErrorClass} role="alert">
           Unable to load dashboard metrics. {metricsError}
         </section>
       ) : null}
 
       {!hasAnyCards ? (
-        <section className="rounded-2xl border border-neutral-200 bg-white p-8 text-center text-sm text-neutral-600">
+        <section className={dashboardEmptyCardClass}>
           You do not currently have dashboard card permissions assigned.
         </section>
       ) : (
         sections.map((section) => <MetricSection key={section.title} section={section} />)
       )}
 
-      <section className="space-y-4">
-        <div>
+      {visibility.alerts ? (
+        <section className="space-y-3">
           <h2 className="text-lg font-semibold text-neutral-900">Priority Alerts</h2>
-          <p className="mt-1 text-sm text-neutral-600">
-            Mirrors the active operational alerts queue.
-          </p>
-        </div>
-        <div className="grid gap-3">
-          {!visibility.alerts ? (
-            <div className="rounded-xl border border-neutral-200 bg-white p-4 text-sm text-neutral-600">
-              You do not have permission to view alert cards.
+          {priorityAlerts.length ? (
+            <div className="grid gap-3">
+              {priorityAlerts.map((alert) => (
+                <Link
+                  key={alert.id}
+                  href={`/alerts/${alert.id}`}
+                  className={dashboardPanelClass}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-neutral-900">
+                      {alert.alert_title ?? "Untitled alert"}
+                    </span>
+                    <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
+                      {alert.module_name ?? "General"}
+                    </span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      (alert.severity_level ?? "").toLowerCase() === "critical"
+                        ? "bg-red-100 text-red-700"
+                        : (alert.severity_level ?? "").toLowerCase() === "warning"
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-neutral-100 text-neutral-700"
+                    }`}>
+                      {alert.severity_level ?? "info"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-neutral-600">
+                    {alert.alert_message ?? "No details available."}
+                  </p>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    {alert.employee_name ? `Employee: ${alert.employee_name}` : "Employee: —"}
+                    {alert.employee_file_number ? ` • File #: ${alert.employee_file_number}` : ""}
+                  </p>
+                </Link>
+              ))}
             </div>
-          ) : priorityAlerts.length ? (
-            priorityAlerts.map((alert) => (
-              <Link
-                key={alert.id}
-                href={alert.related_record_href ?? `/alerts/${alert.id}`}
-                className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:bg-neutral-50"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold text-neutral-900">
-                    {alert.alert_title ?? "Untitled alert"}
-                  </span>
-                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
-                    {alert.module_name ?? "General"}
-                  </span>
-                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700 capitalize">
-                    {alert.severity_level ?? "info"}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-neutral-600">
-                  {alert.alert_message ?? "No details available."}
-                </p>
-              </Link>
-            ))
           ) : (
-            <div className="rounded-xl border border-neutral-200 bg-white p-4 text-sm text-neutral-600">
-              No active alerts right now.
-            </div>
+            <div className={dashboardEmptyCardClass}>No active alerts right now.</div>
           )}
-        </div>
-      </section>
+        </section>
+      ) : null}
     </main>
   );
 }

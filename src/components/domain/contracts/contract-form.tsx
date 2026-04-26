@@ -1,6 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FormActions, FormFieldError, FormLabel, FormSuccessAlert } from "@/components/ui/form-primitives";
+import {
+  formCheckboxClass,
+  formCheckboxRowClass,
+  formInputClass,
+  formTextareaClass,
+  formPrimaryButtonClass,
+} from "@/lib/ui/form-styles";
 import { contractSchema, type ContractInput } from "@/lib/validators/contract";
 
 type ContractFormProps = {
@@ -60,17 +68,17 @@ function InputField({
   placeholder?: string;
 }) {
   return (
-    <label className="space-y-2">
-      <span className="text-sm font-medium text-neutral-700">{label}</span>
+    <label className="space-y-1.5">
+      <FormLabel>{label}</FormLabel>
       <input
         name={name}
         type={type}
         value={value ?? ""}
         onChange={(event) => onChange(name, event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+        className={formInputClass}
       />
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      {error ? <FormFieldError>{error}</FormFieldError> : null}
     </label>
   );
 }
@@ -173,23 +181,22 @@ export default function ContractForm({
         <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <InputField label="Salary Amount" name="salary_amount" value={values.salary_amount} onChange={handleChange} error={errors.salary_amount} placeholder="12000.00" />
           <InputField label="Salary Frequency" name="salary_frequency" value={values.salary_frequency} onChange={handleChange} error={errors.salary_frequency} placeholder="Monthly" />
-          <label className="space-y-2 md:col-span-2 lg:col-span-3">
-            <span className="text-sm font-medium text-neutral-700">Allowances Summary</span>
+          <label className="space-y-1.5 md:col-span-2 lg:col-span-3">
+            <FormLabel>Allowances Summary</FormLabel>
             <textarea
               name="allowances_summary"
-              rows={3}
               value={values.allowances_summary ?? ""}
               onChange={(event) => handleChange("allowances_summary", event.target.value)}
-              className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              className={formTextareaClass}
             />
-            {errors.allowances_summary ? <p className="text-xs text-red-600">{errors.allowances_summary}</p> : null}
+            {errors.allowances_summary ? <FormFieldError>{errors.allowances_summary}</FormFieldError> : null}
           </label>
-          <label className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
+          <label className={formCheckboxRowClass}>
             <input
               type="checkbox"
               checked={values.is_gratuity_eligible}
               onChange={(event) => handleChange("is_gratuity_eligible", event.target.checked)}
-              className="h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-400"
+              className={formCheckboxClass}
             />
             <span className="text-sm font-medium text-neutral-700">Eligible for gratuity</span>
           </label>
@@ -200,49 +207,40 @@ export default function ContractForm({
         <h2 className="text-lg font-semibold text-neutral-900">Notes & Renewal</h2>
         <p className="mt-1 text-sm text-neutral-600">Supporting notes and renewal progress.</p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-neutral-700">Supporting Notes</span>
+          <label className="space-y-1.5">
+            <FormLabel>Supporting Notes</FormLabel>
             <textarea
               name="supporting_notes"
-              rows={4}
               value={values.supporting_notes ?? ""}
               onChange={(event) => handleChange("supporting_notes", event.target.value)}
-              className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              className={formTextareaClass}
             />
-            {errors.supporting_notes ? <p className="text-xs text-red-600">{errors.supporting_notes}</p> : null}
+            {errors.supporting_notes ? <FormFieldError>{errors.supporting_notes}</FormFieldError> : null}
           </label>
           <div className="space-y-4">
             <InputField label="Renewal Status" name="renewal_status" value={values.renewal_status} onChange={handleChange} error={errors.renewal_status} placeholder="Pending Review" />
-            <label className="space-y-2">
-              <span className="text-sm font-medium text-neutral-700">Renewal Notes</span>
+            <label className="space-y-1.5">
+              <FormLabel>Renewal Notes</FormLabel>
               <textarea
                 name="renewal_notes"
-                rows={4}
                 value={values.renewal_notes ?? ""}
                 onChange={(event) => handleChange("renewal_notes", event.target.value)}
-                className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+                className={formTextareaClass}
               />
-              {errors.renewal_notes ? <p className="text-xs text-red-600">{errors.renewal_notes}</p> : null}
+              {errors.renewal_notes ? <FormFieldError>{errors.renewal_notes}</FormFieldError> : null}
             </label>
           </div>
         </div>
       </section>
 
-      <div className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200">
-        <p className="text-sm text-neutral-600">Required fields are validated before submission.</p>
-        <button
-          type="submit"
-          className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
-        >
+      <p className="text-sm text-neutral-600">Required fields are validated before submission.</p>
+      <FormActions>
+        <button type="submit" className={formPrimaryButtonClass}>
           {submitLabel}
         </button>
-      </div>
+      </FormActions>
 
-      {successMessage ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {successMessage}
-        </div>
-      ) : null}
+      {successMessage ? <FormSuccessAlert>{successMessage}</FormSuccessAlert> : null}
     </form>
   );
 }

@@ -1,5 +1,6 @@
 import type { CurrentUserProfile } from "@/lib/auth/permissions";
 import { ACTIVE_NAV_PERMISSION_KEYS, isSuperUser } from "@/lib/auth/permissions";
+import { RECORD_KEEPING_UI_ENABLED } from "@/lib/features/record-keeping-ui";
 
 export type DashboardNavIconName =
   | "layoutDashboard"
@@ -59,6 +60,7 @@ export function filterDashboardNavItems(
   permissions: string[],
   defs: DashboardNavItemDef[] = DASHBOARD_NAV_DEFS
 ): SerializedNavItem[] {
+  const effectiveDefs = RECORD_KEEPING_UI_ENABLED ? defs : defs.filter((item) => item.href !== "/records");
   const superUser = isSuperUser(profile);
   const hasAccess = (item: DashboardNavItemDef): boolean =>
     item.active &&
@@ -76,5 +78,5 @@ export function filterDashboardNavItems(
     return { label: item.label, shortLabel: item.shortLabel, href: item.href, icon: item.icon };
   };
 
-  return defs.map(toSerialized).filter((item): item is SerializedNavItem => Boolean(item));
+  return effectiveDefs.map(toSerialized).filter((item): item is SerializedNavItem => Boolean(item));
 }

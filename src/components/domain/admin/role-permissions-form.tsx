@@ -1,9 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FormActions, FormLabel } from "@/components/ui/form-primitives";
 import type { AdminPermissionRecord } from "@/lib/queries/admin";
+import { RECORD_KEEPING_UI_ENABLED } from "@/lib/features/record-keeping-ui";
+import { formInputClass, formPrimaryButtonClass } from "@/lib/ui/form-styles";
 
-const ACTIVE_MODULE_ORDER = [
+const BASE_ACTIVE_MODULE_ORDER = [
   "Dashboard",
   "Employees",
   "Contracts",
@@ -20,6 +23,10 @@ const ACTIVE_MODULE_ORDER = [
   "Administration",
   "Settings",
 ] as const;
+
+const ACTIVE_MODULE_ORDER = RECORD_KEEPING_UI_ENABLED
+  ? BASE_ACTIVE_MODULE_ORDER
+  : BASE_ACTIVE_MODULE_ORDER.filter((name) => name !== "Records");
 
 const INACTIVE_MODULE_ORDER = ["Documents", "Compensation"] as const;
 
@@ -39,6 +46,10 @@ type RolePermissionsFormProps = {
 
 function clean(value?: string | null): string {
   return value?.trim() ?? "";
+}
+
+function isRecordsPermission(permission: AdminPermissionRecord): boolean {
+  return (clean(permission.module_name) || "general").toLowerCase() === "records";
 }
 
 function normalizeRoleCode(value: string): string {
@@ -141,7 +152,7 @@ export default function RolePermissionsForm({
     })).filter((entry) => entry.permissions.length > 0);
 
     return { active, inactive };
-  }, [permissions]);
+  }, [permissions, RECORD_KEEPING_UI_ENABLED]);
 
   const allPermissionIds = useMemo(
     () => grouped.active.flatMap((group) => group.permissions.map((permission) => permission.id)),
@@ -153,6 +164,20 @@ export default function RolePermissionsForm({
       const next = new Set(prev);
       if (checked) next.add(permissionId);
       else next.delete(permissionId);
+      return next;
+    });
+  };
+
+  const selectAllVisiblePermissions = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(allPermissionIds);
+      if (!RECORD_KEEPING_UI_ENABLED) {
+        for (const permission of permissions) {
+          if (isRecordsPermission(permission) && prev.has(permission.id)) {
+            next.add(permission.id);
+          }
+        }
+      }
       return next;
     });
   };
@@ -175,6 +200,13 @@ export default function RolePermissionsForm({
 
   return (
     <form action={action} className="space-y-6">
+      {!RECORD_KEEPING_UI_ENABLED
+        ? permissions
+            .filter((permission) => isRecordsPermission(permission) && selectedIds.has(permission.id))
+            .map((permission) => (
+              <input key={permission.id} type="hidden" name="permission_ids" value={permission.id} />
+            ))
+        : null}
       <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200">
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Role Name" name="role_name" defaultValue={defaultValues?.role_name ?? ""} required />
@@ -220,7 +252,7 @@ export default function RolePermissionsForm({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setSelectedIds(new Set(allPermissionIds))}
+              onClick={selectAllVisiblePermissions}
               className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700"
             >
               Select all active permissions
@@ -359,14 +391,11 @@ export default function RolePermissionsForm({
         ) : null}
       </section>
 
-      <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200">
-        <button
-          type="submit"
-          className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
-        >
+      <FormActions>
+        <button type="submit" className={formPrimaryButtonClass}>
           {submitLabel}
         </button>
-      </section>
+      </FormActions>
     </form>
   );
 }
@@ -387,8 +416,8 @@ function Field({
   normalizeOnBlur?: boolean;
 }) {
   return (
-    <label className="space-y-2">
-      <span className="text-sm font-medium text-neutral-700">{label}</span>
+    <label className="space-y-1.5">
+      <FormLabel required={required}>{label}</FormLabel>
       <input
         name={name}
         required={required}
@@ -401,7 +430,7 @@ function Field({
               }
             : undefined
         }
-        className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+        className={formInputClass}
       />
     </label>
   );

@@ -1,6 +1,18 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { FormActions, FormLabel } from "@/components/ui/form-primitives";
+import {
+  formCheckboxClass,
+  formCheckboxRowClass,
+  formErrorAlertClass,
+  formHelperClass,
+  formInputClass,
+  formPrimaryButtonClass,
+  formSelectClass,
+  formTextareaClass,
+} from "@/lib/ui/form-styles";
+import { cn } from "@/lib/utils/cn";
 import type { EmployeeInput } from "@/lib/validators/employee";
 
 type EmployeeFormProps = {
@@ -86,11 +98,7 @@ export default function EmployeeForm({
       onSubmit={handleSubmit}
       className="space-y-6 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
     >
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
+      {error ? <div className={formErrorAlertClass}>{error}</div> : null}
 
       <section className="space-y-4">
         <div>
@@ -156,7 +164,7 @@ export default function EmployeeForm({
             required
           />
         </div>
-        <label className="mt-2 flex items-start gap-2 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+        <label className={cn("mt-2", formCheckboxRowClass)}>
           <input
             type="checkbox"
             checked={noEmployeeNumber}
@@ -165,7 +173,7 @@ export default function EmployeeForm({
               setNoEmployeeNumber(checked);
               if (checked) updateField("employee_number", "");
             }}
-            className="mt-0.5 h-4 w-4 rounded border-neutral-300"
+            className={formCheckboxClass}
           />
           <span className="text-sm text-neutral-700">
             <span className="font-medium">This employee does not have an employee number</span>
@@ -314,15 +322,11 @@ export default function EmployeeForm({
         </div>
       </section>
 
-      <div className="flex justify-end gap-3 border-t border-neutral-200 pt-6">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-xl bg-neutral-900 px-5 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
-        >
+      <FormActions>
+        <button type="submit" disabled={isPending} className={formPrimaryButtonClass}>
           {isPending ? "Saving..." : submitLabel}
         </button>
-      </div>
+      </FormActions>
     </form>
   );
 }
@@ -373,13 +377,9 @@ type SelectFieldProps = {
 
 function SelectField({ label, value, options, onChange }: SelectFieldProps) {
   return (
-    <label className="block space-y-1">
-      <span className="text-sm font-medium text-neutral-700">{label}</span>
-      <select
-        value={value ?? ""}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-      >
+    <label className="block space-y-1.5">
+      <FormLabel>{label}</FormLabel>
+      <select value={value ?? ""} onChange={(event) => onChange(event.target.value)} className={formSelectClass}>
         {options.map(([optionValue, optionLabel]) => (
           <option key={optionValue} value={optionValue}>
             {optionLabel}
@@ -398,14 +398,9 @@ type TextAreaProps = {
 
 function TextArea({ label, value, onChange }: TextAreaProps) {
   return (
-    <label className="block space-y-1">
-      <span className="text-sm font-medium text-neutral-700">{label}</span>
-      <textarea
-        value={value ?? ""}
-        rows={4}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
-      />
+    <label className="block space-y-1.5">
+      <FormLabel>{label}</FormLabel>
+      <textarea value={value ?? ""} onChange={(event) => onChange(event.target.value)} className={formTextareaClass} />
     </label>
   );
 }

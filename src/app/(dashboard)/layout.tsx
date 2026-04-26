@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import AppShell from "@/components/layout/app-shell";
+import { dashboardMainInnerClass } from "@/lib/ui/dashboard-styles";
 import { getDashboardSession, getFirstAccessibleModuleHref } from "@/lib/auth/guards";
 import { profileDisplayName } from "@/lib/auth/permissions";
 import { buildVisibleDashboardNavItems } from "@/lib/navigation/get-visible-dashboard-nav";
@@ -46,7 +47,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
         initials: getInitials(displayName),
       }}
     >
-      {children}
+      <div className={dashboardMainInnerClass}>{children}</div>
     </AppShell>
   );
 }

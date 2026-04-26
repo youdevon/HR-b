@@ -3,8 +3,7 @@ import Link from "next/link";
 
 export default function ExpiringDocumentsPage() {
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Expiring Documents"
           description="This module is temporarily disabled in the active application."
@@ -18,7 +17,7 @@ export default function ExpiringDocumentsPage() {
             </Link>
           </div>
         </section>
-      </div>
+    
     </main>
   );
 }

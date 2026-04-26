@@ -1,6 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FormActions, FormFieldError, FormLabel, FormSuccessAlert } from "@/components/ui/form-primitives";
+import {
+  formInputClass,
+  formSelectClass,
+  formTextareaClass,
+  formPrimaryButtonClass,
+} from "@/lib/ui/form-styles";
 import { fileMovementSchema, movementStatuses, type FileMovementInput } from "@/lib/validators/file-movement";
 
 type FileMovementFormProps = {
@@ -42,15 +49,15 @@ function InputField({
   type?: "text" | "date";
 }) {
   return (
-    <label className="space-y-2">
-      <span className="text-sm font-medium text-neutral-700">{label}</span>
+    <label className="space-y-1.5">
+      <FormLabel>{label}</FormLabel>
       <input
         type={type}
         value={value ?? ""}
         onChange={(event) => onChange(name, event.target.value)}
-        className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+        className={formInputClass}
       />
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      {error ? <FormFieldError>{error}</FormFieldError> : null}
     </label>
   );
 }
@@ -96,12 +103,12 @@ export default function FileMovementForm({ initialValues, submitLabel = "Save Mo
         <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <InputField label="Employee ID" name="employee_id" value={values.employee_id} onChange={handleChange} error={errors.employee_id} />
           <InputField label="File Number" name="file_number" value={values.file_number} onChange={handleChange} error={errors.file_number} />
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-neutral-700">Movement Status</span>
+          <label className="space-y-1.5">
+            <FormLabel>Movement Status</FormLabel>
             <select
               value={values.movement_status}
               onChange={(event) => handleChange("movement_status", event.target.value)}
-              className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              className={formSelectClass}
             >
               {movementStatuses.map((status) => (
                 <option key={status} value={status}>
@@ -109,7 +116,7 @@ export default function FileMovementForm({ initialValues, submitLabel = "Save Mo
                 </option>
               ))}
             </select>
-            {errors.movement_status ? <p className="text-xs text-red-600">{errors.movement_status}</p> : null}
+            {errors.movement_status ? <FormFieldError>{errors.movement_status}</FormFieldError> : null}
           </label>
           <InputField label="Date Sent" name="date_sent" type="date" value={values.date_sent} onChange={handleChange} error={errors.date_sent} />
           <InputField label="Date Received" name="date_received" type="date" value={values.date_received} onChange={handleChange} error={errors.date_received} />
@@ -132,40 +139,34 @@ export default function FileMovementForm({ initialValues, submitLabel = "Save Mo
       <section className={sectionClassName}>
         <h2 className="text-lg font-semibold text-neutral-900">Reason & Remarks</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-neutral-700">Movement Reason</span>
+          <label className="space-y-1.5">
+            <FormLabel>Movement Reason</FormLabel>
             <textarea
-              rows={3}
               value={values.movement_reason}
               onChange={(event) => handleChange("movement_reason", event.target.value)}
-              className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              className={formTextareaClass}
             />
-            {errors.movement_reason ? <p className="text-xs text-red-600">{errors.movement_reason}</p> : null}
+            {errors.movement_reason ? <FormFieldError>{errors.movement_reason}</FormFieldError> : null}
           </label>
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-neutral-700">Remarks</span>
+          <label className="space-y-1.5">
+            <FormLabel>Remarks</FormLabel>
             <textarea
-              rows={3}
               value={values.remarks ?? ""}
               onChange={(event) => handleChange("remarks", event.target.value)}
-              className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
+              className={formTextareaClass}
             />
           </label>
         </div>
       </section>
 
-      <div className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200">
-        <p className="text-sm text-neutral-600">Required fields are validated before submission.</p>
-        <button type="submit" className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800">
+      <p className="text-sm text-neutral-600">Required fields are validated before submission.</p>
+      <FormActions>
+        <button type="submit" className={formPrimaryButtonClass}>
           {submitLabel}
         </button>
-      </div>
+      </FormActions>
 
-      {successMessage ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {successMessage}
-        </div>
-      ) : null}
+      {successMessage ? <FormSuccessAlert>{successMessage}</FormSuccessAlert> : null}
     </form>
   );
 }

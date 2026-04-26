@@ -6,8 +6,7 @@ export default async function InTransitFilesPage() {
   const rows = await listInTransitFiles();
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Files in transit"
           description="Movements with status transferred or in_transit."
@@ -48,7 +47,7 @@ export default async function InTransitFilesPage() {
             <div className="px-4 py-10 text-center text-sm text-neutral-600">No file movements in transit.</div>
           ) : null}
         </section>
-      </div>
+    
     </main>
   );
 }

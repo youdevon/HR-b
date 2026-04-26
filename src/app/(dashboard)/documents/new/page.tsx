@@ -2,8 +2,7 @@ import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
 export default function NewDocumentPage() {
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="New Document"
           description="This module is temporarily disabled in the active application."
@@ -17,7 +16,7 @@ export default function NewDocumentPage() {
             </Link>
           </div>
         </section>
-      </div>
+    
     </main>
   );
 }

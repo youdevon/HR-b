@@ -76,8 +76,7 @@ export default async function NewAdminUserPage({
   }
 
   return (
-    <main className="min-h-screen bg-neutral-100 p-6">
-      <div className="mx-auto max-w-5xl space-y-6">
+    <main className="space-y-6">
         <PageHeader
           title="Create User"
           description="Create a public.user_profiles row for application access."
@@ -102,7 +101,7 @@ export default async function NewAdminUserPage({
           mode="create"
           submitLabel="Create User"
         />
-      </div>
+    
     </main>
   );
 }

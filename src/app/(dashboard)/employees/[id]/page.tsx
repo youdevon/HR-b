@@ -11,7 +11,8 @@ import {
   listLeaveTransactionsByEmployeeId,
   summarizeVacationLeaveWithinPeriod,
 } from "@/lib/queries/leave";
-import { listRecordsByEmployeeId } from "@/lib/queries/records";
+import { RECORD_KEEPING_UI_ENABLED } from "@/lib/features/record-keeping-ui";
+import { listRecordsByEmployeeId, type RecordKeepingRecord } from "@/lib/queries/records";
 import { getCurrentActiveContract, listContractsByEmployeeId } from "@/lib/queries/contracts";
 import {
   getCurrentFileMovementByEmployeeId,
@@ -63,11 +64,17 @@ export default async function EmployeeDetailPage({
   const canCreateContract = hasAnyPermissionForContext(profile, permissions, ["contracts.create"]);
   const canCreateLeave = hasAnyPermissionForContext(profile, permissions, ["leave.create"]);
   const canMoveFile = hasAnyPermissionForContext(profile, permissions, ["files.move", "employee.file.move"]);
-  const canCreateRecord = hasAnyPermissionForContext(profile, permissions, ["records.create"]);
+  const canCreateRecord =
+    RECORD_KEEPING_UI_ENABLED &&
+    hasAnyPermissionForContext(profile, permissions, ["records.create"]);
   const canViewEmployeeId = hasAnyPermissionForContext(profile, permissions, ["employee.id.view"]);
   const canViewBir = hasAnyPermissionForContext(profile, permissions, ["employee.bir.view"]);
   const canViewFileDetails = hasAnyPermissionForContext(profile, permissions, ["employee.file.view", "files.view"]);
   const { id } = await params;
+  const recordsPromise: Promise<RecordKeepingRecord[]> = RECORD_KEEPING_UI_ENABLED
+    ? listRecordsByEmployeeId(id)
+    : Promise.resolve([]);
+
   const [
     employee,
     contracts,
@@ -77,13 +84,12 @@ export default async function EmployeeDetailPage({
     fileMovements,
     currentFileMovement,
     employeeAudits,
-  ] =
-    await Promise.all([
+  ] = await Promise.all([
     getEmployeeById(id),
     listContractsByEmployeeId(id),
     listLeaveBalancesByEmployeeId(id),
     listLeaveTransactionsByEmployeeId(id),
-    listRecordsByEmployeeId(id),
+    recordsPromise,
     listFileMovementsByEmployeeId(id),
     getCurrentFileMovementByEmployeeId(id),
     listAuditLogsByEmployeeId(id),
@@ -509,64 +515,66 @@ export default async function EmployeeDetailPage({
         )}
       </section>
 
-      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-neutral-900">Record Keeping</h2>
-          <Link
-            href={`/records?employeeId=${employee.id}`}
-            className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
-          >
-            View all
-          </Link>
-        </div>
-
-        {records.length ? (
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full divide-y divide-neutral-200 text-sm">
-              <thead className="bg-neutral-50">
-                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
-                  <th className="px-4 py-3">Title</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Category</th>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Reference</th>
-                  <th className="px-4 py-3">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
-                {records.map((record) => (
-                  <tr key={record.id} className="hover:bg-neutral-50">
-                    <td className="max-w-[260px] truncate px-4 py-3 font-medium text-neutral-900">
-                      <Link href={`/records/${record.id}`} className="hover:underline">
-                        {display(record.record_title)}
-                      </Link>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {display(record.record_type)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {display(record.record_category)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {display(record.record_date)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {display(record.reference_number)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {display(record.status)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {RECORD_KEEPING_UI_ENABLED ? (
+        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-neutral-900">Record Keeping</h2>
+            <Link
+              href={`/records?employeeId=${employee.id}`}
+              className="text-sm font-medium text-neutral-700 hover:text-neutral-900"
+            >
+              View all
+            </Link>
           </div>
-        ) : (
-          <p className="mt-4 text-sm text-neutral-600">
-            No records found for this employee.
-          </p>
-        )}
-      </section>
+
+          {records.length ? (
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full divide-y divide-neutral-200 text-sm">
+                <thead className="bg-neutral-50">
+                  <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-600">
+                    <th className="px-4 py-3">Title</th>
+                    <th className="px-4 py-3">Type</th>
+                    <th className="px-4 py-3">Category</th>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3">Reference</th>
+                    <th className="px-4 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100 bg-white text-neutral-700">
+                  {records.map((record) => (
+                    <tr key={record.id} className="hover:bg-neutral-50">
+                      <td className="max-w-[260px] truncate px-4 py-3 font-medium text-neutral-900">
+                        <Link href={`/records/${record.id}`} className="hover:underline">
+                          {display(record.record_title)}
+                        </Link>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {display(record.record_type)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {display(record.record_category)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {display(record.record_date)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {display(record.reference_number)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {display(record.status)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-neutral-600">
+              No records found for this employee.
+            </p>
+          )}
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">
