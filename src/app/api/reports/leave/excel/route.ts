@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
+import { hasPermission } from "@/lib/auth/permissions";
 import { getLeaveReportData, type ReportFilters } from "@/lib/queries/reports";
 
 function clean(value?: string): string {
@@ -72,6 +73,9 @@ function formatLeavePeriod(from: string | null, to: string | null): string {
 }
 
 export async function GET(request: Request) {
+  if (!(await hasPermission("reports.export")) || !(await hasPermission("reports.leave.view"))) {
+    return NextResponse.json({ error: "Access denied." }, { status: 403 });
+  }
   const { searchParams } = new URL(request.url);
   const filters = getFilters(searchParams);
   if (!hasCriteria(filters)) {

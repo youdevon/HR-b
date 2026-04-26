@@ -1,5 +1,6 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import { requirePermission } from "@/lib/auth/guards";
 
 const reportLinks = [
   { href: "/reports/employees", label: "Employee Report", description: "Employee identity, department, role, and status." },
@@ -15,7 +16,8 @@ const reportLinks = [
   { href: "/reports/gratuity", label: "Gratuity Report", description: "Gratuity calculations, approvals, and payout readiness." },
 ] as const;
 
-export default function Page() {
+export default async function Page() {
+  await requirePermission("reports.view");
   return (
     <main className="space-y-6">
       <PageHeader

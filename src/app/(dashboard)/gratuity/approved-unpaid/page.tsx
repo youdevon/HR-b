@@ -1,7 +1,9 @@
 import PageHeader from "@/components/layout/page-header";
+import { requirePermission } from "@/lib/auth/guards";
 import { listApprovedUnpaidGratuityCalculations } from "@/lib/queries/gratuity";
 
 export default async function GratuityApprovedUnpaidPage() {
+  await requirePermission("gratuity.approve");
   const rows = await listApprovedUnpaidGratuityCalculations();
 
   return (

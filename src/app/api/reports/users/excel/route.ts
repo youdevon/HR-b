@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
+import { hasPermission } from "@/lib/auth/permissions";
 import { getUserAccountsReport, type ReportFilters } from "@/lib/queries/reports";
 
 function clean(value?: string | null): string {
@@ -51,6 +52,9 @@ function filterSummary(filters: ReportFilters): string {
 }
 
 export async function GET(request: Request) {
+  if (!(await hasPermission("reports.export")) || !(await hasPermission("reports.users.view"))) {
+    return NextResponse.json({ error: "Access denied." }, { status: 403 });
+  }
   const { searchParams } = new URL(request.url);
   const filters = getFilters(searchParams);
   if (!hasCriteria(filters)) {

@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import { NextResponse } from "next/server";
+import { hasPermission } from "@/lib/auth/permissions";
 import {
   getContractAvailabilityFilterSummary,
   getContractAvailabilityMode,
@@ -54,6 +55,9 @@ function formatSalary(value: number | null): string {
 }
 
 export async function GET(request: Request) {
+  if (!(await hasPermission("reports.export")) || !(await hasPermission("reports.employees.view"))) {
+    return NextResponse.json({ error: "Access denied." }, { status: 403 });
+  }
   const { searchParams } = new URL(request.url);
   const filters = getFilters(searchParams);
   const { generated, rows } = await getEmployeeReport(filters);

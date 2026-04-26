@@ -1,8 +1,17 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import { listGratuityCalculations } from "@/lib/queries/gratuity";
 
 export default async function GratuityCalculationsPage() {
+  await requirePermission("gratuity.view");
+  const auth = await getDashboardSession();
+  const profile = auth?.profile ?? null;
+  const permissions = auth?.permissions ?? [];
+  const canManageRules = hasAnyPermissionForContext(profile, permissions, ["gratuity.rules.manage"]);
+  const canViewPayments = hasAnyPermissionForContext(profile, permissions, ["gratuity.view"]);
+  const canApprove = hasAnyPermissionForContext(profile, permissions, ["gratuity.approve"]);
   const rows = await listGratuityCalculations();
 
   return (
@@ -13,30 +22,38 @@ export default async function GratuityCalculationsPage() {
           backHref="/dashboard"
           actions={
             <>
-            <Link
-              href="/gratuity/rules"
-              className="inline-flex items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
-            >
-              Rules
-            </Link>
-            <Link
-              href="/gratuity/payments"
-              className="inline-flex items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
-            >
-              Payments
-            </Link>
-            <Link
-              href="/gratuity/pending-review"
-              className="inline-flex items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
-            >
-              Pending review
-            </Link>
-            <Link
-              href="/gratuity/approved-unpaid"
-              className="inline-flex items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
-            >
-              Approved unpaid
-            </Link>
+            {canManageRules ? (
+              <Link
+                href="/gratuity/rules"
+                className="inline-flex items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
+              >
+                Manage Rules
+              </Link>
+            ) : null}
+            {canViewPayments ? (
+              <Link
+                href="/gratuity/payments"
+                className="inline-flex items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
+              >
+                Payments
+              </Link>
+            ) : null}
+            {canApprove ? (
+              <Link
+                href="/gratuity/pending-review"
+                className="inline-flex items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
+              >
+                Pending review
+              </Link>
+            ) : null}
+            {canApprove ? (
+              <Link
+                href="/gratuity/approved-unpaid"
+                className="inline-flex items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
+              >
+                Approved unpaid
+              </Link>
+            ) : null}
             </>
           }
         />

@@ -16,6 +16,8 @@ import {
   formSecondaryButtonClass,
 } from "@/lib/ui/form-styles";
 import { cn } from "@/lib/utils/cn";
+import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 
 type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -103,6 +105,9 @@ function hasCriteria(filters: ReportFilters): boolean {
 }
 
 export default async function Page({ searchParams }: PageProps) {
+  await requirePermission("reports.contracts.view");
+  const auth = await getDashboardSession();
+  const canExport = hasAnyPermissionForContext(auth?.profile ?? null, auth?.permissions ?? [], ["reports.export"]);
   const sp = await searchParams;
   const filters: ReportFilters = {
     show: firstString(sp.show),
@@ -134,7 +139,7 @@ export default async function Page({ searchParams }: PageProps) {
         title="Contracts report"
         description="Filter contracts by status, term type, and expiry window."
         backHref="/reports"
-        actions={<ExportButtons generated={shouldGenerate} excelHref={excelHref} />}
+        actions={<ExportButtons generated={shouldGenerate && canExport} excelHref={excelHref} />}
       />
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">

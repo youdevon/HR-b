@@ -7,6 +7,8 @@ import {
   getAlertById,
   resolveAlert,
 } from "@/lib/queries/alerts";
+import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 
 type AlertDetailPageProps = {
   params: Promise<{
@@ -39,6 +41,12 @@ function statusBadgeClass(status: string | null): string {
 export default async function AlertDetailPage({
   params,
 }: AlertDetailPageProps) {
+  await requirePermission("alerts.view");
+  const auth = await getDashboardSession();
+  const profile = auth?.profile ?? null;
+  const permissions = auth?.permissions ?? [];
+  const canAcknowledge = hasAnyPermissionForContext(profile, permissions, ["alerts.acknowledge"]);
+  const canResolve = hasAnyPermissionForContext(profile, permissions, ["alerts.resolve"]);
   const { id } = await params;
   const alert = await getAlertById(id);
 
@@ -48,6 +56,7 @@ export default async function AlertDetailPage({
 
   async function acknowledgeAction() {
     "use server";
+    await requirePermission("alerts.acknowledge");
     await acknowledgeAlert(id);
     revalidatePath("/alerts/active");
     revalidatePath("/dashboard");
@@ -56,6 +65,7 @@ export default async function AlertDetailPage({
 
   async function resolveAction() {
     "use server";
+    await requirePermission("alerts.resolve");
     await resolveAlert(id);
     revalidatePath("/alerts/active");
     revalidatePath("/dashboard");
@@ -157,22 +167,26 @@ export default async function AlertDetailPage({
           </dl>
 
           <div className="mt-6 flex flex-wrap gap-3">
-            <form action={acknowledgeAction}>
-              <button
-                type="submit"
-                className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
-              >
-                Acknowledge
-              </button>
-            </form>
-            <form action={resolveAction}>
-              <button
-                type="submit"
-                className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100"
-              >
-                Resolve
-              </button>
-            </form>
+            {canAcknowledge ? (
+              <form action={acknowledgeAction}>
+                <button
+                  type="submit"
+                  className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
+                >
+                  Acknowledge
+                </button>
+              </form>
+            ) : null}
+            {canResolve ? (
+              <form action={resolveAction}>
+                <button
+                  type="submit"
+                  className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100"
+                >
+                  Resolve
+                </button>
+              </form>
+            ) : null}
           </div>
         </section>
     

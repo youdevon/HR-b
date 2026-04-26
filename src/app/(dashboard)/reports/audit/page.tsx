@@ -3,6 +3,8 @@ import { getAuditReportData } from "@/lib/queries/reports";
 import Link from "next/link";
 import { formInputClass, formPrimaryButtonClass, formSecondaryButtonClass } from "@/lib/ui/form-styles";
 import { cn } from "@/lib/utils/cn";
+import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
+import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 
 type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 function firstString(value: string | string[] | undefined): string {
@@ -120,6 +122,9 @@ function buildSearchParams(filters: {
 }
 
 export default async function Page({ searchParams }: PageProps) {
+  await requirePermission("reports.audit.view");
+  const auth = await getDashboardSession();
+  const canExport = hasAnyPermissionForContext(auth?.profile ?? null, auth?.permissions ?? [], ["reports.export"]);
   const sp = await searchParams;
   const filters = {
     show: firstString(sp.show),
@@ -143,7 +148,7 @@ export default async function Page({ searchParams }: PageProps) {
         title="Audit report"
         description="Summaries of audit trail activity and changes across the system will appear here."
         backHref="/reports"
-        actions={<ExportButtons generated={generated} excelHref={excelHref} />}
+        actions={<ExportButtons generated={generated && canExport} excelHref={excelHref} />}
       />
 
       <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">

@@ -6,6 +6,7 @@ import {
   fetchPermissionsForProfile,
   fetchUserProfileForAuthUser,
   hasAnyPermissionForContext,
+  isProfileActive,
   type CurrentUserProfile,
 } from "@/lib/auth/permissions";
 import { getUser } from "@/lib/auth/session";
@@ -67,6 +68,7 @@ export async function loadDashboardAuthContext(): Promise<DashboardAuthContext |
 
   // Build auth context from the already-resolved user to avoid another auth lookup path.
   const profile = await fetchUserProfileForAuthUser(user);
+  if (!isProfileActive(profile)) return null;
   const role = profile?.role_code ?? profile?.role_name ?? null;
   const permissions = await fetchPermissionsForProfile(profile).catch((error: unknown) => {
     console.error(

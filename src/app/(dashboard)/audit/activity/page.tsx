@@ -1,5 +1,6 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import { requirePermission } from "@/lib/auth/guards";
 import { listRecentAuditLogs } from "@/lib/queries/audit";
 import { dashboardButtonSecondaryClass } from "@/lib/ui/dashboard-styles";
 
@@ -21,6 +22,7 @@ function firstString(value: string | string[] | undefined): string | undefined {
 }
 
 export default async function AuditActivityPage({ searchParams }: AuditActivityPageProps) {
+  await requirePermission("audit.view");
   const sp = await searchParams;
   const employeeId = firstString(sp.employee_id)?.trim();
   const logs = await listRecentAuditLogs(100, employeeId);

@@ -26,6 +26,7 @@ export default async function EditRolePage({ params }: EditRolePageProps) {
 
   async function saveRoleAction(formData: FormData) {
     "use server";
+    await requirePermission("admin.roles.manage");
     const permissionIds = formData
       .getAll("permission_ids")
       .map((value) => String(value))

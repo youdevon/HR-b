@@ -1,21 +1,23 @@
 import PageHeader from "@/components/layout/page-header";
-import { listApprovedUnpaidGratuityCalculations } from "@/lib/queries/gratuity";
+import { requirePermission } from "@/lib/auth/guards";
+import { listPendingGratuityCalculations } from "@/lib/queries/gratuity";
 
-export default async function GratuityApprovedUnpaidPage() {
-  const rows = await listApprovedUnpaidGratuityCalculations();
+export default async function GratuityPendingReviewPage() {
+  await requirePermission("gratuity.approve");
+  const rows = await listPendingGratuityCalculations();
 
   return (
     <main className="space-y-6">
       <PageHeader
-        title="Approved Unpaid Gratuity"
-        description="Approved gratuity calculations pending payment."
+        title="Pending Review Gratuity"
+        description="Gratuity calculations waiting for review and approval."
         backHref="/gratuity/calculations"
       />
 
       {rows.length === 0 ? (
         <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
           <p className="text-sm text-neutral-600">
-            No approved unpaid gratuity records.
+            No pending gratuity calculations.
           </p>
         </div>
       ) : (

@@ -13,6 +13,7 @@ export type CurrentUserProfile = {
   role_id: string | null;
   role_name: string | null;
   role_code: string | null;
+  is_active: boolean | null;
   account_status: string | null;
 };
 
@@ -23,6 +24,7 @@ type UserProfileRow = {
   email: string | null;
   phone_number: string | null;
   role_id: string | null;
+  is_active: boolean | null;
   account_status: string | null;
 };
 
@@ -161,12 +163,19 @@ export function isSuperUser(profile: CurrentUserProfile | null): boolean {
   return (profile?.role_code ?? "").toUpperCase() === "SUPER_USER";
 }
 
+export function isProfileActive(profile: CurrentUserProfile | null): boolean {
+  if (!profile) return false;
+  if (profile.is_active === false) return false;
+  const accountStatus = (profile.account_status ?? "").trim().toLowerCase();
+  return accountStatus === "" || accountStatus === "active";
+}
+
 /** Profile for an already-resolved `User` (no additional `getUser` call). */
 export async function fetchUserProfileForAuthUser(user: User): Promise<CurrentUserProfile | null> {
   const supabase = await createClient();
   const { data: profile, error: profileError } = await supabase
     .from("user_profiles")
-    .select("id, first_name, last_name, email, phone_number, role_id, account_status")
+    .select("id, first_name, last_name, email, phone_number, role_id, is_active, account_status")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -204,6 +213,7 @@ export async function fetchUserProfileForAuthUser(user: User): Promise<CurrentUs
     role_id: row.role_id,
     role_name: roleName,
     role_code: roleCode,
+    is_active: row.is_active ?? null,
     account_status: row.account_status,
   };
 }
@@ -212,6 +222,7 @@ export async function fetchUserProfileForAuthUser(user: User): Promise<CurrentUs
 export async function fetchPermissionsForProfile(
   profile: CurrentUserProfile | null
 ): Promise<string[]> {
+  if (!isProfileActive(profile)) return [];
   if (!profile?.role_id) return [];
   if (isSuperUser(profile)) return ["*"];
 
@@ -267,6 +278,7 @@ export function hasPermissionForContext(
   permissions: string[],
   permissionKey: string
 ): boolean {
+  if (!isProfileActive(profile)) return false;
   if (isSuperUser(profile)) return true;
   return permissions.includes("*") || permissions.includes(permissionKey);
 }
@@ -276,6 +288,7 @@ export function hasAllPermissionsForContext(
   permissions: string[],
   permissionKeys: string[]
 ): boolean {
+  if (!isProfileActive(profile)) return false;
   if (isSuperUser(profile)) return true;
   if (permissions.includes("*")) return true;
   return permissionKeys.every((key) => permissions.includes(key));
@@ -286,6 +299,7 @@ export function hasAnyPermissionForContext(
   permissions: string[],
   permissionKeys: string[]
 ): boolean {
+  if (!isProfileActive(profile)) return false;
   if (isSuperUser(profile)) return true;
   if (permissions.includes("*")) return true;
   return permissionKeys.some((key) => permissions.includes(key));

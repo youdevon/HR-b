@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
 import { getAuditLogById } from "@/lib/queries/audit";
 import Link from "next/link";
+import { requirePermission } from "@/lib/auth/guards";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -81,6 +82,7 @@ function toDisplayValue(value: unknown): string {
 }
 
 export default async function Page({ params }: PageProps) {
+  await requirePermission("reports.audit.view");
   const { id } = await params;
   const record = await getAuditLogById(id);
   if (!record) notFound();

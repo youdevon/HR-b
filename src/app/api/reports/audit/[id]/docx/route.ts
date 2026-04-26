@@ -10,6 +10,7 @@ import {
   TextRun,
   WidthType,
 } from "docx";
+import { hasPermission } from "@/lib/auth/permissions";
 import { getAuditLogById } from "@/lib/queries/audit";
 
 function clean(value?: string | null): string {
@@ -95,6 +96,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!(await hasPermission("reports.export")) || !(await hasPermission("reports.audit.view"))) {
+    return NextResponse.json({ error: "Access denied." }, { status: 403 });
+  }
   const { id } = await params;
   const record = await getAuditLogById(id);
   if (!record) {

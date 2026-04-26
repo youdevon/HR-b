@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
+import { requirePermission } from "@/lib/auth/guards";
 import {
   calculateGratuityBreakdownForRecord,
   getGratuityCalculationById,
@@ -11,6 +12,7 @@ type PageProps = {
 };
 
 export default async function Page({ params }: PageProps) {
+  await requirePermission("gratuity.view");
   const { id } = await params;
   const record = await getGratuityCalculationById(id);
 

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
-import { requireDashboardAuth } from "@/lib/auth/guards";
+import { assertPermission, requireDashboardAuth, requirePermission } from "@/lib/auth/guards";
 import {
   applyFileMovementAction,
   getFileMovementById,
@@ -47,6 +47,7 @@ export default async function FileMovementDetailPage({
   params,
   searchParams,
 }: FileMovementDetailPageProps) {
+  await requirePermission("files.view");
   const { id } = await params;
   const sp = await searchParams;
   const status = firstString(sp.status);
@@ -58,6 +59,7 @@ export default async function FileMovementDetailPage({
 
   async function applyAction(formData: FormData) {
     "use server";
+    await assertPermission("files.move");
     const auth = await requireDashboardAuth();
     const action = String(formData.get("action") ?? "") as FileMovementAction;
 

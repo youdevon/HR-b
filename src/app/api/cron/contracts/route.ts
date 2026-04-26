@@ -6,17 +6,19 @@ const CRON_SECRET = process.env.CRON_SECRET;
 
 export async function GET(request: Request) {
   try {
-    // --- SECURITY (recommended for production) ---
-    // Vercel Cron can send a header like: Authorization: Bearer <secret>
-    if (CRON_SECRET) {
-      const authHeader = request.headers.get("authorization");
+    if (!CRON_SECRET) {
+      return NextResponse.json(
+        { success: false, message: "CRON_SECRET is not configured" },
+        { status: 503 }
+      );
+    }
+    const authHeader = request.headers.get("authorization");
 
-      if (authHeader !== `Bearer ${CRON_SECRET}`) {
-        return NextResponse.json(
-          { success: false, message: "Unauthorized" },
-          { status: 401 }
-        );
-      }
+    if (authHeader !== `Bearer ${CRON_SECRET}`) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     // --- RUN ALERT GENERATION ---

@@ -1,8 +1,10 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
+import { requirePermission } from "@/lib/auth/guards";
 import { listGratuityPayments } from "@/lib/queries/gratuity";
 
 export default async function GratuityPaymentsPage() {
+  await requirePermission("gratuity.view");
   const rows = await listGratuityPayments();
 
   return (
