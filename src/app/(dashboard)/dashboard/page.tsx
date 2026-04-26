@@ -3,13 +3,13 @@ import PageHeader from "@/components/layout/page-header";
 import {
   DASHBOARD_CARD_PERMISSION_KEYS,
   hasAnyPermissionForContext,
+  hasPermissionForContext,
   profileDisplayName,
 } from "@/lib/auth/permissions";
-import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
-import { listPriorityAlerts } from "@/lib/queries/alerts";
+import { isAuthRateLimitError, requireDashboardAuth } from "@/lib/auth/guards";
+import type { DashboardAuthContext } from "@/lib/auth/guards";
 import { getDashboardMetrics } from "@/lib/queries/dashboard";
-import { generateAllSystemAlerts } from "@/lib/queries/notifications";
-import { dashboardAlertErrorClass, dashboardEmptyCardClass, dashboardPanelClass } from "@/lib/ui/dashboard-styles";
+import { dashboardAlertErrorClass, dashboardEmptyCardClass } from "@/lib/ui/dashboard-styles";
 
 type MetricTone = "critical" | "warning" | "normal" | "success";
 
@@ -36,26 +36,6 @@ const toneClasses: Record<MetricTone, string> = {
 
 function dashboardSections(metrics: Awaited<ReturnType<typeof getDashboardMetrics>>): DashboardSection[] {
   return [
-    {
-      title: "Alerts & Action Items",
-      description: "Open alert queue and critical items requiring attention.",
-      cards: [
-        {
-          label: "Active Alerts",
-          value: metrics.activeAlertsCount,
-          hint: "Alerts currently pending action",
-          href: "/alerts/active",
-          tone: metrics.activeAlertsCount > 0 ? "warning" : "normal",
-        },
-        {
-          label: "Critical Alerts",
-          value: metrics.criticalAlertsCount,
-          hint: "Critical alerts currently pending action",
-          href: "/alerts/active?severity_level=critical",
-          tone: metrics.criticalAlertsCount > 0 ? "critical" : "normal",
-        },
-      ],
-    },
     {
       title: "Contracts",
       description: "Contract coverage, expiry exposure, and renewal risk.",
@@ -185,7 +165,6 @@ type DashboardCardVisibility = {
   contracts: boolean;
   leave: boolean;
   files: boolean;
-  alerts: boolean;
   gratuity: boolean;
 };
 
@@ -199,7 +178,6 @@ function filterSectionsByPermissions(
       if (section.title === "Contracts" && !visibility.contracts) return null;
       if (section.title === "Leave" && !visibility.leave) return null;
       if (section.title === "Physical Files" && !visibility.files) return null;
-      if (section.title === "Alerts & Action Items" && !visibility.alerts) return null;
       if (section.title === "Gratuity" && !visibility.gratuity) return null;
       return section;
     })
@@ -241,37 +219,58 @@ function MetricSection({ section }: { section: DashboardSection }) {
 }
 
 export default async function DashboardPage() {
-  await requirePermission("dashboard.view");
-  const auth = await getDashboardSession();
-  const profile = auth?.profile ?? null;
-  const permissions = auth?.permissions ?? [];
+  let auth: DashboardAuthContext;
+  try {
+    auth = await requireDashboardAuth();
+  } catch (error) {
+    if (isAuthRateLimitError(error)) {
+      return (
+        <main className="space-y-6">
+          <PageHeader
+            title="Dashboard"
+            description="Monitor employee coverage, contract exposure, leave pressure, files, and gratuity from one dashboard."
+          />
+          <section className={dashboardAlertErrorClass} role="alert">
+            Authentication is temporarily rate-limited. Please wait a moment and refresh this page.
+          </section>
+        </main>
+      );
+    }
+    throw error;
+  }
+  const profile = auth.profile ?? null;
+  const permissions = auth.permissions ?? [];
+
+  if (!hasPermissionForContext(profile, permissions, "dashboard.view")) {
+    return (
+      <main className="space-y-6">
+        <PageHeader
+          title="Dashboard"
+          description="Monitor employee coverage, contract exposure, leave pressure, files, and gratuity from one dashboard."
+        />
+        <section className={dashboardAlertErrorClass} role="alert">
+          Access denied. You do not have permission to view the dashboard.
+        </section>
+      </main>
+    );
+  }
 
   const visibility: DashboardCardVisibility = {
     workforce: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.workforce]),
     contracts: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.contracts]),
     leave: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.leave]),
     files: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.files]),
-    alerts: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.alerts]),
     gratuity: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.gratuity]),
   };
 
   const hasAnyCards = Object.values(visibility).some(Boolean);
   let metricsError = "";
   let sections: DashboardSection[] = [];
-  let priorityAlerts: Awaited<ReturnType<typeof listPriorityAlerts>> = [];
-
-  if (visibility.alerts) {
-    await generateAllSystemAlerts().catch(() => 0);
-  }
 
   if (hasAnyCards) {
     try {
-      const [metrics, alerts] = await Promise.all([
-        getDashboardMetrics(visibility),
-        visibility.alerts ? listPriorityAlerts(8) : Promise.resolve([]),
-      ]);
+      const metrics = await getDashboardMetrics(visibility);
       sections = filterSectionsByPermissions(dashboardSections(metrics), visibility);
-      priorityAlerts = alerts;
     } catch (error) {
       metricsError =
         error instanceof Error
@@ -284,7 +283,7 @@ export default async function DashboardPage() {
     <main className="space-y-6">
       <PageHeader
         title="Dashboard"
-        description="Monitor employee coverage, contract exposure, leave pressure, files, and priority alerts from one dashboard."
+        description="Monitor employee coverage, contract exposure, leave pressure, files, and gratuity from one dashboard."
       />
 
       {metricsError ? (
@@ -308,50 +307,6 @@ export default async function DashboardPage() {
       ) : (
         sections.map((section) => <MetricSection key={section.title} section={section} />)
       )}
-
-      {visibility.alerts ? (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-neutral-900">Priority Alerts</h2>
-          {priorityAlerts.length ? (
-            <div className="grid gap-3">
-              {priorityAlerts.map((alert) => (
-                <Link
-                  key={alert.id}
-                  href={`/alerts/${alert.id}`}
-                  className={dashboardPanelClass}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-neutral-900">
-                      {alert.alert_title ?? "Untitled alert"}
-                    </span>
-                    <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
-                      {alert.module_name ?? "General"}
-                    </span>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      (alert.severity_level ?? "").toLowerCase() === "critical"
-                        ? "bg-red-100 text-red-700"
-                        : (alert.severity_level ?? "").toLowerCase() === "warning"
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-neutral-100 text-neutral-700"
-                    }`}>
-                      {alert.severity_level ?? "info"}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-neutral-600">
-                    {alert.alert_message ?? "No details available."}
-                  </p>
-                  <p className="mt-1 text-xs text-neutral-500">
-                    {alert.employee_name ? `Employee: ${alert.employee_name}` : "Employee: —"}
-                    {alert.employee_file_number ? ` • File #: ${alert.employee_file_number}` : ""}
-                  </p>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className={dashboardEmptyCardClass}>No active alerts right now.</div>
-          )}
-        </section>
-      ) : null}
     </main>
   );
 }

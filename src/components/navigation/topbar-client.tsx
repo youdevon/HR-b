@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bell, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 export type TopbarUserProps = {
@@ -73,15 +73,6 @@ export default function TopbarClient({ user, onOpenMobileNav }: TopbarClientProp
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
-          <Link
-            href="/alerts/active"
-            className="inline-flex min-w-0 items-center justify-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-2 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 sm:px-3"
-            aria-label="View notifications"
-          >
-            <Bell className="h-4 w-4 shrink-0" aria-hidden />
-            <span className="hidden sm:inline">Notifications</span>
-          </Link>
-
           <div className="relative" ref={menuRef}>
             <button
               type="button"

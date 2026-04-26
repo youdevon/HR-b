@@ -15,7 +15,7 @@ import {
   isSuperUser,
   type CurrentUserProfile,
 } from "@/lib/auth/permissions";
-import { getUser } from "@/lib/auth/session";
+import { AUTH_RATE_LIMIT_MESSAGE, getUser, isSupabaseAuthRateLimitError } from "@/lib/auth/session";
 import { RECORD_KEEPING_UI_ENABLED } from "@/lib/features/record-keeping-ui";
 export {
   requireAnyPermission,
@@ -69,7 +69,15 @@ export type DashboardAuthContext = {
  * so deeper server components reusing those helpers do not issue duplicate fetches.
  */
 export async function loadDashboardAuthContext(): Promise<DashboardAuthContext | null> {
-  const user = await getUser();
+  let user: User | null = null;
+  try {
+    user = await getUser();
+  } catch (error) {
+    if (isSupabaseAuthRateLimitError(error)) {
+      throw new Error(AUTH_RATE_LIMIT_MESSAGE);
+    }
+    throw error;
+  }
   if (!user) return null;
 
   // Build auth context from the already-resolved user to avoid another auth lookup path.
@@ -95,6 +103,11 @@ export async function loadDashboardAuthContext(): Promise<DashboardAuthContext |
 export const getDashboardSession = cache(async (): Promise<DashboardAuthContext | null> => {
   return loadDashboardAuthContext();
 });
+
+export function isAuthRateLimitError(error: unknown): boolean {
+  if (error instanceof Error && error.message === AUTH_RATE_LIMIT_MESSAGE) return true;
+  return isSupabaseAuthRateLimitError(error);
+}
 
 export function canViewNavItem(
   profile: CurrentUserProfile | null,
@@ -150,7 +163,6 @@ export function getFirstAccessibleModuleHref(
     { key: "leave", href: "/leave" },
     { key: "physicalFiles", href: "/file-movements" },
     { key: "records", href: "/records" },
-    { key: "alerts", href: "/alerts/active" },
     { key: "reports", href: "/reports" },
     { key: "audit", href: "/audit/activity" },
     { key: "gratuity", href: "/gratuity/calculations" },

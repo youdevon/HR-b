@@ -27,12 +27,6 @@ const adminSections = [
     permissions: ["admin.permissions.manage"],
   },
   {
-    href: "/admin/alert-rules",
-    title: "Alert Rules",
-    description: "Configure notification automation thresholds, timing, and severity.",
-    permissions: ["admin.settings.manage"],
-  },
-  {
     href: "/admin/document-types",
     title: "Document Types",
     description: "Manage document type settings for HR document tracking.",
@@ -72,7 +66,7 @@ export default async function AdminPage() {
     <main className="space-y-6">
       <PageHeader
         title="Admin Settings"
-        description="Manage users, access, notification rules, and system configuration."
+        description="Manage users, access, and system configuration."
         backHref="/dashboard"
       />
 

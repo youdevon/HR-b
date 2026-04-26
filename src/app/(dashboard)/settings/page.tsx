@@ -18,7 +18,6 @@ export default async function SettingsLandingPage() {
     "admin.roles.manage",
     "admin.permissions.view",
     "admin.permissions.manage",
-    "alerts.rules.manage",
     "gratuity.rules.manage",
     "admin.settings.manage",
     "settings.manage",
@@ -31,7 +30,6 @@ export default async function SettingsLandingPage() {
   const canUsers = hasAnyPermissionForContext(profile, permissions, ["admin.users.view", "admin.users.manage"]);
   const canRoles = hasAnyPermissionForContext(profile, permissions, ["admin.roles.view", "admin.roles.manage"]);
   const canPermissions = hasAnyPermissionForContext(profile, permissions, ["admin.permissions.view", "admin.permissions.manage"]);
-  const canAlertRules = hasAnyPermissionForContext(profile, permissions, ["alerts.rules.manage"]);
   const canGratuityRules = hasAnyPermissionForContext(profile, permissions, ["gratuity.rules.manage"]);
   const canSystemSettings = hasAnyPermissionForContext(profile, permissions, ["admin.settings.manage", "settings.manage"]);
 
@@ -55,12 +53,6 @@ export default async function SettingsLandingPage() {
       enabled: canPermissions,
     },
     {
-      title: "Alert Rules",
-      description: "Configure alert timing, thresholds, and severity settings.",
-      href: "/admin/alert-rules",
-      enabled: canAlertRules,
-    },
-    {
       title: "Gratuity Rules",
       description: "Review gratuity policy guidance and rule configuration.",
       href: "/gratuity/rules",
@@ -79,7 +71,7 @@ export default async function SettingsLandingPage() {
     <main className="space-y-6">
       <PageHeader
         title="Settings"
-        description="Manage users, roles, permissions, alert rules, gratuity rules, and system configuration."
+        description="Manage users, roles, permissions, gratuity rules, and system configuration."
         backHref="/dashboard"
       />
 

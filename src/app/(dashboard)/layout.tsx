@@ -2,7 +2,13 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import AppShell from "@/components/layout/app-shell";
 import { dashboardMainInnerClass } from "@/lib/ui/dashboard-styles";
-import { getDashboardSession, getFirstAccessibleModuleHref, isProfileOnlyUser } from "@/lib/auth/guards";
+import {
+  type DashboardAuthContext,
+  getDashboardSession,
+  getFirstAccessibleModuleHref,
+  isAuthRateLimitError,
+  isProfileOnlyUser,
+} from "@/lib/auth/guards";
 import { profileDisplayName } from "@/lib/auth/permissions";
 import { buildVisibleDashboardNavItems } from "@/lib/navigation/get-visible-dashboard-nav";
 
@@ -24,7 +30,25 @@ function getInitials(name: string): string {
 }
 
 export default async function DashboardLayout({ children }: DashboardLayoutProps) {
-  const auth = await getDashboardSession();
+  let auth: DashboardAuthContext | null = null;
+  try {
+    auth = await getDashboardSession();
+  } catch (error) {
+    if (isAuthRateLimitError(error)) {
+      return (
+        <main className="mx-auto max-w-3xl p-6">
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900 shadow-sm">
+            <h1 className="text-lg font-semibold">Please wait and try again</h1>
+            <p className="mt-2 text-sm">
+              Authentication is temporarily rate-limited. Refresh this page in a moment.
+            </p>
+          </section>
+        </main>
+      );
+    }
+    throw error;
+  }
+
   if (!auth) {
     redirect("/login");
   }

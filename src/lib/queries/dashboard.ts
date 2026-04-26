@@ -12,13 +12,10 @@ export type DashboardMetrics = {
   lowVacationLeaveCount: number;
   employeesOnLeaveCount: number;
   pendingLeaveApprovalsCount: number;
-  lowLeaveBalanceAlertsCount: number;
   filesCheckedOutCount: number;
   overdueFileReturnsCount: number;
   missingFilesCount: number;
   filesInTransitCount: number;
-  activeAlertsCount: number;
-  criticalAlertsCount: number;
   pendingGratuityCalculationsCount: number;
   approvedUnpaidGratuityCount: number;
 };
@@ -28,7 +25,6 @@ export type DashboardMetricsScope = {
   contracts?: boolean;
   leave?: boolean;
   files?: boolean;
-  alerts?: boolean;
   gratuity?: boolean;
 };
 
@@ -166,24 +162,6 @@ async function countPendingLeaveApprovals(): Promise<number> {
   return count ?? 0;
 }
 
-async function countLowLeaveBalanceAlerts(): Promise<number> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("leave_balances")
-    .select("remaining_days, warning_threshold_days, low_balance_warning_enabled")
-    .neq("low_balance_warning_enabled", false);
-
-  if (error) {
-    throw new Error(`Failed to count low leave balance alerts: ${error.message}`);
-  }
-
-  return (data ?? []).filter((row) => {
-    const remaining = Number(row.remaining_days ?? 0);
-    const threshold = Number(row.warning_threshold_days ?? 0);
-    return remaining <= threshold;
-  }).length;
-}
-
 async function countFilesInTransit(): Promise<number> {
   const supabase = await createClient();
   const { count, error } = await supabase
@@ -214,39 +192,6 @@ async function countFilesByMovementStatus(statuses: string[]): Promise<number> {
 
 async function countOverdueFileReturns(): Promise<number> {
   return 0;
-}
-
-async function countActiveAlerts(): Promise<number> {
-  const supabase = await createClient();
-  const activeModules = ["Contracts", "Leave", "Physical Files", "Alerts", "Gratuity"];
-  const { count, error } = await supabase
-    .from("alerts")
-    .select("id", { head: true, count: "exact" })
-    .eq("status", "active")
-    .in("module_name", activeModules);
-
-  if (error) {
-    throw new Error(`Failed to count active alerts: ${error.message}`);
-  }
-
-  return count ?? 0;
-}
-
-async function countCriticalAlerts(): Promise<number> {
-  const supabase = await createClient();
-  const activeModules = ["Contracts", "Leave", "Physical Files", "Alerts", "Gratuity"];
-  const { count, error } = await supabase
-    .from("alerts")
-    .select("id", { head: true, count: "exact" })
-    .eq("status", "active")
-    .eq("severity_level", "critical")
-    .in("module_name", activeModules);
-
-  if (error) {
-    throw new Error(`Failed to count critical alerts: ${error.message}`);
-  }
-
-  return count ?? 0;
 }
 
 async function countPendingGratuityCalculations(): Promise<number> {
@@ -284,7 +229,6 @@ export async function getDashboardMetrics(scope: DashboardMetricsScope = {}): Pr
     contracts = true,
     leave = true,
     files = true,
-    alerts = true,
     gratuity = true,
   } = scope;
 
@@ -298,13 +242,10 @@ export async function getDashboardMetrics(scope: DashboardMetricsScope = {}): Pr
     lowVacationLeaveCount,
     employeesOnLeaveCount,
     pendingLeaveApprovalsCount,
-    lowLeaveBalanceAlertsCount,
     filesCheckedOutCount,
     overdueFileReturnsCount,
     missingFilesCount,
     filesInTransitCount,
-    activeAlertsCount,
-    criticalAlertsCount,
     pendingGratuityCalculationsCount,
     approvedUnpaidGratuityCount,
   ] = await Promise.all([
@@ -317,13 +258,10 @@ export async function getDashboardMetrics(scope: DashboardMetricsScope = {}): Pr
     leave ? countLowLeaveByType("vacation_leave") : Promise.resolve(0),
     leave ? countEmployeesOnLeave() : Promise.resolve(0),
     leave ? countPendingLeaveApprovals() : Promise.resolve(0),
-    leave ? countLowLeaveBalanceAlerts() : Promise.resolve(0),
     files ? countFilesByMovementStatus(["checked_out"]) : Promise.resolve(0),
     files ? countOverdueFileReturns() : Promise.resolve(0),
     files ? countFilesByMovementStatus(["missing"]) : Promise.resolve(0),
     files ? countFilesInTransit() : Promise.resolve(0),
-    alerts ? countActiveAlerts() : Promise.resolve(0),
-    alerts ? countCriticalAlerts() : Promise.resolve(0),
     gratuity ? countPendingGratuityCalculations() : Promise.resolve(0),
     gratuity ? countApprovedUnpaidGratuity() : Promise.resolve(0),
   ]);
@@ -338,13 +276,10 @@ export async function getDashboardMetrics(scope: DashboardMetricsScope = {}): Pr
     lowVacationLeaveCount,
     employeesOnLeaveCount,
     pendingLeaveApprovalsCount,
-    lowLeaveBalanceAlertsCount,
     filesCheckedOutCount,
     overdueFileReturnsCount,
     missingFilesCount,
     filesInTransitCount,
-    activeAlertsCount,
-    criticalAlertsCount,
     pendingGratuityCalculationsCount,
     approvedUnpaidGratuityCount,
   };

@@ -106,9 +106,7 @@ export function getCurrentActiveContract(
 }
 
 export type ContractLifecycleAction =
-  | "renew_contract"
-  | "confirm_employee"
-  | "extend_probation";
+  | "renew_contract";
 
 const CONTRACT_LIST_SELECT = `
   id,
@@ -1032,13 +1030,9 @@ export async function applyContractLifecycleAction(input: {
   action: ContractLifecycleAction;
   start_date?: string;
   end_date?: string;
-  renewal_due_date?: string;
-  probation_end_date?: string;
   renewal_notes?: string;
-  hr_owner?: string;
 }): Promise<ContractRecord> {
   const supabase = await createClient();
-  const now = new Date().toISOString().slice(0, 10);
 
   const { data: existing, error: existingError } = await supabase
     .from("contracts")
@@ -1060,21 +1054,13 @@ export async function applyContractLifecycleAction(input: {
   let patch: Record<string, string | null> = {};
 
   if (input.action === "renew_contract") {
-    const renewalDueDate = input.renewal_due_date?.trim() ?? "";
     const renewalNotes = input.renewal_notes?.trim() ?? "";
 
     if (!renewalStartDate || !renewalEndDate) {
-      throw new Error("Renewal requires both start and end dates.");
+      throw new Error("Renewal start and end dates are required.");
     }
-    if (!renewalDueDate) {
-      throw new Error("Renewal due date is required.");
-    }
-    if (!renewalNotes) {
-      throw new Error("Renewal notes are required.");
-    }
-
     if (renewalEndDate < renewalStartDate) {
-      throw new Error("Renewal end date cannot be earlier than renewal start date.");
+      throw new Error("Renewal end date must be after or equal to renewal start date.");
     }
 
     if (existing.end_date && renewalStartDate <= existing.end_date) {
@@ -1095,25 +1081,8 @@ export async function applyContractLifecycleAction(input: {
       end_date: renewalEndDate,
       renewal_status: "renewed",
       contract_status: "active",
-      renewal_due_date: renewalDueDate,
-      renewal_notes: renewalNotes,
-      hr_owner: input.hr_owner?.trim() || null,
-    };
-  }
-
-  if (input.action === "confirm_employee") {
-    patch = {
-      confirmation_status: "confirmed",
-      probation_end_date: input.probation_end_date?.trim() || now,
-    };
-  }
-
-  if (input.action === "extend_probation") {
-    patch = {
-      confirmation_status: "pending",
-      probation_end_date: input.probation_end_date?.trim() || null,
-      renewal_notes: input.renewal_notes?.trim() || null,
-      hr_owner: input.hr_owner?.trim() || null,
+      renewal_due_date: null,
+      renewal_notes: renewalNotes || null,
     };
   }
 

@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   BarChart2,
-  Bell,
   Calendar,
   DollarSign,
   FileStack,
@@ -33,7 +32,6 @@ const ICON_MAP: Record<DashboardNavIconName, LucideIcon> = {
   fileStack: FileStack,
   dollarSign: DollarSign,
   landmark: Landmark,
-  bell: Bell,
   barChart2: BarChart2,
   listTree: ListTree,
   settings2: Settings2,

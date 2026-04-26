@@ -34,6 +34,18 @@ function firstString(value: string | string[] | undefined): string | undefined {
   return undefined;
 }
 
+function formatReadableDate(dateText: string | null | undefined): string {
+  const value = (dateText ?? "").trim();
+  if (!value) return "—";
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function redirectWithActionMessage(
   contractId: string,
   action: string,
@@ -56,13 +68,11 @@ async function renewContractServerAction(contractId: string, formData: FormData)
       action: "renew_contract",
       start_date: String(formData.get("start_date") ?? ""),
       end_date: String(formData.get("end_date") ?? ""),
-      renewal_due_date: String(formData.get("renewal_due_date") ?? ""),
       renewal_notes: String(formData.get("renewal_notes") ?? ""),
-      hr_owner: String(formData.get("hr_owner") ?? ""),
     });
   } catch (error) {
     const errorMessage =
-      error instanceof Error ? error.message : "Failed to renew contract.";
+      error instanceof Error ? error.message : "Failed to record renewal dates.";
     redirectWithActionMessage(contractId, "renew", "error", errorMessage);
   }
 
@@ -73,59 +83,7 @@ async function renewContractServerAction(contractId: string, formData: FormData)
     contractId,
     "renew",
     "success",
-    "Contract renewed successfully."
-  );
-}
-
-async function confirmEmployeeServerAction(contractId: string, formData: FormData) {
-  "use server";
-  await assertPermission("contracts.approve");
-  try {
-    await applyContractLifecycleAction({
-      id: contractId,
-      action: "confirm_employee",
-      probation_end_date: String(formData.get("probation_end_date") ?? ""),
-    });
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Failed to confirm employee.";
-    redirectWithActionMessage(contractId, "confirm", "error", errorMessage);
-  }
-
-  revalidatePath(`/contracts/${contractId}`);
-  revalidatePath("/contracts");
-  redirectWithActionMessage(
-    contractId,
-    "confirm",
-    "success",
-    "Employee confirmed successfully."
-  );
-}
-
-async function extendProbationServerAction(contractId: string, formData: FormData) {
-  "use server";
-  await assertPermission("contracts.edit");
-  try {
-    await applyContractLifecycleAction({
-      id: contractId,
-      action: "extend_probation",
-      probation_end_date: String(formData.get("probation_end_date") ?? ""),
-      renewal_notes: String(formData.get("renewal_notes") ?? ""),
-      hr_owner: String(formData.get("hr_owner") ?? ""),
-    });
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Failed to extend probation.";
-    redirectWithActionMessage(contractId, "probation", "error", errorMessage);
-  }
-
-  revalidatePath(`/contracts/${contractId}`);
-  revalidatePath("/contracts");
-  redirectWithActionMessage(
-    contractId,
-    "probation",
-    "success",
-    "Probation updated successfully."
+    "Renewal dates recorded successfully."
   );
 }
 
@@ -139,7 +97,6 @@ export default async function ContractDetailPage({
   const permissions = auth?.permissions ?? [];
   const canEditContract = hasAnyPermissionForContext(profile, permissions, ["contracts.edit"]);
   const canRenewContract = hasAnyPermissionForContext(profile, permissions, ["contracts.renew"]);
-  const canApproveContract = hasAnyPermissionForContext(profile, permissions, ["contracts.approve"]);
   const canViewSalary = hasAnyPermissionForContext(profile, permissions, ["contracts.salary.view"]);
   const { id } = await params;
   const sp = await searchParams;
@@ -180,8 +137,6 @@ export default async function ContractDetailPage({
     Number(contract.salary_amount ?? 0) + Number(totalMonthlyAllowances ?? 0);
 
   const renewContractAction = renewContractServerAction.bind(null, id);
-  const confirmEmployeeAction = confirmEmployeeServerAction.bind(null, id);
-  const extendProbationAction = extendProbationServerAction.bind(null, id);
 
   return (
     <main className="space-y-6">
@@ -226,8 +181,8 @@ export default async function ContractDetailPage({
           <Info label="Contract #" value={contract.contract_number ?? "—"} />
           <Info label="Title" value={contract.contract_title ?? "—"} />
           <Info label="Status" value={effectiveStatus} />
-          <Info label="Start Date" value={contract.start_date ?? "—"} />
-          <Info label="End Date" value={contract.end_date ?? "—"} />
+          <Info label="Start Date" value={formatReadableDate(contract.start_date)} />
+          <Info label="End Date" value={formatReadableDate(contract.end_date)} />
           <Info
             label="Gratuity Eligibility"
             value={contract.is_gratuity_eligible ? "Eligible" : "Not applicable"}
@@ -313,15 +268,11 @@ export default async function ContractDetailPage({
           />
           <Info
             label="Contract Period"
-            value={`${contract.start_date ?? "—"} to ${contract.end_date ?? "—"}`}
+            value={`${formatReadableDate(contract.start_date)} to ${formatReadableDate(contract.end_date)}`}
           />
           <Info
             label="Total Vacation Planning Entitlement"
             value={`${annualVacationEntitlement} × ${contractYears} = ${totalVacationPlanningEntitlement} days`}
-          />
-          <Info
-            label="Sick Leave Policy"
-            value="Resets yearly, no rollover"
           />
         </div>
         {leaveBalanceSummary.length === 0 ? (
@@ -332,7 +283,7 @@ export default async function ContractDetailPage({
               <Info
                 key={balance.id}
                 label={`${formatLeaveType(balance.leave_type)} (${balance.balance_year ?? "Year"})`}
-                value={`Entitlement ${Number(balance.entitlement_days ?? 0)} • Used ${Number(balance.used_days ?? 0)} • Remaining ${Number(balance.remaining_days ?? 0)} • ${balance.effective_from ?? "—"} to ${balance.effective_to ?? "—"}`}
+                value={`Entitlement ${Number(balance.entitlement_days ?? 0)} • Used ${Number(balance.used_days ?? 0)} • Remaining ${Number(balance.remaining_days ?? 0)} • ${formatReadableDate(balance.effective_from)} to ${formatReadableDate(balance.effective_to)}`}
               />
             ))}
           </div>
@@ -387,92 +338,50 @@ export default async function ContractDetailPage({
 
       {canRenewContract ? (
         <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-neutral-900">Renew Contract</h2>
+          <h2 className="text-lg font-semibold text-neutral-900">Add Renewal Dates</h2>
           <p className="mt-1 text-sm text-neutral-600">
-            Enter new contract dates and renewal details.
+            Use this section to record the new contract period after renewal has been confirmed administratively.
           </p>
           <form action={renewContractAction} className="mt-4 grid gap-3 md:grid-cols-2">
-            <input name="start_date" type="date" required className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-            <input name="end_date" type="date" required className="rounded-xl border border-neutral-300 px-3 py-2 text-sm" />
-            <input
-              name="renewal_due_date"
-              type="date"
-              required
-              defaultValue={contract.renewal_due_date ?? ""}
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <input
-              name="hr_owner"
-              defaultValue={contract.hr_owner ?? ""}
-              placeholder="HR owner"
-              className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <textarea
-              name="renewal_notes"
-              defaultValue={contract.renewal_notes ?? ""}
-              placeholder="Renewal notes"
-              required
-              rows={4}
-              className="md:col-span-2 rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-            />
+            <label className="space-y-1 text-sm text-neutral-700">
+              <span className="font-medium text-neutral-900">Renewal Start Date</span>
+              <input
+                name="start_date"
+                type="date"
+                required
+                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm text-neutral-700">
+              <span className="font-medium text-neutral-900">Renewal End Date</span>
+              <input
+                name="end_date"
+                type="date"
+                required
+                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <div className="md:col-span-2 space-y-1">
+              <label htmlFor="renewal_notes" className="text-sm font-medium text-neutral-900">
+                Renewal Notes
+              </label>
+              <p className="text-xs text-neutral-600">
+                Add any notes about the renewal decision, approval, or supporting information.
+              </p>
+              <textarea
+                id="renewal_notes"
+                name="renewal_notes"
+                defaultValue={contract.renewal_notes ?? ""}
+                placeholder="Renewal notes"
+                rows={4}
+                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+              />
+            </div>
             <button type="submit" className="w-fit rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
-              Renew Contract
+              Add Renewal Dates
             </button>
           </form>
         </section>
-      ) : null}
-
-      {canApproveContract ? (
-      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-neutral-900">Confirm Employee</h2>
-        <p className="mt-1 text-sm text-neutral-600">
-          Mark this employee as confirmed for the contract.
-        </p>
-        <form action={confirmEmployeeAction} className="mt-4 flex flex-wrap gap-3">
-          <input
-            name="probation_end_date"
-            type="date"
-            defaultValue={contract.probation_end_date ?? ""}
-            className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-          />
-          <button type="submit" className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600">
-            Confirm Employee
-          </button>
-        </form>
-      </section>
-      ) : null}
-
-      {canEditContract ? (
-      <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-neutral-900">Extend Probation</h2>
-        <p className="mt-1 text-sm text-neutral-600">
-          Set a new probation end date and save notes.
-        </p>
-        <form action={extendProbationAction} className="mt-4 grid gap-3 md:grid-cols-2">
-          <input
-            name="probation_end_date"
-            type="date"
-            defaultValue={contract.probation_end_date ?? ""}
-            className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-          />
-          <input
-            name="hr_owner"
-            defaultValue={contract.hr_owner ?? ""}
-            placeholder="HR owner"
-            className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-          />
-          <textarea
-            name="renewal_notes"
-            defaultValue={contract.renewal_notes ?? ""}
-            placeholder="Probation notes"
-            rows={4}
-            className="md:col-span-2 rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-          />
-          <button type="submit" className="w-fit rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
-            Extend Probation
-          </button>
-        </form>
-      </section>
       ) : null}
     </main>
   );
