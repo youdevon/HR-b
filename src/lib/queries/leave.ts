@@ -737,14 +737,16 @@ async function enrichLeaveTransactions(
   });
 }
 
-export async function listLeaveBalances(): Promise<LeaveBalanceRecord[]> {
+export async function listLeaveBalances(options?: { limit?: number }): Promise<LeaveBalanceRecord[]> {
   const supabase = await createClient();
+  const limit = Math.max(1, Math.min(2000, Math.floor(options?.limit ?? 2000)));
 
   const { data, error } = await supabase
     .from("leave_balances")
     .select(LEAVE_BALANCE_SELECT)
     .order("balance_year", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(limit);
 
   if (error) {
     console.error("listLeaveBalances error:", JSON.stringify(error, null, 2));

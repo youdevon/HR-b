@@ -8,6 +8,12 @@ import {
   listContracts,
   normalizeExpiringContractDays,
 } from "@/lib/queries/contracts";
+import {
+  calculateContractMonths,
+  calculateGratuityPayment,
+  DEFAULT_GOVERNMENT_TAX_PERCENT,
+  DEFAULT_GRATUITY_RATE_PERCENT,
+} from "@/lib/queries/gratuity";
 import { getEmployeeById } from "@/lib/queries/employees";
 import {
   dashboardButtonSecondaryClass,
@@ -45,28 +51,6 @@ function parseExpiringDays(value: string | undefined): 30 | 60 | 90 {
   return normalizeExpiringContractDays(Number.isFinite(parsed) ? parsed : undefined);
 }
 
-function lifecycleStatus(contract: {
-  renewal_status: string | null;
-  confirmation_status: string | null;
-  renewal_due_date: string | null;
-  probation_end_date: string | null;
-}): string {
-  if (contract.renewal_status?.toLowerCase() === "renewed") return "Renewed";
-  if (contract.confirmation_status?.toLowerCase() === "confirmed") return "Confirmed";
-  if (contract.renewal_due_date && contract.renewal_status?.toLowerCase() !== "renewed") {
-    const due = new Date(contract.renewal_due_date).getTime();
-    if (!Number.isNaN(due) && due < Date.now()) return "Overdue Renewal";
-    return "Renewal Due";
-  }
-  if (
-    contract.probation_end_date &&
-    contract.confirmation_status?.toLowerCase() !== "confirmed"
-  ) {
-    return "In Probation";
-  }
-  return "Active Lifecycle";
-}
-
 function statusBadgeClass(status: string | null | undefined): string {
   const normalized = (status ?? "").trim().toLowerCase();
   if (normalized === "active") return "bg-emerald-100 text-emerald-800";
@@ -74,6 +58,34 @@ function statusBadgeClass(status: string | null | undefined): string {
   if (normalized === "expired" || normalized === "critical") return "bg-red-100 text-red-800";
   if (normalized === "inactive" || normalized === "resolved") return "bg-neutral-100 text-neutral-700";
   return "bg-neutral-100 text-neutral-700";
+}
+
+function formatReadableDate(value: string | null | undefined): string {
+  const dateText = (value ?? "").trim();
+  if (!dateText) return "—";
+  const parsed = new Date(`${dateText}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dateText;
+  return parsed
+    .toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+    .replace(",", "");
+}
+
+function formatCurrency(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function employeeDisplayName(contract: {
+  employee_first_name: string | null;
+  employee_last_name: string | null;
+}): string {
+  const fullName = `${contract.employee_first_name ?? ""} ${contract.employee_last_name ?? ""}`.trim();
+  return fullName || "Unknown Employee";
 }
 
 export default async function ContractsPage({
@@ -96,6 +108,7 @@ export default async function ContractsPage({
   const hasAnyExplicitFilter = showAllSelected || selectedStatus !== "all" || hasSearch;
   const hasClearableFilter =
     showAllSelected || selectedStatus !== "all" || hasSearch || hasEmployeeFilter;
+  const isStandardizedContractsView = selectedStatus !== "all" || showAllSelected;
   const selectedEmployee = employeeId ? await getEmployeeById(employeeId) : null;
   const selectedEmployeeName = selectedEmployee
     ? `${selectedEmployee.first_name ?? ""} ${selectedEmployee.last_name ?? ""}`.trim()
@@ -225,53 +238,89 @@ export default async function ContractsPage({
             <table className="min-w-full text-sm">
               <thead>
                 <tr className={dashboardTableHeadRowClass}>
-                  <th className={dashboardTableHeadCellClass}>Contract #</th>
-                  <th className={dashboardTableHeadCellClass}>Title</th>
-                  <th className={dashboardTableHeadCellClass}>Type</th>
-                  <th className={dashboardTableHeadCellClass}>Status</th>
-                  <th className={dashboardTableHeadCellClass}>Lifecycle</th>
-                  <th className={dashboardTableHeadCellClass}>Employee</th>
-                  <th className={dashboardTableHeadCellClass}>Start</th>
-                  <th className={dashboardTableHeadCellClass}>End</th>
-                  <th className={dashboardTableHeadCellClass}>Department</th>
-                  <th className={dashboardTableHeadCellClass}>Job Title</th>
-                  {canViewSalary ? <th className={dashboardTableHeadCellClass}>Salary</th> : null}
-                  <th className={dashboardTableHeadCellClass}>Gratuity</th>
+                  {isStandardizedContractsView ? (
+                    <>
+                      <th className={dashboardTableHeadCellClass}>Contract #</th>
+                      <th className={dashboardTableHeadCellClass}>Employee Name</th>
+                      <th className={dashboardTableHeadCellClass}>Start Date</th>
+                      <th className={dashboardTableHeadCellClass}>End Date</th>
+                      <th className={dashboardTableHeadCellClass}>Salary</th>
+                      <th className={dashboardTableHeadCellClass}>Gratuity</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className={dashboardTableHeadCellClass}>Contract #</th>
+                      <th className={dashboardTableHeadCellClass}>Title</th>
+                      <th className={dashboardTableHeadCellClass}>Type</th>
+                      <th className={dashboardTableHeadCellClass}>Status</th>
+                      <th className={dashboardTableHeadCellClass}>Lifecycle</th>
+                      <th className={dashboardTableHeadCellClass}>Employee</th>
+                      <th className={dashboardTableHeadCellClass}>Start</th>
+                      <th className={dashboardTableHeadCellClass}>End</th>
+                      <th className={dashboardTableHeadCellClass}>Department</th>
+                      <th className={dashboardTableHeadCellClass}>Job Title</th>
+                      {canViewSalary ? <th className={dashboardTableHeadCellClass}>Salary</th> : null}
+                      <th className={dashboardTableHeadCellClass}>Gratuity</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {contracts.map((contract) => (
-                  <ClickableTableRow key={contract.id} href={`/contracts/${contract.id}`}>
-                    <td className={dashboardTableCellClass}>{contract.contract_number ?? "—"}</td>
-                    <td className={dashboardTableCellClass}>{contract.contract_title ?? "—"}</td>
-                    <td className={dashboardTableCellClass}>{contract.contract_type ?? "—"}</td>
-                    <td className={dashboardTableCellClass}>
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(contract.effective_contract_status)}`}>
-                        {contract.effective_contract_status}
-                      </span>
-                    </td>
-                    <td className={dashboardTableCellClass}>{lifecycleStatus(contract)}</td>
-                    <td className={dashboardTableCellClass}>
-                      {[contract.employee_first_name, contract.employee_last_name]
-                        .filter(Boolean)
-                        .join(" ") || "—"}
-                    </td>
-                    <td className={dashboardTableCellClass}>{contract.start_date ?? "—"}</td>
-                    <td className={dashboardTableCellClass}>{contract.end_date ?? "—"}</td>
-                    <td className={dashboardTableCellClass}>{contract.department ?? "—"}</td>
-                    <td className={dashboardTableCellClass}>{contract.job_title ?? "—"}</td>
-                    {canViewSalary ? (
-                      <td className={dashboardTableCellClass}>
-                        {contract.salary_amount != null
-                          ? `${contract.salary_amount} ${contract.salary_frequency ?? ""}`.trim()
-                          : "—"}
-                      </td>
-                    ) : null}
-                    <td className={dashboardTableCellClass}>
-                      {contract.is_gratuity_eligible ? "Yes" : "No"}
-                    </td>
-                  </ClickableTableRow>
-                ))}
+                {contracts.map((contract) => {
+                  const contractMonths = calculateContractMonths(contract.start_date, contract.end_date);
+                  const gratuityEstimate = calculateGratuityPayment({
+                    monthlySalary: Number(contract.salary_amount ?? 0),
+                    contractMonths,
+                    isGratuityEligible: contract.is_gratuity_eligible === true,
+                    gratuityRatePercent: DEFAULT_GRATUITY_RATE_PERCENT,
+                    governmentTaxPercent: DEFAULT_GOVERNMENT_TAX_PERCENT,
+                  });
+                  const gratuityDisplay = contract.is_gratuity_eligible === true
+                    ? gratuityEstimate.is_eligible
+                      ? `Eligible — ${formatCurrency(gratuityEstimate.net_gratuity_payable)}`
+                      : "Eligible — Unable to calculate"
+                    : "Not applicable";
+
+                  return (
+                    <ClickableTableRow key={contract.id} href={`/contracts/${contract.id}`}>
+                      <td className={dashboardTableCellClass}>{contract.contract_number ?? "—"}</td>
+                      {isStandardizedContractsView ? (
+                        <>
+                          <td className={dashboardTableCellClass}>{employeeDisplayName(contract)}</td>
+                          <td className={dashboardTableCellClass}>{formatReadableDate(contract.start_date)}</td>
+                          <td className={dashboardTableCellClass}>{formatReadableDate(contract.end_date)}</td>
+                          <td className={dashboardTableCellClass}>
+                            {canViewSalary ? formatCurrency(contract.salary_amount) : "—"}
+                          </td>
+                          <td className={dashboardTableCellClass}>{gratuityDisplay}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td className={dashboardTableCellClass}>{contract.contract_title ?? "—"}</td>
+                          <td className={dashboardTableCellClass}>{contract.contract_type ?? "—"}</td>
+                          <td className={dashboardTableCellClass}>
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(contract.effective_contract_status)}`}>
+                              {contract.effective_contract_status}
+                            </span>
+                          </td>
+                          <td className={dashboardTableCellClass}>{employeeDisplayName(contract)}</td>
+                          <td className={dashboardTableCellClass}>{formatReadableDate(contract.start_date)}</td>
+                          <td className={dashboardTableCellClass}>{formatReadableDate(contract.end_date)}</td>
+                          <td className={dashboardTableCellClass}>{contract.department ?? "—"}</td>
+                          <td className={dashboardTableCellClass}>{contract.job_title ?? "—"}</td>
+                          {canViewSalary ? (
+                            <td className={dashboardTableCellClass}>
+                              {formatCurrency(contract.salary_amount)}
+                            </td>
+                          ) : null}
+                          <td className={dashboardTableCellClass}>
+                            {contract.is_gratuity_eligible ? "Eligible" : "Not applicable"}
+                          </td>
+                        </>
+                      )}
+                    </ClickableTableRow>
+                  );
+                })}
               </tbody>
             </table>
           </div>
