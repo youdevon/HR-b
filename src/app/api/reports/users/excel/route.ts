@@ -119,7 +119,7 @@ export async function GET(request: Request) {
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": 'attachment; filename="users-report.xlsx"',
+      "Content-Disposition": 'attachment; filename="user-report.xlsx"',
       "Cache-Control": "no-store",
     },
   });

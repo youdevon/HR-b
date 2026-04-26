@@ -48,11 +48,11 @@ function hasCriteria(filters: ReportFilters): boolean {
   );
 }
 
-function formatDate(value: string | null): string {
+function formatDate(value: string | null): Date | string {
   if (!value) return "—";
   const parsed = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString();
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed;
 }
 
 function formatType(value: string | null): string {
@@ -178,6 +178,9 @@ export async function GET(request: Request) {
     ) {
       sheet.getColumn(index + 1).numFmt = "$#,##0.00";
     }
+    if (field === "start_date" || field === "end_date") {
+      sheet.getColumn(index + 1).numFmt = "mmm dd, yyyy";
+    }
   });
 
   const buffer = await workbook.xlsx.writeBuffer();
@@ -186,9 +189,7 @@ export async function GET(request: Request) {
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="contracts-report-${now
-        .toISOString()
-        .slice(0, 10)}.xlsx"`,
+      "Content-Disposition": 'attachment; filename="contract-report.xlsx"',
     },
   });
 }

@@ -1,6 +1,8 @@
 import PageHeader from "@/components/layout/page-header";
 import { getAuditReportData } from "@/lib/queries/reports";
 import Link from "next/link";
+import { formInputClass, formPrimaryButtonClass, formSecondaryButtonClass } from "@/lib/ui/form-styles";
+import { cn } from "@/lib/utils/cn";
 
 type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 function firstString(value: string | string[] | undefined): string {
@@ -152,7 +154,7 @@ export default async function Page({ searchParams }: PageProps) {
               <select
                 name="module"
                 defaultValue={filters.module}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                className={formInputClass}
               >
                 <option value="">All</option>
                 {reportData.moduleOptions.map((option) => (
@@ -167,7 +169,7 @@ export default async function Page({ searchParams }: PageProps) {
               <select
                 name="action"
                 defaultValue={filters.action}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                className={formInputClass}
               >
                 <option value="">All</option>
                 {reportData.actionOptions.map((option) => (
@@ -183,7 +185,7 @@ export default async function Page({ searchParams }: PageProps) {
                 <select
                   name="summary"
                   defaultValue={filters.summary}
-                  className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                  className={formInputClass}
                 >
                   <option value="">All</option>
                   {reportData.summaryOptions.map((option) => (
@@ -199,7 +201,7 @@ export default async function Page({ searchParams }: PageProps) {
               <select
                 name="performedBy"
                 defaultValue={filters.performedBy}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                className={formInputClass}
               >
                 <option value="">All</option>
                 {reportData.performerOptions.map((option) => (
@@ -214,7 +216,7 @@ export default async function Page({ searchParams }: PageProps) {
               <select
                 name="performedForEmployeeId"
                 defaultValue={filters.performedForEmployeeId}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                className={formInputClass}
               >
                 <option value="">All</option>
                 {reportData.performedForOptions.map((option) => (
@@ -230,7 +232,7 @@ export default async function Page({ searchParams }: PageProps) {
                 name="startDate"
                 type="date"
                 defaultValue={filters.startDate}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                className={formInputClass}
               />
             </label>
             <label className="space-y-1">
@@ -239,25 +241,19 @@ export default async function Page({ searchParams }: PageProps) {
                 name="endDate"
                 type="date"
                 defaultValue={filters.endDate}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                className={formInputClass}
               />
             </label>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button className="inline-flex h-10 items-center rounded-xl bg-neutral-900 px-4 text-sm font-medium text-white">
+            <button type="submit" className={formPrimaryButtonClass}>
               Apply Filters
             </button>
-            <Link
-              href="/reports/audit?show=all"
-              className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-900"
-            >
+            <Link href="/reports/audit?show=all" className={formSecondaryButtonClass}>
               Show All
             </Link>
             {generated ? (
-              <Link
-                href="/reports/audit"
-                className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-900"
-              >
+              <Link href="/reports/audit" className={formSecondaryButtonClass}>
                 Clear
               </Link>
             ) : null}
@@ -268,16 +264,16 @@ export default async function Page({ searchParams }: PageProps) {
       <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
         {!generated ? (
           <p className="p-8 text-center text-sm text-neutral-600">
-            Use Show All or apply filters to generate the audit report.
+            Use Show All or apply filters to generate this report.
           </p>
         ) : !rows.length ? (
           <p className="p-8 text-center text-sm text-neutral-600">
-            No audit activity matches the selected filters.
+            No records found for the selected criteria.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-600">
+              <thead className="bg-neutral-50 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
                 <tr>
                   <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3">Time</th>
@@ -355,17 +351,14 @@ function ExportButtons({ generated, excelHref }: { generated: boolean; excelHref
       <button
         type="button"
         disabled
-        className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-400"
+        className={cn(formSecondaryButtonClass, "cursor-not-allowed text-neutral-400")}
       >
         Export Excel
       </button>
     );
   }
   return (
-    <Link
-      href={excelHref}
-      className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-900"
-    >
+    <Link href={excelHref} className={formSecondaryButtonClass}>
       Export Excel
     </Link>
   );

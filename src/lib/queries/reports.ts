@@ -14,6 +14,7 @@ import { getEffectiveContractStatus } from "@/lib/queries/contracts";
 import {
   calculateContractMonths,
   calculateGratuityPayment,
+  listGratuityCalculations,
 } from "@/lib/queries/gratuity";
 import { createClient } from "@/lib/supabase/server";
 
@@ -124,6 +125,21 @@ export type LeaveReportData = {
   selectedContract: LeaveContractOption | null;
   contractYearDetails: LeaveContractYearDetailRow[];
   contractTransactions: LeaveTransactionRecord[];
+};
+
+export type GratuityReportRow = {
+  id: string;
+  employee_name: string;
+  file_number: string | null;
+  contract_number: string | null;
+  calculation_status: string;
+  calculation_date: string | null;
+  approved_at: string | null;
+  service_start_date: string | null;
+  service_end_date: string | null;
+  service_length_months: number | null;
+  salary_basis_amount: number | null;
+  approved_amount: number | null;
 };
 
 export type AuditFilterOption = {
@@ -1408,4 +1424,79 @@ export async function getUserAccountsReport(filters: ReportFilters) {
     missingCreatedYearForMonth,
     rows: reportRows,
   };
+}
+
+function hasGratuityReportCriteria(filters: ReportFilters): boolean {
+  return Boolean(
+    clean(filters.show).toLowerCase() === "all" ||
+      clean(filters.status) ||
+      clean(filters.startDate) ||
+      clean(filters.endDate) ||
+      clean(filters.query)
+  );
+}
+
+export async function getGratuityReportData(filters: ReportFilters): Promise<{
+  generated: boolean;
+  rows: GratuityReportRow[];
+}> {
+  const generated = hasGratuityReportCriteria(filters);
+  if (!generated) {
+    return { generated: false, rows: [] };
+  }
+
+  const [calculations, employees, contracts] = await Promise.all([
+    listGratuityCalculations(),
+    listEmployees(),
+    listContracts({}),
+  ]);
+
+  const employeeMap = new Map(
+    employees.map((employee) => [
+      employee.id,
+      {
+        name: `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim() || "—",
+        file_number: employee.file_number ?? null,
+      },
+    ])
+  );
+  const contractMap = new Map(
+    contracts.map((contract) => [contract.id, contract.contract_number ?? null])
+  );
+  const statusFilter = clean(filters.status).toLowerCase();
+  const query = clean(filters.query).toLowerCase();
+
+  const rows = calculations
+    .map((row) => {
+      const employee = row.employee_id ? employeeMap.get(row.employee_id) : undefined;
+      return {
+        id: row.id,
+        employee_name: employee?.name ?? "—",
+        file_number: employee?.file_number ?? null,
+        contract_number: row.contract_id ? contractMap.get(row.contract_id) ?? null : null,
+        calculation_status: clean(row.calculation_status).toLowerCase() || "unknown",
+        calculation_date: row.calculation_date,
+        approved_at: row.approved_at,
+        service_start_date: row.service_start_date,
+        service_end_date: row.service_end_date,
+        service_length_months: row.service_length_months,
+        salary_basis_amount: row.salary_basis_amount,
+        approved_amount: row.approved_amount ?? row.calculated_amount,
+      } satisfies GratuityReportRow;
+    })
+    .filter((row) => {
+      if (statusFilter && statusFilter !== "all" && row.calculation_status !== statusFilter) return false;
+      if (
+        query &&
+        !row.employee_name.toLowerCase().includes(query) &&
+        !(row.file_number ?? "").toLowerCase().includes(query) &&
+        !(row.contract_number ?? "").toLowerCase().includes(query)
+      ) {
+        return false;
+      }
+      if (!inDateRange(row.calculation_date ?? row.approved_at, filters)) return false;
+      return true;
+    });
+
+  return { generated: true, rows };
 }

@@ -5,6 +5,8 @@ import {
   type LeaveContractOption,
   type ReportFilters,
 } from "@/lib/queries/reports";
+import { formInputClass, formPrimaryButtonClass, formSecondaryButtonClass } from "@/lib/ui/form-styles";
+import { cn } from "@/lib/utils/cn";
 
 type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -128,7 +130,7 @@ export default async function Page({ searchParams }: PageProps) {
                 name="query"
                 defaultValue={filters.query}
                 placeholder="Search name or file #"
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900"
+                className={formInputClass}
               />
             </label>
             <label className="space-y-1">
@@ -136,7 +138,7 @@ export default async function Page({ searchParams }: PageProps) {
               <select
                 name="leaveType"
                 defaultValue={filters.leaveType}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900"
+                className={formInputClass}
               >
                 <option value="">All</option>
                 <option value="vacation_leave">Vacation Leave</option>
@@ -153,7 +155,7 @@ export default async function Page({ searchParams }: PageProps) {
               <select
                 name="status"
                 defaultValue={filters.status}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900"
+                className={formInputClass}
               >
                 <option value="">All</option>
                 <option value="active">Active</option>
@@ -166,7 +168,7 @@ export default async function Page({ searchParams }: PageProps) {
                 name="activeAsAtDate"
                 type="date"
                 defaultValue={filters.activeAsAtDate}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900"
+                className={formInputClass}
               />
             </label>
             <label className="space-y-1">
@@ -175,7 +177,7 @@ export default async function Page({ searchParams }: PageProps) {
                 name="effectiveFrom"
                 type="date"
                 defaultValue={filters.effectiveFrom}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900"
+                className={formInputClass}
               />
             </label>
             <label className="space-y-1">
@@ -184,7 +186,7 @@ export default async function Page({ searchParams }: PageProps) {
                 name="effectiveTo"
                 type="date"
                 defaultValue={filters.effectiveTo}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900"
+                className={formInputClass}
               />
             </label>
             <label className="space-y-1">
@@ -196,7 +198,7 @@ export default async function Page({ searchParams }: PageProps) {
                 max="9999"
                 defaultValue={filters.contractYear}
                 placeholder="e.g. 2026"
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900"
+                className={formInputClass}
               />
             </label>
           </div>
@@ -209,7 +211,7 @@ export default async function Page({ searchParams }: PageProps) {
                   name="specificEmployeeLookup"
                   defaultValue={filters.specificEmployeeLookup}
                   placeholder="Search specific employee"
-                  className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900"
+                  className={formInputClass}
                 />
               </label>
               <label className="space-y-1">
@@ -217,7 +219,7 @@ export default async function Page({ searchParams }: PageProps) {
                 <select
                   name="specificEmployeeId"
                   defaultValue={filters.specificEmployeeId}
-                  className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900"
+                  className={formInputClass}
                 >
                   <option value="">Select employee</option>
                   {reportData.employeeOptions.map((employee) => (
@@ -232,7 +234,7 @@ export default async function Page({ searchParams }: PageProps) {
                 <select
                   name="contractId"
                   defaultValue={filters.contractId}
-                  className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900"
+                  className={formInputClass}
                 >
                   <option value="">Select contract</option>
                   {reportData.contractOptions.map((contract) => (
@@ -249,20 +251,14 @@ export default async function Page({ searchParams }: PageProps) {
             of each employee’s contract start date.
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <button className="inline-flex h-10 items-center rounded-xl bg-neutral-900 px-4 text-sm font-medium text-white">
+            <button type="submit" className={formPrimaryButtonClass}>
               Apply Filters
             </button>
-            <Link
-              href="/reports/leave?show=all"
-              className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-900"
-            >
+            <Link href="/reports/leave?show=all" className={formSecondaryButtonClass}>
               Show All
             </Link>
             {generated ? (
-              <Link
-                href="/reports/leave"
-                className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-900"
-              >
+              <Link href="/reports/leave" className={formSecondaryButtonClass}>
                 Clear
               </Link>
             ) : null}
@@ -273,10 +269,10 @@ export default async function Page({ searchParams }: PageProps) {
       <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
         {!generated ? (
           <p className="p-8 text-center text-sm text-neutral-600">
-            Use Show All or apply filters to generate the leave report.
+            Use Show All or apply filters to generate this report.
           </p>
         ) : !rows.length ? (
-          <p className="p-8 text-center text-sm text-neutral-600">No leave balances match the selected filters.</p>
+          <p className="p-8 text-center text-sm text-neutral-600">No records found for the selected criteria.</p>
         ) : (
           <div className="overflow-x-auto">
             <div className="border-b border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-600">
@@ -288,7 +284,7 @@ export default async function Page({ searchParams }: PageProps) {
               planning and monitoring.
             </div>
             <table className="min-w-full text-sm">
-              <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-600">
+              <thead className="bg-neutral-50 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
                 <tr>
                   <th className="px-4 py-3">Employee Name</th>
                   <th className="px-4 py-3">File #</th>
@@ -378,7 +374,7 @@ export default async function Page({ searchParams }: PageProps) {
 
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-600">
+              <thead className="bg-neutral-50 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
                 <tr>
                   <th className="px-4 py-3">Contract Year</th>
                   <th className="px-4 py-3">Effective From</th>
@@ -420,17 +416,14 @@ function ExportButtons({ generated, excelHref }: { generated: boolean; excelHref
       <button
         type="button"
         disabled
-        className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-400"
+        className={cn(formSecondaryButtonClass, "cursor-not-allowed text-neutral-400")}
       >
         Export Excel
       </button>
     );
   }
   return (
-    <Link
-      href={excelHref}
-      className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-900"
-    >
+    <Link href={excelHref} className={formSecondaryButtonClass}>
       Export Excel
     </Link>
   );

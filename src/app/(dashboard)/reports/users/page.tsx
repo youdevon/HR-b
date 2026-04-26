@@ -2,6 +2,8 @@ import PageHeader from "@/components/layout/page-header";
 import { getUserAccountsReport } from "@/lib/queries/reports";
 import { listRoles } from "@/lib/queries/admin";
 import Link from "next/link";
+import { formInputClass, formPrimaryButtonClass, formSecondaryButtonClass } from "@/lib/ui/form-styles";
+import { cn } from "@/lib/utils/cn";
 
 type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 function firstString(value: string | string[] | undefined): string {
@@ -109,7 +111,7 @@ export default async function Page({ searchParams }: PageProps) {
                 name="query"
                 defaultValue={filters.query}
                 placeholder="Name or email"
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                className={formInputClass}
               />
             </label>
             <label className="space-y-1">
@@ -117,7 +119,7 @@ export default async function Page({ searchParams }: PageProps) {
               <select
                 name="roleId"
                 defaultValue={filters.roleId}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                className={formInputClass}
               >
                 <option value="">All</option>
                 {roles.map((role) => (
@@ -132,7 +134,7 @@ export default async function Page({ searchParams }: PageProps) {
               <select
                 name="status"
                 defaultValue={filters.status}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                className={formInputClass}
               >
                 <option value="">All</option>
                 <option value="active">Active</option>
@@ -150,7 +152,7 @@ export default async function Page({ searchParams }: PageProps) {
                 max="9999"
                 defaultValue={filters.createdYear}
                 placeholder="e.g. 2026"
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                className={formInputClass}
               />
             </label>
             <label className="space-y-1">
@@ -158,7 +160,7 @@ export default async function Page({ searchParams }: PageProps) {
               <select
                 name="createdMonth"
                 defaultValue={filters.createdMonth}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm"
+                className={formInputClass}
               >
                 <option value="">All</option>
                 {MONTH_OPTIONS.map((month) => (
@@ -170,20 +172,14 @@ export default async function Page({ searchParams }: PageProps) {
             </label>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button className="inline-flex h-10 items-center rounded-xl bg-neutral-900 px-4 text-sm font-medium text-white">
+            <button type="submit" className={formPrimaryButtonClass}>
               Apply Filters
             </button>
-            <Link
-              href="/reports/users?show=all"
-              className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-900"
-            >
+            <Link href="/reports/users?show=all" className={formSecondaryButtonClass}>
               Show All
             </Link>
             {hasCriteria(filters) ? (
-              <Link
-                href="/reports/users"
-                className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-900"
-              >
+              <Link href="/reports/users" className={formSecondaryButtonClass}>
                 Clear
               </Link>
             ) : null}
@@ -197,16 +193,16 @@ export default async function Page({ searchParams }: PageProps) {
       <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
         {!generated ? (
           <p className="p-8 text-center text-sm text-neutral-600">
-            Use Show All or apply filters to generate the user report.
+            Use Show All or apply filters to generate this report.
           </p>
         ) : !rows.length ? (
           <p className="p-8 text-center text-sm text-neutral-600">
-            No user accounts match the selected filters.
+            No records found for the selected criteria.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-600">
+              <thead className="bg-neutral-50 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
                 <tr>
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Email</th>
@@ -246,17 +242,14 @@ function ExportButtons({ generated, excelHref }: { generated: boolean; excelHref
       <button
         type="button"
         disabled
-        className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-400"
+        className={cn(formSecondaryButtonClass, "cursor-not-allowed text-neutral-400")}
       >
         Export Excel
       </button>
     );
   }
   return (
-    <Link
-      href={excelHref}
-      className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-900"
-    >
+    <Link href={excelHref} className={formSecondaryButtonClass}>
       Export Excel
     </Link>
   );

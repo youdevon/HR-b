@@ -8,6 +8,15 @@ import {
   type EmployeeReportFilters,
   type EmployeeReportRow,
 } from "@/lib/queries/reports";
+import {
+  formCheckboxClass,
+  formInputClass,
+  formPrimaryButtonClass,
+  formReadOnlyInputClass,
+  formSecondaryButtonClass,
+  formSelectClass,
+} from "@/lib/ui/form-styles";
+import { cn } from "@/lib/utils/cn";
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -192,7 +201,7 @@ export default async function Page({ searchParams }: PageProps) {
                 name="name"
                 defaultValue={filters.name}
                 placeholder="Search employee name"
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
+                className={formInputClass}
               />
             </label>
             <label className="space-y-1">
@@ -201,7 +210,7 @@ export default async function Page({ searchParams }: PageProps) {
                 name="fileNumber"
                 defaultValue={filters.fileNumber}
                 placeholder="Search file number"
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
+                className={formInputClass}
               />
             </label>
             <label className="space-y-1">
@@ -210,7 +219,7 @@ export default async function Page({ searchParams }: PageProps) {
                 name="department"
                 defaultValue={filters.department}
                 placeholder="Department"
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
+                className={formInputClass}
               />
             </label>
             <label className="space-y-1">
@@ -219,7 +228,7 @@ export default async function Page({ searchParams }: PageProps) {
                 name="jobTitle"
                 defaultValue={filters.jobTitle}
                 placeholder="Job title"
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
+                className={formInputClass}
               />
             </label>
             <label className="space-y-1">
@@ -227,7 +236,7 @@ export default async function Page({ searchParams }: PageProps) {
               <select
                 name="status"
                 defaultValue={filters.status}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
+                className={formInputClass}
               >
                 <option value="">Any status</option>
                 <option value="active">active</option>
@@ -244,7 +253,7 @@ export default async function Page({ searchParams }: PageProps) {
                 max="9999"
                 defaultValue={filters.fiscalCutoffYear}
                 placeholder="Fiscal year (e.g. 2026)"
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
+                className={formInputClass}
               />
             </label>
             <label className="space-y-1">
@@ -252,7 +261,7 @@ export default async function Page({ searchParams }: PageProps) {
               <select
                 name="fiscalCutoffMonth"
                 defaultValue={filters.fiscalCutoffMonth}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
+                className={formInputClass}
               >
                 <option value="">Select month</option>
                 {MONTH_OPTIONS.map((month) => (
@@ -268,7 +277,7 @@ export default async function Page({ searchParams }: PageProps) {
                 type="text"
                 readOnly
                 value={formatCutoffDate(fiscalCutoffDate)}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 text-sm text-neutral-700"
+                className={formReadOnlyInputClass}
               />
               <p className="text-xs text-neutral-500">
                 Shows contracts ending on or before this fiscal cut-off date.
@@ -283,7 +292,7 @@ export default async function Page({ searchParams }: PageProps) {
                     name="hasContracts"
                     value="true"
                     defaultChecked={(filters.hasContracts ?? "").trim().toLowerCase() === "true"}
-                    className="h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/20"
+                    className={formCheckboxClass}
                   />
                   <span className="ml-2 text-sm text-neutral-900">Employees with contracts</span>
                 </label>
@@ -293,7 +302,7 @@ export default async function Page({ searchParams }: PageProps) {
                     name="noContracts"
                     value="true"
                     defaultChecked={(filters.noContracts ?? "").trim().toLowerCase() === "true"}
-                    className="h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/20"
+                    className={formCheckboxClass}
                   />
                   <span className="ml-2 text-sm text-neutral-900">Employees with no contracts</span>
                 </label>
@@ -314,11 +323,7 @@ export default async function Page({ searchParams }: PageProps) {
             </div>
             <label className="space-y-1">
               <span className="text-sm font-medium text-neutral-700">Has Allowances</span>
-              <select
-                name="hasAllowances"
-                defaultValue={filters.hasAllowances}
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
-              >
+              <select name="hasAllowances" defaultValue={filters.hasAllowances} className={formSelectClass}>
                 <option value="">All</option>
                 <option value="true">With allowances</option>
               </select>
@@ -329,7 +334,7 @@ export default async function Page({ searchParams }: PageProps) {
                 name="allowanceName"
                 defaultValue={filters.allowanceName}
                 placeholder="Housing, Travelling, etc."
-                className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10"
+                className={formInputClass}
               />
             </label>
           </div>
@@ -352,7 +357,7 @@ export default async function Page({ searchParams }: PageProps) {
                     name="fields"
                     value={option.key}
                     defaultChecked={checkedFields.has(option.key)}
-                    className="h-4 w-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900/20"
+                    className={formCheckboxClass}
                   />
                   <span className="ml-2 text-sm text-neutral-900">{option.label}</span>
                 </label>
@@ -360,19 +365,19 @@ export default async function Page({ searchParams }: PageProps) {
             </div>
           </section>
           <div className="flex flex-wrap items-center gap-2">
-            <button className="inline-flex h-10 items-center rounded-xl bg-neutral-900 px-4 text-sm font-medium text-white">
+            <button type="submit" className={formPrimaryButtonClass}>
               Apply Filters
             </button>
             <Link
               href="/reports/employees?show=all"
-              className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-900"
+              className={formSecondaryButtonClass}
             >
               Show All
             </Link>
             {hasCriteria ? (
               <Link
                 href="/reports/employees"
-                className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-900"
+                className={formSecondaryButtonClass}
               >
                 Clear
               </Link>
@@ -460,7 +465,10 @@ function ExportButtons({
           type="button"
           disabled
           title="Generate a report before exporting."
-          className="inline-flex h-10 cursor-not-allowed items-center rounded-xl border border-neutral-200 bg-neutral-100 px-4 text-sm font-medium text-neutral-500"
+          className={cn(
+            formSecondaryButtonClass,
+            "cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-500"
+          )}
         >
           Export Excel
         </button>
@@ -469,10 +477,7 @@ function ExportButtons({
   }
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Link
-        href={excelHref}
-        className="inline-flex h-10 items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-medium text-neutral-900"
-      >
+      <Link href={excelHref} className={formSecondaryButtonClass}>
         Export Excel
       </Link>
     </div>
@@ -491,7 +496,7 @@ function Table({
   if (!generated) {
     return (
       <p className="p-8 text-center text-sm text-neutral-600">
-        Use Show All or apply filters to generate the employee report.
+        Use Show All or apply filters to generate this report.
       </p>
     );
   }
@@ -499,7 +504,7 @@ function Table({
   if (!rows.length) {
     return (
       <p className="p-8 text-center text-sm text-neutral-600">
-        No employees found for the selected report criteria.
+        No records found for the selected criteria.
       </p>
     );
   }
@@ -528,7 +533,7 @@ function Table({
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
-        <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-600">
+        <thead className="bg-neutral-50 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
           <tr>
             {visibleFields.map((field) => (
               <th key={field} className="px-4 py-3">
