@@ -82,10 +82,13 @@ function computeBalancesWithRollover(
         const thisYear = Number(row.balance_year ?? 0);
         const previousUnused = vacationRows
           .filter((vacationRow) => Number(vacationRow.balance_year ?? 0) < thisYear)
-          .reduce(
-            (sum, vacationRow) => sum + Math.max(0, Number(vacationRow.remaining_days ?? 0)),
-            0
-          );
+          .reduce((sum, vacationRow) => {
+            const pool =
+              Number(vacationRow.entitlement_days ?? 0) +
+              Number(vacationRow.carried_forward_days ?? 0);
+            const used = Number(vacationRow.used_days ?? 0);
+            return sum + Math.max(0, pool - used);
+          }, 0);
         const carriedForward = Math.max(0, Number(row.carried_forward_days ?? 0));
         computedRolloverDays = carriedForward > 0 ? carriedForward : previousUnused;
       }
@@ -197,13 +200,26 @@ export default async function LeaveBalancesPage({
                   const employee = row.employee_id ? employeeById.get(row.employee_id) : undefined;
                   const leaveType = (row.leave_type ?? "").trim().toLowerCase();
                   const isVacation = leaveType === "vacation_leave";
-                  const rolloverValue = isVacation ? Number(row.computed_rollover_days ?? 0) : 0;
+                  const rolloverForDisplay =
+                    isVacation && row.is_current_contract_year
+                      ? Number(row.computed_rollover_days ?? 0)
+                      : isVacation
+                        ? Math.max(0, Number(row.carried_forward_days ?? 0))
+                        : 0;
                   const annualEntitlement = isVacation
                     ? Math.max(0, Number(row.entitlement_days ?? 0))
                     : Number(row.entitlement_days ?? 0);
                   const totalEntitlement = isVacation
-                    ? annualEntitlement + rolloverValue
+                    ? annualEntitlement + rolloverForDisplay
                     : annualEntitlement;
+
+                  const usedRaw = row.used_days;
+                  const usedNum =
+                    usedRaw === null || usedRaw === undefined ? null : Number(usedRaw);
+                  const remainingFromTotal =
+                    usedNum === null || Number.isNaN(usedNum)
+                      ? null
+                      : totalEntitlement - usedNum;
 
                   return (
                   <tr key={row.id} className="border-b border-neutral-100 align-top">
@@ -220,9 +236,9 @@ export default async function LeaveBalancesPage({
                     <td className="px-4 py-3 text-sm font-semibold text-neutral-900">{annualEntitlement}</td>
                     <td className="px-4 py-3 text-sm text-neutral-700">
                       {isVacation ? (
-                        rolloverValue > 0 ? (
+                        rolloverForDisplay > 0 ? (
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-neutral-900">{rolloverValue}</span>
+                            <span className="text-sm font-semibold text-neutral-900">{rolloverForDisplay}</span>
                             <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
                               Includes rollover
                             </span>
@@ -232,7 +248,17 @@ export default async function LeaveBalancesPage({
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold text-neutral-900">{totalEntitlement}</td>
                     <td className="px-4 py-3 text-sm text-neutral-700">{row.used_days ?? "—"}</td>
-                    <td className="px-4 py-3 text-sm text-neutral-700">{row.remaining_days ?? "—"}</td>
+                    <td
+                      className={`px-4 py-3 text-sm ${
+                        remainingFromTotal !== null && remainingFromTotal < 0
+                          ? "font-semibold text-red-600"
+                          : "text-neutral-700"
+                      }`}
+                    >
+                      {remainingFromTotal === null
+                        ? "—"
+                        : String(remainingFromTotal)}
+                    </td>
                   </tr>
                 )})}
               </tbody>

@@ -4,6 +4,7 @@ import ClickableTableRow from "@/components/ui/clickable-table-row";
 import EmptyStateCard from "@/components/ui/empty-state-card";
 import {
   formatLeaveType,
+  formatReadableDate,
   listLeaveTransactions,
   listLeaveTransactionsByEmployeeId,
 } from "@/lib/queries/leave";
@@ -20,13 +21,6 @@ import {
 function formatDays(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "-";
   return String(value);
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString();
 }
 
 function statusBadgeClass(status: string | null | undefined): string {
@@ -133,10 +127,10 @@ export default async function LeaveTransactionsPage({
                       {row.transaction_type ?? "-"}
                     </td>
                     <td className={`${dashboardTableCellClass} whitespace-nowrap`}>
-                      {formatDate(row.start_date)}
+                      {formatReadableDate(row.start_date)}
                     </td>
                     <td className={`${dashboardTableCellClass} whitespace-nowrap`}>
-                      {formatDate(row.end_date)}
+                      {formatReadableDate(row.end_date)}
                     </td>
                     <td className={`${dashboardTableCellClass} whitespace-nowrap`}>
                       {formatDays(row.days)}

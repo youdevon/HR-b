@@ -522,11 +522,13 @@ export function formatReadableDate(value: string | null | undefined): string {
   if (!dateText) return "-";
   const parsed = new Date(`${dateText}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return dateText;
-  return parsed.toLocaleDateString("en-US", {
+  return new Intl.DateTimeFormat("en-US", {
     month: "long",
     day: "numeric",
     year: "numeric",
-  });
+  })
+    .format(parsed)
+    .replace(/,/g, "");
 }
 
 function includesText(value: string | null | undefined, query: string): boolean {

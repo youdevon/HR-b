@@ -6,6 +6,7 @@ import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import {
   applyLeaveAction,
   formatLeaveType,
+  formatReadableDate,
   getLeaveTransactionById,
   type LeaveAction,
 } from "@/lib/queries/leave";
@@ -203,9 +204,9 @@ export default async function LeaveDetailPage({
           <Info label="Leave Type" value={formatLeaveType(leave.leave_type)} />
           <Info label="Transaction Type" value={display(leave.transaction_type)} />
           <Info label="Total Days" value={display(leave.total_days)} />
-          <Info label="Start Date" value={display(leave.start_date)} />
-          <Info label="End Date" value={display(leave.end_date)} />
-          <Info label="Return to Work" value={display(leave.return_to_work_date)} />
+          <Info label="Start Date" value={formatReadableDate(leave.start_date)} />
+          <Info label="End Date" value={formatReadableDate(leave.end_date)} />
+          <Info label="Return to Work" value={formatReadableDate(leave.return_to_work_date)} />
           <Info label="Entitlement" value={display(leave.entitlement_days)} />
           <Info label="Days Taken" value={display(leave.days_taken)} />
           <Info label="Balance" value={display(leave.balance_days)} />
