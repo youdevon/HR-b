@@ -7,6 +7,9 @@ import {
 } from "@/lib/ui/form-styles";
 import { cn } from "@/lib/utils/cn";
 import type { AdminRoleRecord, AdminUserRecord } from "@/lib/queries/admin";
+import EmployeeLinkSelector, {
+  type EmployeeLinkOption,
+} from "@/components/domain/admin/employee-link-selector";
 
 type UserFormProps = {
   action: (formData: FormData) => void | Promise<void>;
@@ -14,9 +17,12 @@ type UserFormProps = {
   mode: "create" | "edit";
   submitLabel: string;
   user?: AdminUserRecord;
+  employees?: EmployeeLinkOption[];
 };
 
 const accountStatuses = ["Active", "Pending", "Disabled", "Locked"];
+
+const OFFICER_ROLE_CODE = "OFFICER";
 
 export default function UserForm({
   action,
@@ -24,7 +30,9 @@ export default function UserForm({
   mode,
   submitLabel,
   user,
+  employees = [],
 }: UserFormProps) {
+  const userRoleCode = user?.role_code?.toUpperCase() ?? null;
   return (
     <form action={action} className="space-y-6">
       <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200">
@@ -69,6 +77,14 @@ export default function UserForm({
               ))}
             </select>
           </label>
+
+          {employees.length > 0 ? (
+            <EmployeeLinkSelector
+              employees={employees}
+              selectedEmployeeId={user?.employee_id}
+              isOfficerRole={userRoleCode === OFFICER_ROLE_CODE}
+            />
+          ) : null}
 
           {mode === "create" ? (
             <>

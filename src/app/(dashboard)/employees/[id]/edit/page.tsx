@@ -43,6 +43,7 @@ export default async function Page({ params }: PageProps) {
 
   const initialValues: EmployeeInput = {
     employee_number: employee.employee_number ?? "",
+    no_employee_number: !employee.employee_number,
     file_number: employee.file_number ?? "",
     first_name: employee.first_name ?? "",
     middle_name: employee.middle_name ?? "",

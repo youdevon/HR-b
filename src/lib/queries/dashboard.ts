@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEffectiveContractStatus } from "@/lib/queries/contracts";
+import { listLowSickLeave, listLowVacationLeave } from "@/lib/queries/leave";
 
 export type DashboardMetrics = {
   activeEmployeesCount: number;
@@ -46,12 +47,6 @@ function plusDaysDateString(days: number): string {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function normalizeLeaveType(value: string | null): string {
-  const normalized = (value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
-  if (!normalized) return "";
-  return normalized.endsWith("_leave") ? normalized : `${normalized}_leave`;
 }
 
 async function countEmployeesByStatus(status: string): Promise<number> {
@@ -131,22 +126,12 @@ async function countExpiredContracts(): Promise<number> {
 }
 
 async function countLowLeaveByType(leaveType: "sick_leave" | "vacation_leave"): Promise<number> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("leave_balances")
-    .select("leave_type, remaining_days, warning_threshold_days, low_balance_warning_enabled")
-    .neq("low_balance_warning_enabled", false);
-
-  if (error) {
-    throw new Error(`Failed to count low ${leaveType}: ${error.message}`);
+  if (leaveType === "vacation_leave") {
+    const rows = await listLowVacationLeave();
+    return rows.length;
   }
-
-  return (data ?? []).filter((row) => {
-    const remaining = Number(row.remaining_days ?? 0);
-    const threshold = Number(row.warning_threshold_days ?? 0);
-    return normalizeLeaveType(row.leave_type) === leaveType && remaining <= threshold;
-  }).length;
+  const rows = await listLowSickLeave();
+  return rows.length;
 }
 
 async function countEmployeesOnLeave(): Promise<number> {
@@ -233,10 +218,12 @@ async function countOverdueFileReturns(): Promise<number> {
 
 async function countActiveAlerts(): Promise<number> {
   const supabase = await createClient();
+  const activeModules = ["Contracts", "Leave", "Physical Files", "Alerts", "Gratuity"];
   const { count, error } = await supabase
     .from("alerts")
     .select("id", { head: true, count: "exact" })
-    .eq("status", "active");
+    .eq("status", "active")
+    .in("module_name", activeModules);
 
   if (error) {
     throw new Error(`Failed to count active alerts: ${error.message}`);
@@ -247,11 +234,13 @@ async function countActiveAlerts(): Promise<number> {
 
 async function countCriticalAlerts(): Promise<number> {
   const supabase = await createClient();
+  const activeModules = ["Contracts", "Leave", "Physical Files", "Alerts", "Gratuity"];
   const { count, error } = await supabase
     .from("alerts")
     .select("id", { head: true, count: "exact" })
     .eq("status", "active")
-    .eq("severity_level", "critical");
+    .eq("severity_level", "critical")
+    .in("module_name", activeModules);
 
   if (error) {
     throw new Error(`Failed to count critical alerts: ${error.message}`);

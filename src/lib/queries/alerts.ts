@@ -2,7 +2,7 @@ import {
   listAlertRules as listConfigurableAlertRules,
   type AlertRuleRecord,
 } from "@/lib/queries/alert-rules";
-import { writeAuditLog } from "@/lib/queries/audit";
+import { DEFAULT_AUDIT_SOURCE_TYPE, writeAuditLog } from "@/lib/queries/audit";
 import { generateAllSystemAlerts } from "@/lib/queries/notifications";
 import { createClient } from "@/lib/supabase/server";
 
@@ -123,6 +123,7 @@ export async function listActiveAlerts(
   filters?: ActiveAlertFilters
 ): Promise<ActiveAlertListItem[]> {
   const supabase = await createClient();
+  const allowedModules = ["contracts", "leave", "physical files", "alerts", "gratuity"];
 
   const normalizedStatus = (filters?.status ?? "").trim().toLowerCase();
   const effectiveStatus =
@@ -152,9 +153,12 @@ export async function listActiveAlerts(
   }
 
   const rows = (data ?? []) as AlertRecord[];
+  const scopedRows = rows.filter((row) =>
+    allowedModules.includes((row.module_name ?? "").trim().toLowerCase())
+  );
   const employeeIds = [
     ...new Set(
-      rows
+      scopedRows
         .map((row) => row.employee_id)
         .filter((id): id is string => Boolean(id))
     ),
@@ -181,7 +185,7 @@ export async function listActiveAlerts(
     }
   }
 
-  const enriched = rows.map((row) => {
+  const enriched = scopedRows.map((row) => {
     const employee = row.employee_id ? employeeById.get(row.employee_id) : undefined;
     const employeeName = employee
       ? `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim() || null
@@ -280,7 +284,7 @@ export async function acknowledgeAlert(id: string): Promise<AlertRecord> {
       resolved_at: data.resolved_at,
       severity_level: data.severity_level,
     },
-    source_type: "application",
+    source_type: DEFAULT_AUDIT_SOURCE_TYPE,
   });
 
   return data;
@@ -404,7 +408,7 @@ export async function resolveAlert(
       resolved_at: data.resolved_at,
       severity_level: data.severity_level,
     },
-    source_type: "application",
+    source_type: DEFAULT_AUDIT_SOURCE_TYPE,
   });
 
   return data;

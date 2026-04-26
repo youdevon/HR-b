@@ -4,6 +4,7 @@ import PageHeader from "@/components/layout/page-header";
 import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
 import { hasAnyPermissionForContext } from "@/lib/auth/permissions";
 import { getEmployeeById } from "@/lib/queries/employees";
+import { getUserLinkedToEmployee } from "@/lib/queries/admin";
 import {
   formatLeaveType,
   getCurrentSickLeaveBalance,
@@ -70,10 +71,15 @@ export default async function EmployeeDetailPage({
   const canViewEmployeeId = hasAnyPermissionForContext(profile, permissions, ["employee.id.view"]);
   const canViewBir = hasAnyPermissionForContext(profile, permissions, ["employee.bir.view"]);
   const canViewFileDetails = hasAnyPermissionForContext(profile, permissions, ["employee.file.view", "files.view"]);
+  const canLinkUser = hasAnyPermissionForContext(profile, permissions, ["admin.users.edit", "admin.users.manage"]);
   const { id } = await params;
   const recordsPromise: Promise<RecordKeepingRecord[]> = RECORD_KEEPING_UI_ENABLED
     ? listRecordsByEmployeeId(id)
     : Promise.resolve([]);
+
+  const linkedUserPromise = canLinkUser
+    ? getUserLinkedToEmployee(id)
+    : Promise.resolve(null);
 
   const [
     employee,
@@ -84,6 +90,7 @@ export default async function EmployeeDetailPage({
     fileMovements,
     currentFileMovement,
     employeeAudits,
+    linkedUser,
   ] = await Promise.all([
     getEmployeeById(id),
     listContractsByEmployeeId(id),
@@ -93,6 +100,7 @@ export default async function EmployeeDetailPage({
     listFileMovementsByEmployeeId(id),
     getCurrentFileMovementByEmployeeId(id),
     listAuditLogsByEmployeeId(id),
+    linkedUserPromise,
   ]);
 
   if (!employee) {
@@ -194,8 +202,34 @@ export default async function EmployeeDetailPage({
           {canCreateRecord ? (
             <Link href={`/records/new?employeeId=${employee.id}`} className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50">Add Record</Link>
           ) : null}
+          {canLinkUser ? (
+            <Link href={`/employees/${employee.id}/link-user`} className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50">
+              {linkedUser ? "Manage Linked User" : "Link User Account"}
+            </Link>
+          ) : null}
         </div>
       </section>
+
+      {canLinkUser ? (
+        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Linked User Account</h2>
+          {linkedUser ? (
+            <>
+              <p className="mt-2 text-sm text-neutral-900">
+                <span className="font-medium">
+                  {[linkedUser.first_name, linkedUser.last_name].filter(Boolean).join(" ") || "Unnamed"}
+                </span>
+                {linkedUser.email ? ` — ${linkedUser.email}` : ""}
+              </p>
+              <p className="mt-1 text-xs text-neutral-500">
+                Role: {linkedUser.role_name ?? linkedUser.role_code ?? "—"} · Status: {linkedUser.account_status ?? "—"}
+              </p>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-neutral-500">No user account linked.</p>
+          )}
+        </section>
+      ) : null}
 
       <section className="space-y-4">
         <div className="grid gap-4 md:grid-cols-3">

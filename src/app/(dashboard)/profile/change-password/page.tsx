@@ -49,7 +49,7 @@ export default async function ChangePasswordPage({
         <PageHeader
           title="Change Password"
           description="Update your account password securely."
-          backHref="/dashboard"
+          backHref="/profile"
         />
 
         {message ? (

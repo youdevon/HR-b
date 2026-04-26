@@ -23,6 +23,7 @@ type EmployeeFormProps = {
 
 const defaultValues: EmployeeInput = {
   employee_number: "",
+  no_employee_number: false,
   file_number: "",
   first_name: "",
   middle_name: "",
@@ -52,6 +53,7 @@ export default function EmployeeForm({
   onSubmitAction,
   submitLabel = "Create Employee",
 }: EmployeeFormProps) {
+  const hasInitialValues = Boolean(initialValues && Object.keys(initialValues).length > 0);
   const [formData, setFormData] = useState<EmployeeInput>({
     ...defaultValues,
     ...initialValues,
@@ -59,7 +61,8 @@ export default function EmployeeForm({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [noEmployeeNumber, setNoEmployeeNumber] = useState(
-    !(initialValues?.employee_number ?? "").trim()
+    Boolean(initialValues?.no_employee_number) ||
+      (hasInitialValues && !(initialValues?.employee_number ?? "").trim())
   );
 
   function updateField<K extends keyof EmployeeInput>(
@@ -81,6 +84,7 @@ export default function EmployeeForm({
         const payload: EmployeeInput = {
           ...formData,
           employee_number: noEmployeeNumber ? "" : formData.employee_number ?? "",
+          no_employee_number: noEmployeeNumber,
         };
         await onSubmitAction(payload);
       } catch (err) {
@@ -116,7 +120,7 @@ export default function EmployeeForm({
             value={formData.employee_number}
             onChange={(value) => updateField("employee_number", value)}
             placeholder={noEmployeeNumber ? "Not assigned" : "Enter employee number"}
-            hint="Optional. Use the checkbox below when this employee has no employee number."
+            hint="Optional. Leave blank to use the File Number as the Employee Number."
             disabled={noEmployeeNumber}
           />
           <Field
@@ -255,7 +259,7 @@ export default function EmployeeForm({
             label="ID Number"
             value={formData.id_number}
             onChange={(value) => updateField("id_number", value)}
-            required
+            hint="Optional. Must be unique when provided."
           />
           <Field
             label="Other ID Description"
@@ -266,7 +270,8 @@ export default function EmployeeForm({
             label="BIR Number"
             value={formData.bir_number}
             onChange={(value) => updateField("bir_number", value)}
-            required
+            hint="Optional. This can be completed later."
+            placeholder="Not recorded"
           />
         </div>
       </section>

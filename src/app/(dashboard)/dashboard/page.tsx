@@ -3,6 +3,7 @@ import PageHeader from "@/components/layout/page-header";
 import {
   DASHBOARD_CARD_PERMISSION_KEYS,
   hasAnyPermissionForContext,
+  profileDisplayName,
 } from "@/lib/auth/permissions";
 import { getDashboardSession, requirePermission } from "@/lib/auth/guards";
 import { listPriorityAlerts } from "@/lib/queries/alerts";
@@ -293,8 +294,16 @@ export default async function DashboardPage() {
       ) : null}
 
       {!hasAnyCards ? (
-        <section className={dashboardEmptyCardClass}>
-          You do not currently have dashboard card permissions assigned.
+        <section className="rounded-2xl border border-neutral-200 bg-white p-8 text-center shadow-sm">
+          <h2 className="text-2xl font-bold text-neutral-900">
+            Welcome Back, {profile?.first_name || profileDisplayName(profile)}
+          </h2>
+          <p className="mt-2 text-sm text-neutral-600">
+            You currently do not have dashboard cards assigned to your role.
+          </p>
+          <p className="mt-1 text-sm text-neutral-500">
+            Please use the navigation menu to access your available areas.
+          </p>
         </section>
       ) : (
         sections.map((section) => <MetricSection key={section.title} section={section} />)

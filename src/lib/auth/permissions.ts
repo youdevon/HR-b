@@ -15,6 +15,7 @@ export type CurrentUserProfile = {
   role_code: string | null;
   is_active: boolean | null;
   account_status: string | null;
+  employee_id: string | null;
 };
 
 type UserProfileRow = {
@@ -26,6 +27,7 @@ type UserProfileRow = {
   role_id: string | null;
   is_active: boolean | null;
   account_status: string | null;
+  employee_id: string | null;
 };
 
 type RoleRow = {
@@ -38,7 +40,17 @@ type PermissionRow = {
   permission_key: string | null;
 };
 
+export const PROFILE_PERMISSION_KEYS = [
+  "profile.view",
+  "profile.contracts.view",
+  "profile.leave.view",
+  "profile.salary.view",
+  "profile.gratuity.view",
+  "profile.saved_information.view",
+] as const;
+
 export const ACTIVE_NAV_PERMISSION_KEYS = {
+  profile: [...PROFILE_PERMISSION_KEYS],
   dashboard: ["dashboard.view"],
   employees: [
     "employees.view",
@@ -145,13 +157,19 @@ export const ACTIVE_NAV_PERMISSION_KEYS = {
   ],
 } as const;
 
+/**
+ * Dashboard card visibility is driven exclusively by `dashboard.cards.*` permissions.
+ * Module-level permissions (e.g. `employees.view`) do NOT automatically grant card
+ * visibility. This ensures roles like Intake Clerk can access a module without seeing
+ * its dashboard cards. SUPER_USER sees all cards because the wildcard `"*"` matches.
+ */
 export const DASHBOARD_CARD_PERMISSION_KEYS = {
-  workforce: ["dashboard.cards.workforce.view", "employees.view"],
-  contracts: ["dashboard.cards.contracts.view", "contracts.view"],
-  leave: ["dashboard.cards.leave.view", "leave.view"],
-  files: ["dashboard.cards.files.view", "files.view"],
-  alerts: ["dashboard.cards.alerts.view", "alerts.view"],
-  gratuity: ["dashboard.cards.gratuity.view", "gratuity.view"],
+  workforce: ["dashboard.cards.workforce.view"],
+  contracts: ["dashboard.cards.contracts.view"],
+  leave: ["dashboard.cards.leave.view"],
+  files: ["dashboard.cards.files.view"],
+  alerts: ["dashboard.cards.alerts.view"],
+  gratuity: ["dashboard.cards.gratuity.view"],
 } as const;
 
 export function profileDisplayName(profile: CurrentUserProfile | null): string {
@@ -159,8 +177,32 @@ export function profileDisplayName(profile: CurrentUserProfile | null): string {
   return fullName || profile?.email || "User";
 }
 
+export const SUPER_USER_ROLE_CODE = "SUPER_USER";
+export const OFFICER_ROLE_CODE = "OFFICER";
+
 export function isSuperUser(profile: CurrentUserProfile | null): boolean {
-  return (profile?.role_code ?? "").toUpperCase() === "SUPER_USER";
+  return (profile?.role_code ?? "").toUpperCase() === SUPER_USER_ROLE_CODE;
+}
+
+export function isOfficer(profile: CurrentUserProfile | null): boolean {
+  return (profile?.role_code ?? "").toUpperCase() === OFFICER_ROLE_CODE;
+}
+
+/**
+ * Returns true when a user holds only self-service profile permissions
+ * and no HR/admin module permissions. Used to determine Officer-only routing.
+ */
+export function hasOnlyProfilePermissions(
+  profile: CurrentUserProfile | null,
+  permissions: string[]
+): boolean {
+  if (!isProfileActive(profile)) return false;
+  if (isSuperUser(profile)) return false;
+  if (permissions.includes("*")) return false;
+  const hrKeys: string[] = Object.values(ACTIVE_NAV_PERMISSION_KEYS).flat();
+  const profileKeySet = new Set<string>(PROFILE_PERMISSION_KEYS);
+  const hrOnlyKeys = hrKeys.filter((k) => !profileKeySet.has(k));
+  return !permissions.some((key) => hrOnlyKeys.includes(key));
 }
 
 export function isProfileActive(profile: CurrentUserProfile | null): boolean {
@@ -170,21 +212,62 @@ export function isProfileActive(profile: CurrentUserProfile | null): boolean {
   return accountStatus === "" || accountStatus === "active";
 }
 
-/** Profile for an already-resolved `User` (no additional `getUser` call). */
+/**
+ * Profile for an already-resolved `User` (no additional `getUser` call).
+ *
+ * SQL guidance if `employee_id` column does not exist yet:
+ *   alter table public.user_profiles
+ *   add column if not exists employee_id uuid references public.employees(id) on delete set null;
+ *
+ *   create index if not exists idx_user_profiles_employee_id
+ *   on public.user_profiles(employee_id);
+ */
 export async function fetchUserProfileForAuthUser(user: User): Promise<CurrentUserProfile | null> {
   const supabase = await createClient();
-  const { data: profile, error: profileError } = await supabase
+
+  const selectWithEmployeeId = "id, first_name, last_name, email, phone_number, role_id, is_active, account_status, employee_id";
+  const selectWithout = "id, first_name, last_name, email, phone_number, role_id, is_active, account_status";
+
+  let profile: Record<string, unknown> | null = null;
+  let hasEmployeeIdColumn = true;
+
+  const { data: tryData, error: tryError } = await supabase
     .from("user_profiles")
-    .select("id, first_name, last_name, email, phone_number, role_id, is_active, account_status")
+    .select(selectWithEmployeeId)
     .eq("id", user.id)
     .maybeSingle();
 
-  if (profileError || !profile) {
-    if (profileError) console.error("getCurrentUserProfile error:", profileError.message);
+  if (tryError && tryError.message.includes("employee_id")) {
+    hasEmployeeIdColumn = false;
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from("user_profiles")
+      .select(selectWithout)
+      .eq("id", user.id)
+      .maybeSingle();
+    if (fallbackError || !fallbackData) {
+      if (fallbackError) console.error("getCurrentUserProfile error:", fallbackError.message);
+      return null;
+    }
+    profile = fallbackData as Record<string, unknown>;
+  } else if (tryError || !tryData) {
+    if (tryError) console.error("getCurrentUserProfile error:", tryError.message);
     return null;
+  } else {
+    profile = tryData as Record<string, unknown>;
   }
 
-  const row = profile as UserProfileRow;
+  const row: UserProfileRow = {
+    id: profile.id as string,
+    first_name: (profile.first_name as string | null) ?? null,
+    last_name: (profile.last_name as string | null) ?? null,
+    email: (profile.email as string | null) ?? null,
+    phone_number: (profile.phone_number as string | null) ?? null,
+    role_id: (profile.role_id as string | null) ?? null,
+    is_active: (profile.is_active as boolean | null) ?? null,
+    account_status: (profile.account_status as string | null) ?? null,
+    employee_id: hasEmployeeIdColumn ? ((profile.employee_id as string | null) ?? null) : null,
+  };
+
   let roleName: string | null = null;
   let roleCode: string | null = null;
 
@@ -215,6 +298,7 @@ export async function fetchUserProfileForAuthUser(user: User): Promise<CurrentUs
     role_code: roleCode,
     is_active: row.is_active ?? null,
     account_status: row.account_status,
+    employee_id: row.employee_id,
   };
 }
 

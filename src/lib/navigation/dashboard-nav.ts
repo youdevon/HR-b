@@ -5,6 +5,7 @@ import { RECORD_KEEPING_UI_ENABLED } from "@/lib/features/record-keeping-ui";
 export type DashboardNavIconName =
   | "layoutDashboard"
   | "users"
+  | "userCircle"
   | "fileText"
   | "calendar"
   | "folderOpen"
@@ -27,6 +28,7 @@ export type DashboardNavItemDef = {
 };
 
 export const DASHBOARD_NAV_DEFS: DashboardNavItemDef[] = [
+  { label: "My Profile", shortLabel: "Me", href: "/profile", active: true, permissions: [...ACTIVE_NAV_PERMISSION_KEYS.profile], icon: "userCircle" },
   { label: "Dashboard", shortLabel: "Db", href: "/dashboard", active: true, permissions: [...ACTIVE_NAV_PERMISSION_KEYS.dashboard], icon: "layoutDashboard" },
   { label: "Employees", shortLabel: "Em", href: "/employees", active: true, permissions: [...ACTIVE_NAV_PERMISSION_KEYS.employees], icon: "users" },
   { label: "Contracts", shortLabel: "Co", href: "/contracts", active: true, permissions: [...ACTIVE_NAV_PERMISSION_KEYS.contracts], icon: "fileText" },

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
@@ -27,6 +26,24 @@ function display(value: string | number | boolean | null | undefined): string {
   return String(value);
 }
 
+function statusBadge(status: string | null | undefined): { label: string; className: string } {
+  const s = (status ?? "").toLowerCase();
+  switch (s) {
+    case "approved":
+      return { label: "Approved", className: "bg-emerald-100 text-emerald-800" };
+    case "pending":
+      return { label: "Pending Approval", className: "bg-amber-100 text-amber-800" };
+    case "rejected":
+      return { label: "Rejected", className: "bg-red-100 text-red-800" };
+    case "cancelled":
+      return { label: "Cancelled", className: "bg-neutral-200 text-neutral-700" };
+    case "returned":
+      return { label: "Returned", className: "bg-blue-100 text-blue-800" };
+    default:
+      return { label: display(status), className: "bg-neutral-100 text-neutral-700" };
+  }
+}
+
 export default async function LeaveDetailPage({
   params,
   searchParams,
@@ -42,17 +59,68 @@ export default async function LeaveDetailPage({
   const canUseWorkflow = canApprove || canReject || canCancel || canReturn;
   const { id } = await params;
   const sp = await searchParams;
-  const status = firstString(sp.status);
+  const msgStatus = firstString(sp.status);
   const message = firstString(sp.message);
   const leave = await getLeaveTransactionById(id);
 
   if (!leave) notFound();
   const employeeId = leave.employee_id;
 
+  const leaveStatus = (leave.approval_status ?? leave.status ?? "").toLowerCase();
+  const leaveType = (leave.leave_type ?? "").toLowerCase();
+  const isPendingVacation = leaveStatus === "pending" && leaveType === "vacation_leave";
+  const isPending = leaveStatus === "pending";
+  const badge = statusBadge(leave.approval_status ?? leave.status);
+
   function redirectWithMessage(nextStatus: "success" | "error", nextMessage: string): never {
     const qs = new URLSearchParams();
     qs.set("status", nextStatus);
     qs.set("message", nextMessage);
+    redirect(`/leave/${id}?${qs.toString()}`);
+  }
+
+  async function approveAction() {
+    "use server";
+    await assertPermission("leave.approve");
+    try {
+      await applyLeaveAction({ id, action: "approve_leave" });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to approve leave.";
+      const qs = new URLSearchParams();
+      qs.set("status", "error");
+      qs.set("message", errorMessage);
+      redirect(`/leave/${id}?${qs.toString()}`);
+    }
+    revalidatePath(`/leave/${id}`);
+    revalidatePath("/leave");
+    revalidatePath("/leave/transactions");
+    if (employeeId) revalidatePath(`/employees/${employeeId}`);
+    const qs = new URLSearchParams();
+    qs.set("status", "success");
+    qs.set("message", "Leave approved and balance deducted successfully.");
+    redirect(`/leave/${id}?${qs.toString()}`);
+  }
+
+  async function rejectAction(formData: FormData) {
+    "use server";
+    await assertPermission("leave.reject");
+    const rejectionReason = String(formData.get("rejection_reason") ?? "").trim();
+    try {
+      await applyLeaveAction({ id, action: "reject_leave", rejection_reason: rejectionReason });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to reject leave.";
+      const qs = new URLSearchParams();
+      qs.set("status", "error");
+      qs.set("message", errorMessage);
+      redirect(`/leave/${id}?${qs.toString()}`);
+    }
+    revalidatePath(`/leave/${id}`);
+    revalidatePath("/leave");
+    revalidatePath("/leave/transactions");
+    if (employeeId) revalidatePath(`/employees/${employeeId}`);
+    const qs = new URLSearchParams();
+    qs.set("status", "success");
+    qs.set("message", "Leave rejected.");
     redirect(`/leave/${id}?${qs.toString()}`);
   }
 
@@ -97,7 +165,7 @@ export default async function LeaveDetailPage({
         {message ? (
           <section
             className={`rounded-2xl border p-4 text-sm ${
-              status === "error"
+              msgStatus === "error"
                 ? "border-red-200 bg-red-50 text-red-700"
                 : "border-emerald-200 bg-emerald-50 text-emerald-800"
             }`}
@@ -106,11 +174,34 @@ export default async function LeaveDetailPage({
           </section>
         ) : null}
 
+        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold text-neutral-900">Status</h2>
+            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${badge.className}`}>
+              {badge.label}
+            </span>
+          </div>
+          {leaveStatus === "approved" && leaveType === "sick_leave" ? (
+            <p className="mt-2 text-sm text-neutral-600">
+              Sick leave was automatically approved and deducted from the balance upon creation.
+            </p>
+          ) : null}
+          {isPendingVacation ? (
+            <p className="mt-2 text-sm text-neutral-600">
+              This vacation leave request is awaiting approval. Balance will be deducted upon approval.
+            </p>
+          ) : null}
+          {isPending && leaveType !== "vacation_leave" ? (
+            <p className="mt-2 text-sm text-neutral-600">
+              This leave request is awaiting approval.
+            </p>
+          ) : null}
+        </section>
+
         <section className="grid gap-4 md:grid-cols-3">
           <Info label="Employee" value={display(leave.employee_name ?? leave.employee_id)} />
           <Info label="Leave Type" value={formatLeaveType(leave.leave_type)} />
           <Info label="Transaction Type" value={display(leave.transaction_type)} />
-          <Info label="Approval Status" value={display(leave.approval_status)} />
           <Info label="Total Days" value={display(leave.total_days)} />
           <Info label="Start Date" value={display(leave.start_date)} />
           <Info label="End Date" value={display(leave.end_date)} />
@@ -131,20 +222,65 @@ export default async function LeaveDetailPage({
           </div>
         </section>
 
+        {isPending && canApprove ? (
+        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
+          <h2 className="text-lg font-semibold text-neutral-900">
+            {isPendingVacation ? "Approve Vacation Leave" : "Approve Leave"}
+          </h2>
+          <p className="mt-1 text-sm text-neutral-600">
+            {isPendingVacation
+              ? "Approving this request will deduct the days from the employee's vacation leave balance."
+              : "Approving this request will deduct the days from the employee's leave balance."}
+          </p>
+          <form action={approveAction} className="mt-4">
+            <button
+              type="submit"
+              className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700"
+            >
+              Approve Leave
+            </button>
+          </form>
+        </section>
+        ) : null}
+
+        {isPending && canReject ? (
+        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
+          <h2 className="text-lg font-semibold text-neutral-900">Reject Leave</h2>
+          <p className="mt-1 text-sm text-neutral-600">
+            Rejecting this request will not affect the leave balance.
+          </p>
+          <form action={rejectAction} className="mt-4 space-y-3">
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-neutral-700">Rejection Reason</span>
+              <input
+                name="rejection_reason"
+                required
+                placeholder="Reason for rejection"
+                className="w-full rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <button
+              type="submit"
+              className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-red-700"
+            >
+              Reject Leave
+            </button>
+          </form>
+        </section>
+        ) : null}
+
         {canUseWorkflow ? (
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-          <h2 className="text-lg font-semibold text-neutral-900">Workflow Actions</h2>
+          <h2 className="text-lg font-semibold text-neutral-900">Other Workflow Actions</h2>
           <p className="mt-1 text-sm text-neutral-600">
-            Approve, reject, cancel, or record return from leave.
+            Cancel or record return from leave.
           </p>
           <form action={workflowAction} className="mt-4 grid gap-3 md:grid-cols-2">
             <select
               name="action"
-              defaultValue="approve_leave"
+              defaultValue={canCancel ? "cancel_leave" : "return_from_leave"}
               className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
             >
-              {canApprove ? <option value="approve_leave">Approve Leave</option> : null}
-              {canReject ? <option value="reject_leave">Reject Leave</option> : null}
               {canCancel ? <option value="cancel_leave">Cancel Leave</option> : null}
               {canReturn ? <option value="return_from_leave">Return From Leave</option> : null}
             </select>

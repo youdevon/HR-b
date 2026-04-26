@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import PageHeader from "@/components/layout/page-header";
 import { FormActions, FormLabel } from "@/components/ui/form-primitives";
+import EmployeeLeaveSelector from "@/components/domain/leave/employee-leave-selector";
 import { assertPermission, requirePermission } from "@/lib/auth/guards";
-import { getEmployeeById } from "@/lib/queries/employees";
+import { getEmployeeById, listEmployeeLookupOptions } from "@/lib/queries/employees";
 import {
   createLeaveApplication,
   formatLeaveType,
@@ -13,12 +13,9 @@ import {
 import {
   formCheckboxClass,
   formCheckboxRowClass,
-  formErrorAlertClass,
   formInputClass,
   formPrimaryButtonClass,
-  formReadOnlyInputClass,
   formSelectClass,
-  formSuccessAlertClass,
   formTextareaClass,
 } from "@/lib/ui/form-styles";
 
@@ -57,10 +54,23 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
     ? `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim() || "Unknown employee"
     : null;
 
+  const employeeOptions = (await listEmployeeLookupOptions(500)).map(
+    (emp) => ({
+      ...emp,
+      full_name: `${emp.first_name ?? ""} ${emp.last_name ?? ""}`.trim(),
+    })
+  );
+
   async function createLeaveAction(formData: FormData) {
     "use server";
     await assertPermission("leave.create");
     const employee_id = input(formData, "employee_id");
+    if (!employee_id) {
+      const qs = new URLSearchParams();
+      qs.set("status", "error");
+      qs.set("message", "Please select an employee before creating leave.");
+      redirect(`/leave/new?${qs.toString()}`);
+    }
     try {
       await createLeaveApplication({
         employee_id: toNull(employee_id),
@@ -106,7 +116,7 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
           description={
             employeeId
               ? `Apply for leave linked to ${employeeName ?? employeeId}.`
-              : "Apply for leave linked to an employee profile. No employee preselected."
+              : "Apply for leave linked to an employee profile."
           }
           backHref="/leave"
         />
@@ -124,13 +134,26 @@ export default async function NewLeavePage({ searchParams }: NewLeavePageProps) 
         ) : null}
 
         <form action={createLeaveAction} className="space-y-6">
-          <input type="hidden" name="employee_id" value={employeeId} />
+          <EmployeeLeaveSelector
+            options={employeeOptions}
+            initialSelectedEmployeeId={employeeId}
+          />
+
+          <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+            <p className="font-medium">How leave types are processed:</p>
+            <ul className="mt-1 list-disc pl-5 space-y-0.5">
+              <li><strong>Sick leave</strong> is recorded after it is taken and will be deducted from your balance immediately.</li>
+              <li><strong>Vacation leave</strong> requires approval before it is deducted from your balance.</li>
+              <li>Other leave types default to pending approval.</li>
+            </ul>
+          </section>
+
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <label className="space-y-1.5">
-                <FormLabel>Employee ID</FormLabel>
-                <input value={employeeId} readOnly placeholder="Optional" className={formReadOnlyInputClass} />
-              </label>
+            <h2 className="text-lg font-semibold text-neutral-900">Leave Details</h2>
+            <p className="mt-1 text-sm text-neutral-600">
+              Select leave type, dates, and provide reason or notes.
+            </p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <label className="space-y-1.5">
                 <FormLabel>Leave Type</FormLabel>
                 <select name="leave_type" defaultValue="vacation_leave" className={formSelectClass}>

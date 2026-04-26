@@ -13,6 +13,7 @@ export type AdminUserRecord = {
   role_code: string | null;
   account_status: string | null;
   created_at: string | null;
+  employee_id: string | null;
 };
 
 export type AdminRoleRecord = {
@@ -55,6 +56,7 @@ export type CreateAdminUserInput = {
   phone_number?: string;
   role_id?: string;
   account_status?: string;
+  employee_id?: string;
 };
 
 export type UpdateAdminUserInput = CreateAdminUserInput;
@@ -75,9 +77,10 @@ type UserProfileRow = {
   role_id: string | null;
   account_status: string | null;
   created_at: string | null;
+  employee_id: string | null;
 };
 
-const USER_PROFILE_SELECT = "id, first_name, last_name, email, phone_number, role_id, account_status, created_at";
+const USER_PROFILE_SELECT = "id, first_name, last_name, email, phone_number, role_id, account_status, created_at, employee_id";
 const ROLE_SELECT = "id, role_name, role_code, description, is_system_role, is_active, created_at";
 const PERMISSION_SELECT = "id, permission_key, permission_name, module_name, permission_type, description, is_sensitive, is_active, created_at, updated_at";
 const ACTIVE_ROLE_PERMISSION_MODULES = new Set([
@@ -125,7 +128,7 @@ async function enrichUsersWithRoles(users: UserProfileRow[]): Promise<AdminUserR
 
   return users.map((user) => {
     const role = user.role_id ? roleMap.get(user.role_id) : undefined;
-    return { ...user, role_name: role?.role_name ?? null, role_code: role?.role_code ?? null };
+    return { ...user, role_name: role?.role_name ?? null, role_code: role?.role_code ?? null, employee_id: user.employee_id ?? null };
   });
 }
 
@@ -212,21 +215,26 @@ export async function createAdminUser(input?: CreateAdminUserInput): Promise<Adm
   }
   const authUserId = authData.user.id;
 
+  const employeeId = toNull(input?.employee_id);
+
   const supabase = await createClient();
+  const insertPayload: Record<string, unknown> = {
+    id: authUserId,
+    first_name: firstName,
+    last_name: lastName,
+    email,
+    phone_number: toNull(input?.phone_number),
+    role_id: roleId,
+    account_status: accountStatus,
+    is_active: isActive,
+    created_at: nowIso,
+    updated_at: nowIso,
+  };
+  if (employeeId) insertPayload.employee_id = employeeId;
+
   const { data, error } = await supabase
     .from("user_profiles")
-    .insert({
-      id: authUserId,
-      first_name: firstName,
-      last_name: lastName,
-      email,
-      phone_number: toNull(input?.phone_number),
-      role_id: roleId,
-      account_status: accountStatus,
-      is_active: isActive,
-      created_at: nowIso,
-      updated_at: nowIso,
-    })
+    .insert(insertPayload)
     .select(USER_PROFILE_SELECT)
     .single();
   if (error) {
@@ -254,19 +262,24 @@ export async function updateAdminUser(id: string, input: UpdateAdminUserInput): 
   const isActive = accountStatusToIsActive(accountStatus);
   const nowIso = new Date().toISOString();
 
+  const employeeId = input.employee_id !== undefined ? toNull(input.employee_id) : undefined;
+
   const supabase = await createClient();
+  const updatePayload: Record<string, unknown> = {
+    first_name: firstName,
+    last_name: lastName,
+    email,
+    phone_number: toNull(input.phone_number),
+    role_id: toNull(input.role_id),
+    account_status: accountStatus,
+    is_active: isActive,
+    updated_at: nowIso,
+  };
+  if (employeeId !== undefined) updatePayload.employee_id = employeeId;
+
   const { data, error } = await supabase
     .from("user_profiles")
-    .update({
-      first_name: firstName,
-      last_name: lastName,
-      email,
-      phone_number: toNull(input.phone_number),
-      role_id: toNull(input.role_id),
-      account_status: accountStatus,
-      is_active: isActive,
-      updated_at: nowIso,
-    })
+    .update(updatePayload)
     .eq("id", id)
     .select(USER_PROFILE_SELECT)
     .single();
@@ -518,4 +531,128 @@ export async function updateRolePermissions(roleId: string, permissionIds: strin
 
 export async function listLoginActivity(): Promise<LoginActivityRecord[]> {
   return [];
+}
+
+export async function getUserLinkedToEmployee(employeeId: string): Promise<AdminUserRecord | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .select(USER_PROFILE_SELECT)
+    .eq("employee_id", employeeId)
+    .maybeSingle();
+
+  if (error) {
+    if (error.message.includes("employee_id")) return null;
+    console.error("getUserLinkedToEmployee error:", error.message);
+    return null;
+  }
+  if (!data) return null;
+  const [user] = await enrichUsersWithRoles([data as UserProfileRow]);
+  return user ?? null;
+}
+
+export type LinkUserToEmployeeInput = {
+  userId: string;
+  employeeId: string;
+  actorUserId: string;
+  actorDisplayName: string;
+};
+
+/**
+ * Database guidance for unique constraint:
+ *   create unique index if not exists idx_user_profiles_employee_id_unique
+ *   on public.user_profiles(employee_id) where employee_id is not null;
+ */
+export async function linkUserToEmployee(input: LinkUserToEmployeeInput): Promise<void> {
+  const supabase = await createClient();
+
+  const { data: currentProfile, error: fetchError } = await supabase
+    .from("user_profiles")
+    .select("employee_id, email")
+    .eq("id", input.userId)
+    .maybeSingle();
+  if (fetchError) throw new Error(`Failed to fetch user profile: ${fetchError.message}`);
+  if (!currentProfile) throw new Error("User profile not found.");
+
+  const previousEmployeeId = (currentProfile as Record<string, unknown>).employee_id as string | null;
+
+  if (previousEmployeeId && previousEmployeeId !== input.employeeId) {
+    throw new Error("This user account is already linked to another employee. Unlink it first before linking it here.");
+  }
+
+  const existingLinked = await getUserLinkedToEmployee(input.employeeId);
+  if (existingLinked && existingLinked.id !== input.userId) {
+    throw new Error("This employee is already linked to a user account. Unlink the existing account before linking another one.");
+  }
+
+  const { error: updateError } = await supabase
+    .from("user_profiles")
+    .update({ employee_id: input.employeeId, updated_at: new Date().toISOString() })
+    .eq("id", input.userId);
+  if (updateError) throw new Error(`Failed to link user to employee: ${updateError.message}`);
+
+  try {
+    await writeAuditLog({
+      module_name: "Admin",
+      entity_type: "user_profile",
+      entity_id: input.userId,
+      action_type: "link_user_employee",
+      action_summary: "Linked user account to employee record",
+      employee_id: input.employeeId,
+      old_values: { employee_id: previousEmployeeId },
+      new_values: { employee_id: input.employeeId },
+      changed_fields: ["employee_id"],
+      performed_by_user_id: input.actorUserId,
+      performed_by_name: input.actorDisplayName,
+    });
+  } catch (auditError) {
+    console.error("Audit log failed for link_user_employee:", auditError instanceof Error ? auditError.message : String(auditError));
+  }
+}
+
+export type UnlinkUserFromEmployeeInput = {
+  userId: string;
+  employeeId: string;
+  actorUserId: string;
+  actorDisplayName: string;
+};
+
+export async function unlinkUserFromEmployee(input: UnlinkUserFromEmployeeInput): Promise<void> {
+  const supabase = await createClient();
+
+  const { data: currentProfile, error: fetchError } = await supabase
+    .from("user_profiles")
+    .select("employee_id, email")
+    .eq("id", input.userId)
+    .maybeSingle();
+  if (fetchError) throw new Error(`Failed to fetch user profile: ${fetchError.message}`);
+  if (!currentProfile) throw new Error("User profile not found.");
+
+  const row = currentProfile as Record<string, unknown>;
+  const previousEmployeeId = row.employee_id as string | null;
+  const userEmail = row.email as string | null;
+
+  const { error: updateError } = await supabase
+    .from("user_profiles")
+    .update({ employee_id: null, updated_at: new Date().toISOString() })
+    .eq("id", input.userId);
+  if (updateError) throw new Error(`Failed to unlink user from employee: ${updateError.message}`);
+
+  try {
+    await writeAuditLog({
+      module_name: "Admin",
+      entity_type: "user_profile",
+      entity_id: input.userId,
+      action_type: "unlink_user_employee",
+      action_summary: "Unlinked user account from employee record",
+      employee_id: input.employeeId,
+      old_values: { employee_id: previousEmployeeId, email: userEmail },
+      new_values: { employee_id: null },
+      changed_fields: ["employee_id"],
+      performed_by_user_id: input.actorUserId,
+      performed_by_name: input.actorDisplayName,
+    });
+  } catch (auditError) {
+    console.error("Audit log failed for unlink_user_employee:", auditError instanceof Error ? auditError.message : String(auditError));
+  }
 }

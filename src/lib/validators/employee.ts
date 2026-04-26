@@ -30,6 +30,7 @@ export const employeeSchema = z
       .nullable()
       .optional()
       .or(z.literal("")),
+    no_employee_number: z.boolean().optional(),
     file_number: z.string().trim().min(1, "File number is required.").max(50),
     first_name: z.string().trim().min(1, "First name is required.").max(120),
     middle_name: optionalTrimmedString,

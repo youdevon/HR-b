@@ -1,6 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { employeeSchema, type EmployeeInput } from "@/lib/validators/employee";
-import { writeAuditLog, type AuditJson } from "@/lib/queries/audit";
+import {
+  DEFAULT_AUDIT_SOURCE_TYPE,
+  writeAuditLog,
+  type AuditJson,
+} from "@/lib/queries/audit";
 import type { DashboardAuthContext } from "@/lib/auth/guards";
 
 export type EmployeeListRecord = {
@@ -107,6 +111,17 @@ const EMPLOYEE_LOOKUP_SELECT = `
   job_title
 `;
 
+/**
+ * Database guidance for uniqueness constraints (blank/null values excluded):
+ *   create unique index if not exists idx_employees_id_number_unique
+ *   on public.employees(id_number)
+ *   where id_number is not null and id_number <> '';
+ *
+ *   create unique index if not exists idx_employees_bir_number_unique
+ *   on public.employees(bir_number)
+ *   where bir_number is not null and bir_number <> '';
+ */
+
 function normalizeEmployeeInput(input: EmployeeInput): EmployeeInput {
   return {
     ...input,
@@ -173,6 +188,46 @@ async function fileNumberExists(
   return Boolean(data?.id);
 }
 
+async function idNumberExists(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  idNumber: string,
+  excludeEmployeeId?: string
+): Promise<boolean> {
+  let query = supabase
+    .from("employees")
+    .select("id")
+    .eq("id_number", idNumber)
+    .limit(1);
+  if (excludeEmployeeId) query = query.neq("id", excludeEmployeeId);
+  const { data, error } = await query.maybeSingle();
+
+  if (error) {
+    console.error("idNumberExists error:", JSON.stringify(error, null, 2));
+    throw new Error(`Failed to validate ID number uniqueness: ${error.message}`);
+  }
+  return Boolean(data?.id);
+}
+
+async function birNumberExists(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  birNumber: string,
+  excludeEmployeeId?: string
+): Promise<boolean> {
+  let query = supabase
+    .from("employees")
+    .select("id")
+    .eq("bir_number", birNumber)
+    .limit(1);
+  if (excludeEmployeeId) query = query.neq("id", excludeEmployeeId);
+  const { data, error } = await query.maybeSingle();
+
+  if (error) {
+    console.error("birNumberExists error:", JSON.stringify(error, null, 2));
+    throw new Error(`Failed to validate BIR number uniqueness: ${error.message}`);
+  }
+  return Boolean(data?.id);
+}
+
 function friendlyDuplicateError(error: unknown): string | null {
   if (!error || typeof error !== "object") return null;
 
@@ -187,6 +242,12 @@ function friendlyDuplicateError(error: unknown): string | null {
   }
   if (haystack.includes("file_number")) {
     return "File number already exists.";
+  }
+  if (haystack.includes("id_number")) {
+    return "Another employee already has this ID Number.";
+  }
+  if (haystack.includes("bir_number")) {
+    return "Another employee already has this BIR Number.";
   }
   return null;
 }
@@ -266,22 +327,46 @@ export async function listEmployeeLookupOptions(
   return (data ?? []) as EmployeeLookupRecord[];
 }
 
+export async function getEmployeeLookupById(
+  id: string
+): Promise<EmployeeLookupRecord | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("employees")
+    .select(EMPLOYEE_LOOKUP_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("getEmployeeLookupById error:", error.message);
+    return null;
+  }
+
+  return (data as EmployeeLookupRecord | null) ?? null;
+}
+
 export async function createEmployee(
   input: EmployeeInput,
   actor?: DashboardAuthContext | null
 ): Promise<EmployeeListRecord> {
   const supabase = await createClient();
+  const noEmployeeNumber = input.no_employee_number === true;
   const providedEmployeeNumber = input.employee_number?.trim() ?? "";
   const providedFileNumber = input.file_number?.trim() ?? "";
+  const providedIdNumber = input.id_number?.trim() ?? "";
+  const providedBirNumber = input.bir_number?.trim() ?? "";
+  const resolvedEmployeeNumber = noEmployeeNumber
+    ? ""
+    : (providedEmployeeNumber || providedFileNumber);
 
   if (!providedFileNumber) {
     throw new Error("File number is required.");
   }
 
-  if (providedEmployeeNumber) {
+  if (resolvedEmployeeNumber) {
     const duplicateEmployeeNumber = await employeeNumberExists(
       supabase,
-      providedEmployeeNumber
+      resolvedEmployeeNumber
     );
     if (duplicateEmployeeNumber) {
       throw new Error("Employee number already exists.");
@@ -293,13 +378,29 @@ export async function createEmployee(
     throw new Error("File number already exists.");
   }
 
+  if (providedIdNumber) {
+    const duplicateIdNumber = await idNumberExists(supabase, providedIdNumber);
+    if (duplicateIdNumber) {
+      throw new Error("Another employee already has this ID Number.");
+    }
+  }
+
+  if (providedBirNumber) {
+    const duplicateBirNumber = await birNumberExists(supabase, providedBirNumber);
+    if (duplicateBirNumber) {
+      throw new Error("Another employee already has this BIR Number.");
+    }
+  }
+
   const parsed = employeeSchema.parse({
     ...input,
-    employee_number: providedEmployeeNumber,
+    employee_number: resolvedEmployeeNumber,
     file_number: providedFileNumber,
+    no_employee_number: noEmployeeNumber,
   });
   const normalized = normalizeEmployeeInput(parsed);
-  const payload = emptyStringsToNull(normalized);
+  const { no_employee_number: _noEmployeeNumber, ...insertable } = normalized;
+  const payload = emptyStringsToNull(insertable);
 
   const response = await supabase
     .from("employees")
@@ -337,7 +438,7 @@ export async function createEmployee(
     old_values: null,
     new_values: createdSnapshot as AuditJson,
     changed_fields: Object.keys(createdSnapshot),
-    source_type: "application",
+    source_type: DEFAULT_AUDIT_SOURCE_TYPE,
     actor: actor
       ? {
           user_id: actor.user.id,
@@ -359,15 +460,41 @@ export async function updateEmployee(
   const previous = await getEmployeeById(id);
   const parsed = employeeSchema.partial().parse(input);
 
-  const normalized = {
+  const normalizedInput = {
     ...parsed,
     file_status: parsed.file_status?.toLowerCase(),
     id_type: parsed.id_type?.toLowerCase(),
     employment_status: parsed.employment_status?.toLowerCase(),
   };
-  const payload = emptyStringsToNull(normalized);
+  if (parsed.no_employee_number === true) {
+    normalizedInput.employee_number = "";
+  } else if (
+    parsed.no_employee_number === false &&
+    (parsed.employee_number ?? "").trim() === "" &&
+    (parsed.file_number ?? "").trim()
+  ) {
+    normalizedInput.employee_number = parsed.file_number?.trim();
+  }
+  const { no_employee_number: _noEmployeeNumber, ...updateable } = normalizedInput;
+  const payload = emptyStringsToNull(updateable);
 
   const supabase = await createClient();
+  const resolvedIdNumber = (normalizedInput.id_number ?? "").trim();
+  const resolvedBirNumber = (normalizedInput.bir_number ?? "").trim();
+
+  if (resolvedIdNumber) {
+    const duplicateIdNumber = await idNumberExists(supabase, resolvedIdNumber, id);
+    if (duplicateIdNumber) {
+      throw new Error("Another employee already has this ID Number.");
+    }
+  }
+
+  if (resolvedBirNumber) {
+    const duplicateBirNumber = await birNumberExists(supabase, resolvedBirNumber, id);
+    if (duplicateBirNumber) {
+      throw new Error("Another employee already has this BIR Number.");
+    }
+  }
 
   const { data, error } = await supabase
     .from("employees")
@@ -415,7 +542,7 @@ export async function updateEmployee(
     old_values: oldSnapshot as AuditJson,
     new_values: newSnapshot as AuditJson,
     changed_fields: auditChangedFieldNames(oldSnapshot, newSnapshot),
-    source_type: "application",
+    source_type: DEFAULT_AUDIT_SOURCE_TYPE,
     actor: actor
       ? {
           user_id: actor.user.id,

@@ -51,7 +51,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.replace("/dashboard");
+    router.replace("/");
     router.refresh();
   }
 

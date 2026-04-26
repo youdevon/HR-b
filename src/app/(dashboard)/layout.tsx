@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import AppShell from "@/components/layout/app-shell";
 import { dashboardMainInnerClass } from "@/lib/ui/dashboard-styles";
-import { getDashboardSession, getFirstAccessibleModuleHref } from "@/lib/auth/guards";
+import { getDashboardSession, getFirstAccessibleModuleHref, isProfileOnlyUser } from "@/lib/auth/guards";
 import { profileDisplayName } from "@/lib/auth/permissions";
 import { buildVisibleDashboardNavItems } from "@/lib/navigation/get-visible-dashboard-nav";
 
@@ -28,11 +28,18 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   if (!auth) {
     redirect("/login");
   }
+
+  const profileOnly = isProfileOnlyUser(auth.profile, auth.permissions);
   const navItems = buildVisibleDashboardNavItems(auth.profile, auth.permissions);
+
   if (!navItems.length) {
+    if (profileOnly) {
+      redirect("/profile");
+    }
     const fallback = getFirstAccessibleModuleHref(auth.profile, auth.permissions);
     redirect(fallback ?? "/access-denied");
   }
+
   const displayName = auth.profile ? profileDisplayName(auth.profile) : "Guest";
   const currentYear = new Date().getFullYear();
 

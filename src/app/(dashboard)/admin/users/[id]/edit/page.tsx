@@ -16,6 +16,7 @@ import { notFound, redirect } from "next/navigation";
 import { assertPermission, requirePermission } from "@/lib/auth/guards";
 import { getCurrentUserId } from "@/lib/auth/session";
 import { dashboardAlertErrorClass, dashboardAlertSuccessClass } from "@/lib/ui/dashboard-styles";
+import { listEmployeeLookupOptions } from "@/lib/queries/employees";
 
 type EditAdminUserPageProps = {
   params: Promise<{ id: string }>;
@@ -48,10 +49,11 @@ export default async function EditAdminUserPage({
   await requirePermission("admin.users.edit");
   const status = firstString(sp.status);
   const message = firstString(sp.message);
-  const [user, roles, hasRecordedActivity] = await Promise.all([
+  const [user, roles, hasRecordedActivity, employees] = await Promise.all([
     getAdminUserById(id),
     listRoles(),
     userHasRecordedActivity(id),
+    listEmployeeLookupOptions(500),
   ]);
 
   if (!user) notFound();
@@ -88,6 +90,7 @@ export default async function EditAdminUserPage({
         phone_number: String(formData.get("phone_number") ?? ""),
         role_id: String(formData.get("role_id") ?? ""),
         account_status: String(formData.get("account_status") ?? "Active"),
+        employee_id: String(formData.get("employee_id") ?? ""),
       });
       if (hasNewPassword && hasConfirmNewPassword) {
         await updateAdminUserPassword(id, newPassword);
@@ -175,6 +178,7 @@ export default async function EditAdminUserPage({
           mode="edit"
           user={user}
           submitLabel="Save User"
+          employees={employees}
         />
 
         <section className="rounded-2xl border border-red-300 bg-red-50 p-5 shadow-sm">

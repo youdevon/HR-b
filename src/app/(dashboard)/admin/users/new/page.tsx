@@ -5,6 +5,7 @@ import UserForm from "@/components/domain/admin/user-form";
 import PageHeader from "@/components/layout/page-header";
 import { createAdminUser, listRoles } from "@/lib/queries/admin";
 import { assertPermission, requirePermission } from "@/lib/auth/guards";
+import { listEmployeeLookupOptions } from "@/lib/queries/employees";
 
 type NewAdminUserPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -30,7 +31,10 @@ export default async function NewAdminUserPage({
   await requirePermission("admin.users.create");
   const status = firstString(sp.status);
   const message = firstString(sp.message);
-  const roles = await listRoles();
+  const [roles, employees] = await Promise.all([
+    listRoles(),
+    listEmployeeLookupOptions(500),
+  ]);
 
   async function createUserAction(formData: FormData) {
     "use server";
@@ -59,6 +63,7 @@ export default async function NewAdminUserPage({
         phone_number: String(formData.get("phone_number") ?? ""),
         role_id: String(formData.get("role_id") ?? ""),
         account_status: String(formData.get("account_status") ?? "Active"),
+        employee_id: String(formData.get("employee_id") ?? ""),
       });
     } catch (error) {
       const errorMessage =
@@ -100,6 +105,7 @@ export default async function NewAdminUserPage({
           roles={roles}
           mode="create"
           submitLabel="Create User"
+          employees={employees}
         />
     
     </main>

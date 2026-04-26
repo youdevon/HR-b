@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   ListTree,
   Settings2,
+  UserCircle,
   Users,
   X,
   type LucideIcon,
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils/cn";
 const ICON_MAP: Record<DashboardNavIconName, LucideIcon> = {
   layoutDashboard: LayoutDashboard,
   users: Users,
+  userCircle: UserCircle,
   fileText: FileText,
   calendar: Calendar,
   folderOpen: FolderOpen,

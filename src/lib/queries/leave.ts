@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { writeAuditLog } from "@/lib/queries/audit";
+import { listAlertRules } from "@/lib/queries/alert-rules";
 
 export const LEAVE_TYPES = [
   "vacation_leave",
@@ -107,9 +109,18 @@ type ContractCoverageRow = {
 
 type EmployeeNameRow = {
   id: string;
+  file_number?: string | null;
   employee_number: string | null;
   first_name: string | null;
   last_name: string | null;
+  employment_status?: string | null;
+};
+
+export type LowLeaveBalanceRecord = LeaveBalanceRecord & {
+  employee_name: string | null;
+  employee_file_number: string | null;
+  employee_status: string | null;
+  threshold_days: number;
 };
 
 const LEAVE_BALANCE_SELECT = `
@@ -521,6 +532,115 @@ function todayDateString(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function buildEmployeeFullName(firstName?: string | null, lastName?: string | null): string | null {
+  const full = `${firstName ?? ""} ${lastName ?? ""}`.trim();
+  return full || null;
+}
+
+async function getLowLeaveThresholdDays(
+  leaveType: "vacation_leave" | "sick_leave"
+): Promise<number> {
+  const rules = await listAlertRules();
+  const ruleCode = leaveType === "vacation_leave" ? "low_vacation_leave" : "low_sick_leave";
+  const matched = rules.find(
+    (rule) =>
+      rule.is_active !== false &&
+      (rule.rule_code ?? "").trim().toLowerCase() === ruleCode
+  );
+  const threshold = matched?.threshold_days ?? Number(matched?.threshold_value ?? 5);
+  return Number.isFinite(threshold) ? threshold : 5;
+}
+
+async function getEmployeesCurrentlyOnApprovedLeave(today: string): Promise<Set<string>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("leave_transactions")
+    .select("employee_id")
+    .eq("status", "approved")
+    .lte("start_date", today)
+    .gte("end_date", today);
+
+  if (error) {
+    throw new Error(`Failed to evaluate employees currently on approved leave: ${error.message}`);
+  }
+
+  return new Set(
+    (data ?? [])
+      .map((row) => row.employee_id as string | null)
+      .filter((id): id is string => Boolean(id))
+  );
+}
+
+async function enrichLowBalanceRows(rows: LeaveBalanceRecord[]): Promise<LowLeaveBalanceRecord[]> {
+  const employeeIds = [
+    ...new Set(rows.map((row) => row.employee_id).filter((id): id is string => Boolean(id))),
+  ];
+  if (employeeIds.length === 0) {
+    return rows.map((row) => ({
+      ...row,
+      employee_name: null,
+      employee_file_number: null,
+      employee_status: null,
+      threshold_days: 5,
+    }));
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("employees")
+    .select("id, first_name, last_name, file_number, employment_status")
+    .in("id", employeeIds);
+  if (error) {
+    throw new Error(`Failed to load employee context for low leave balances: ${error.message}`);
+  }
+  const byId = new Map(
+    ((data ?? []) as EmployeeNameRow[]).map((employee) => [employee.id, employee])
+  );
+
+  return rows.map((row) => {
+    const employee = row.employee_id ? byId.get(row.employee_id) : undefined;
+    return {
+      ...row,
+      employee_name: buildEmployeeFullName(employee?.first_name, employee?.last_name),
+      employee_file_number: employee?.file_number ?? null,
+      employee_status: employee?.employment_status ?? null,
+      threshold_days: 5,
+    };
+  });
+}
+
+async function listLowLeaveByType(
+  leaveType: "vacation_leave" | "sick_leave"
+): Promise<LowLeaveBalanceRecord[]> {
+  const supabase = await createClient();
+  const today = todayDateString();
+  const threshold = await getLowLeaveThresholdDays(leaveType);
+
+  const { data, error } = await supabase
+    .from("leave_balances")
+    .select(LEAVE_BALANCE_SELECT)
+    .eq("leave_type", leaveType)
+    .lte("effective_from", today)
+    .gte("effective_to", today);
+
+  if (error) {
+    throw new Error(`Failed to load low ${leaveType} balances: ${error.message}`);
+  }
+
+  let rows = (data ?? []) as LeaveBalanceRecord[];
+  rows = rows.filter((row) => Number(row.remaining_days ?? 0) <= threshold);
+
+  if (leaveType === "vacation_leave") {
+    const onLeave = await getEmployeesCurrentlyOnApprovedLeave(today);
+    rows = rows.filter((row) => !row.employee_id || !onLeave.has(row.employee_id));
+  }
+
+  const enriched = await enrichLowBalanceRows(rows);
+  return enriched
+    .map((row) => ({ ...row, threshold_days: threshold }))
+    .sort((a, b) => Number(a.remaining_days ?? 0) - Number(b.remaining_days ?? 0));
+}
+
 function calculateDays(startDate: string, endDate: string): number | null {
   if (!startDate || !endDate) return null;
   const start = new Date(`${startDate}T00:00:00`);
@@ -875,6 +995,55 @@ export async function getLeaveTransactionById(
   return record ?? null;
 }
 
+async function deductFromLeaveBalance(
+  employeeId: string,
+  leaveType: LeaveType,
+  days: number,
+  startDate: string
+): Promise<void> {
+  if (days <= 0) return;
+  const supabase = await createClient();
+
+  const { data: balances, error: balanceError } = await supabase
+    .from("leave_balances")
+    .select("id, leave_type, used_days, remaining_days, effective_from, effective_to")
+    .eq("employee_id", employeeId)
+    .eq("leave_type", leaveType)
+    .lte("effective_from", startDate)
+    .gte("effective_to", startDate)
+    .limit(1);
+
+  if (balanceError) {
+    throw new Error(`Failed to look up ${leaveType} balance: ${balanceError.message}`);
+  }
+
+  const balance = (balances ?? [])[0];
+  if (!balance) {
+    throw new Error(`No ${formatLeaveType(leaveType)} balance found for this period. Cannot deduct.`);
+  }
+
+  const currentUsed = Number(balance.used_days ?? 0);
+  const currentRemaining = Number(balance.remaining_days ?? 0);
+
+  if (currentRemaining < days) {
+    throw new Error(
+      `Insufficient ${formatLeaveType(leaveType)} balance. Available: ${currentRemaining} days, Requested: ${days} days.`
+    );
+  }
+
+  const { error: updateError } = await supabase
+    .from("leave_balances")
+    .update({
+      used_days: currentUsed + days,
+      remaining_days: currentRemaining - days,
+    })
+    .eq("id", balance.id);
+
+  if (updateError) {
+    throw new Error(`Failed to deduct ${leaveType} balance: ${updateError.message}`);
+  }
+}
+
 export async function createLeaveApplication(
   input: CreateLeaveApplicationInput
 ): Promise<LeaveTransactionRecord> {
@@ -899,19 +1068,28 @@ export async function createLeaveApplication(
     (startDate && endDate
       ? calculateDays(startDate, endDate)
       : null);
+
+  if (calculatedDays == null || calculatedDays <= 0) {
+    throw new Error("Total days must be greater than 0.");
+  }
+
   const normalizedLeaveType = normalizeLeaveType(input.leave_type);
+  const isSickLeave = normalizedLeaveType === "sick_leave";
+
+  const transactionType = "leave_taken";
+  const initialStatus = isSickLeave ? "approved" : "pending";
 
   const { data, error } = await supabase
     .from("leave_transactions")
     .insert({
       employee_id: input.employee_id,
       leave_type: normalizedLeaveType,
-      transaction_type: "application",
+      transaction_type: transactionType,
       start_date: input.start_date,
       end_date: input.end_date,
       days: calculatedDays,
       reason: input.reason,
-      status: "pending",
+      status: initialStatus,
       notes: input.notes,
       medical_certificate_required: input.medical_certificate_required ?? false,
       medical_certificate_received: input.medical_certificate_received ?? false,
@@ -922,6 +1100,47 @@ export async function createLeaveApplication(
 
   if (error) {
     throw new Error(`Failed to apply leave: ${error.message}`);
+  }
+
+  if (isSickLeave) {
+    await deductFromLeaveBalance(employeeId, normalizedLeaveType, calculatedDays, startDate);
+
+    try {
+      await writeAuditLog({
+        module_name: "Leave",
+        entity_type: "leave_transaction",
+        entity_id: data.id as string,
+        action_type: "create_sick_leave",
+        action_summary: "Sick leave recorded and deducted from balance",
+        employee_id: employeeId,
+        new_values: { leave_type: normalizedLeaveType, days: calculatedDays, status: initialStatus },
+        changed_fields: ["leave_type", "days", "status", "used_days", "remaining_days"],
+      });
+    } catch (auditErr) {
+      console.error("Audit log failed for create_sick_leave:", auditErr instanceof Error ? auditErr.message : String(auditErr));
+    }
+  } else {
+    const auditAction = normalizedLeaveType === "vacation_leave"
+      ? "create_vacation_leave_request"
+      : "create_leave_request";
+    const auditSummary = normalizedLeaveType === "vacation_leave"
+      ? "Vacation leave request created pending approval"
+      : `${formatLeaveType(normalizedLeaveType)} request created pending approval`;
+
+    try {
+      await writeAuditLog({
+        module_name: "Leave",
+        entity_type: "leave_transaction",
+        entity_id: data.id as string,
+        action_type: auditAction,
+        action_summary: auditSummary,
+        employee_id: employeeId,
+        new_values: { leave_type: normalizedLeaveType, days: calculatedDays, status: initialStatus },
+        changed_fields: ["leave_type", "days", "status"],
+      });
+    } catch (auditErr) {
+      console.error(`Audit log failed for ${auditAction}:`, auditErr instanceof Error ? auditErr.message : String(auditErr));
+    }
   }
 
   const [record] = await enrichLeaveTransactions([data as LeaveTransactionRow]);
@@ -941,9 +1160,17 @@ export async function applyLeaveAction(input: {
   const notes = input.notes?.trim() || null;
   const rejectionReason = input.rejection_reason?.trim() || null;
 
+  const existing = await getLeaveTransactionById(input.id);
+  if (!existing) {
+    throw new Error("Leave transaction not found.");
+  }
+
   let patch: Record<string, string | boolean | null> = {};
 
   if (input.action === "approve_leave") {
+    if (existing.approval_status === "approved") {
+      throw new Error("This leave has already been approved.");
+    }
     patch = {
       status: "approved",
       notes: notes ?? `Approved by ${input.approved_by?.trim() || "HR"}`,
@@ -981,6 +1208,33 @@ export async function applyLeaveAction(input: {
 
   if (error) {
     throw new Error(`Failed to update leave workflow: ${error.message}`);
+  }
+
+  if (input.action === "approve_leave" && existing.approval_status !== "approved") {
+    const leaveType = normalizeLeaveType(existing.leave_type ?? "");
+    const totalDays = Number(existing.total_days ?? 0);
+    const empId = (existing.employee_id ?? "").trim();
+    const startDate = (existing.start_date ?? "").trim();
+
+    if (empId && totalDays > 0 && startDate) {
+      await deductFromLeaveBalance(empId, leaveType, totalDays, startDate);
+    }
+
+    try {
+      await writeAuditLog({
+        module_name: "Leave",
+        entity_type: "leave_transaction",
+        entity_id: input.id,
+        action_type: "approve_vacation_leave",
+        action_summary: `${formatLeaveType(leaveType)} approved and deducted from balance`,
+        employee_id: empId || undefined,
+        old_values: { status: existing.approval_status },
+        new_values: { status: "approved", days: totalDays },
+        changed_fields: ["status", "used_days", "remaining_days"],
+      });
+    } catch (auditErr) {
+      console.error("Audit log failed for approve_vacation_leave:", auditErr instanceof Error ? auditErr.message : String(auditErr));
+    }
   }
 
   const [record] = await enrichLeaveTransactions([data as LeaveTransactionRow]);
@@ -1118,44 +1372,22 @@ export async function generateLeaveWorkflowAlerts(): Promise<number> {
   return payload.length;
 }
 
-export async function listLowSickLeave(): Promise<LeaveBalanceRecord[]> {
-  const balances = await listLeaveBalances();
-
-  return balances
-    .filter((row) => {
-      const remaining = Number(row.remaining_days ?? 0);
-      const threshold = Number(row.warning_threshold_days ?? 0);
-
-      return (
-        normalizeLeaveType(row.leave_type ?? "") === "sick_leave" &&
-        row.low_balance_warning_enabled !== false &&
-        remaining <= threshold
-      );
-    })
-    .sort(
-      (a, b) =>
-        Number(a.remaining_days ?? 0) - Number(b.remaining_days ?? 0)
-    );
+export async function listLowSickLeave(): Promise<LowLeaveBalanceRecord[]> {
+  return listLowLeaveByType("sick_leave");
 }
 
-export async function listLowVacationLeave(): Promise<LeaveBalanceRecord[]> {
-  const balances = await listLeaveBalances();
+export async function listLowVacationLeave(): Promise<LowLeaveBalanceRecord[]> {
+  return listLowLeaveByType("vacation_leave");
+}
 
-  return balances
-    .filter((row) => {
-      const remaining = Number(row.remaining_days ?? 0);
-      const threshold = Number(row.warning_threshold_days ?? 0);
-
-      return (
-        normalizeLeaveType(row.leave_type ?? "") === "vacation_leave" &&
-        row.low_balance_warning_enabled !== false &&
-        remaining <= threshold
-      );
-    })
-    .sort(
-      (a, b) =>
-        Number(a.remaining_days ?? 0) - Number(b.remaining_days ?? 0)
-    );
+export async function listLowLeaveBalances(): Promise<LowLeaveBalanceRecord[]> {
+  const [vacation, sick] = await Promise.all([
+    listLowVacationLeave(),
+    listLowSickLeave(),
+  ]);
+  return [...vacation, ...sick].sort(
+    (a, b) => Number(a.remaining_days ?? 0) - Number(b.remaining_days ?? 0)
+  );
 }
 
 export async function listExhaustedSickLeave(): Promise<LeaveBalanceRecord[]> {

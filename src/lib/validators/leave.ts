@@ -1,11 +1,13 @@
 import { z } from "zod";
 
 export const leaveTypes = [
-  "sick_leave",
   "vacation_leave",
+  "sick_leave",
   "casual_leave",
+  "maternity_leave",
+  "paternity_leave",
+  "unpaid_leave",
   "special_leave",
-  "other_leave",
 ] as const;
 
 const optionalTrimmedString = z

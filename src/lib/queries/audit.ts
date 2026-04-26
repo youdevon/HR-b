@@ -3,6 +3,15 @@ import { headers as nextHeaders } from "next/headers";
 import "server-only";
 
 type AuditSupabase = Awaited<ReturnType<typeof createClient>>;
+export const ALLOWED_AUDIT_SOURCE_TYPES = [
+  "web_ui",
+  "api",
+  "background_job",
+  "migration",
+  "system_rule",
+] as const;
+export type AuditSourceType = (typeof ALLOWED_AUDIT_SOURCE_TYPES)[number];
+export const DEFAULT_AUDIT_SOURCE_TYPE: AuditSourceType = "web_ui";
 
 export type AuditJson = Record<string, unknown> | null;
 
@@ -101,6 +110,13 @@ export type WriteAuditLogInput = {
   computer_name?: string | null;
   user_agent?: string | null;
 };
+
+function normalizeAuditSourceType(value: string | null | undefined): AuditSourceType {
+  const candidate = (value ?? "").trim().toLowerCase();
+  return (ALLOWED_AUDIT_SOURCE_TYPES as readonly string[]).includes(candidate)
+    ? (candidate as AuditSourceType)
+    : DEFAULT_AUDIT_SOURCE_TYPE;
+}
 // SQL guidance for optional metadata columns:
 // alter table public.audit_logs
 // add column if not exists ip_address text,
@@ -373,17 +389,17 @@ export async function writeAuditLog(input: WriteAuditLogInput): Promise<AuditRec
     action_summary: input.action_summary,
     old_values: input.old_values ?? null,
     new_values: input.new_values ?? null,
-    source_type: input.source_type ?? "application",
+    source_type: normalizeAuditSourceType(input.source_type),
     performed_by_name: input.performed_by_name ?? actorDisplayName ?? null,
     performed_by_user_id: input.performed_by_user_id ?? actorUserId,
     role_at_time: input.role_at_time ?? actorRole,
-    event_timestamp: input.event_timestamp ?? new Date().toISOString(),
+    event_timestamp: input.event_timestamp ?? input.created_at ?? new Date().toISOString(),
     reason_for_change: input.reason_for_change ?? null,
     correlation_id: input.correlation_id ?? null,
     is_sensitive: input.is_sensitive ?? false,
     changed_fields: input.changed_fields ?? null,
     employee_id: input.employee_id ?? null,
-    created_at: input.created_at ?? null,
+    created_at: input.created_at ?? new Date().toISOString(),
   };
   if (!supportedColumns.employee_id) {
     delete payload.employee_id;
@@ -422,8 +438,12 @@ export async function writeAuditLog(input: WriteAuditLogInput): Promise<AuditRec
     .single();
 
   if (error) {
+    const finalErrorMessage =
+      typeof error === "object" && error && "message" in error
+        ? String(error.message ?? "Unknown audit log error")
+        : "Unknown audit log error";
     console.error("writeAuditLog error:", error);
-    throw new Error(`Failed to write audit log: ${error.message}`);
+    throw new Error(`Failed to write audit log: ${finalErrorMessage}`);
   }
 
   return data as unknown as AuditRecord;

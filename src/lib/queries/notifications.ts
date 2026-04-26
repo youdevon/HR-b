@@ -41,6 +41,9 @@ type EmployeeNameRow = {
   id: string;
   first_name: string | null;
   last_name: string | null;
+  file_number: string | null;
+  file_status: string | null;
+  file_location: string | null;
 };
 
 type DocumentRow = {
@@ -56,6 +59,7 @@ type LeaveBalanceRow = {
   employee_id: string | null;
   leave_type: string | null;
   remaining_days: number | null;
+  effective_from: string | null;
   effective_to: string | null;
 };
 
@@ -130,6 +134,29 @@ function normalized(value: string | null | undefined): string {
 
 function normalizedLeaveType(value: string | null): string {
   return normalized(value).replaceAll(" ", "_");
+}
+
+function formatEmployeeDisplay(employee: EmployeeNameRow | undefined): string {
+  if (!employee) return "Unknown employee";
+  const fullName = `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim();
+  return fullName || "Unknown employee";
+}
+
+function formatEmployeeFileNumber(employee: EmployeeNameRow | undefined): string {
+  return employee?.file_number?.trim() || "—";
+}
+
+async function getEmployeeContextByIds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  employeeIds: string[]
+): Promise<Map<string, EmployeeNameRow>> {
+  if (employeeIds.length === 0) return new Map();
+  const { data, error } = await supabase
+    .from("employees")
+    .select("id, first_name, last_name, file_number, file_status, file_location")
+    .in("id", employeeIds);
+  if (error) throw new Error(`Failed to load employee context for alerts: ${error.message}`);
+  return new Map(((data ?? []) as EmployeeNameRow[]).map((row) => [row.id, row]));
 }
 
 function ruleDays(rule: AlertRuleRecord, fallback: number): number {
@@ -213,12 +240,37 @@ async function insertNewAlerts(payload: AlertPayload[]): Promise<AlertPayload[]>
   if (!payload.length) return [];
 
   const supabase = await createClient();
-  const correlationIds = [...new Set(payload.map((alert) => alert.correlation_id))];
+  const validPayload: AlertPayload[] = [];
+  for (const alert of payload) {
+    const correlationId = (alert.correlation_id ?? "").trim();
+    if (!correlationId) {
+      console.warn("Skipping generated alert without correlation_id:", {
+        alert_title: alert.alert_title,
+        module_name: alert.module_name,
+        entity_type: alert.entity_type,
+        entity_id: alert.entity_id,
+      });
+      continue;
+    }
+    validPayload.push({ ...alert, correlation_id: correlationId });
+  }
+
+  if (!validPayload.length) return [];
+
+  const dedupedByCorrelation = new Map<string, AlertPayload>();
+  for (const alert of validPayload) {
+    if (!dedupedByCorrelation.has(alert.correlation_id)) {
+      dedupedByCorrelation.set(alert.correlation_id, alert);
+    }
+  }
+  const normalizedPayload = [...dedupedByCorrelation.values()];
+
+  const correlationIds = [...new Set(normalizedPayload.map((alert) => alert.correlation_id))];
   const { data: existing, error: existingError } = await supabase
     .from("alerts")
     .select("correlation_id")
     .in("correlation_id", correlationIds)
-    .in("status", ["active", "acknowledged"]);
+    .in("status", ["active", "acknowledged", "resolved"]);
 
   if (existingError) {
     throw new Error(`Failed to check duplicate alerts: ${existingError.message}`);
@@ -229,16 +281,33 @@ async function insertNewAlerts(payload: AlertPayload[]): Promise<AlertPayload[]>
       .map((row) => row.correlation_id as string | null)
       .filter((value): value is string => Boolean(value))
   );
-  const toUpsert = payload.filter((alert) => !openCorrelationIds.has(alert.correlation_id));
+  const toUpsert = normalizedPayload.filter((alert) => !openCorrelationIds.has(alert.correlation_id));
 
   if (!toUpsert.length) return [];
 
-  const { error } = await supabase
+  const upsertResult = await supabase
     .from("alerts")
     .upsert(toUpsert, { onConflict: "correlation_id" });
+  const { error } = upsertResult;
 
-  if (error) {
+  if (!error) {
+    return toUpsert;
+  }
+
+  const upsertErrorMessage = String(error.message ?? "").toLowerCase();
+  const missingConflictConstraint =
+    upsertErrorMessage.includes("no unique or exclusion constraint") ||
+    upsertErrorMessage.includes("on conflict specification");
+  if (!missingConflictConstraint) {
     throw new Error(`Failed to upsert generated alerts: ${error.message}`);
+  }
+
+  // Fallback for environments where `alerts.correlation_id` unique constraint
+  // has not been applied yet. We still prevent duplicates by pre-checking
+  // existing active/acknowledged/resolved correlation IDs above.
+  const { error: insertError } = await supabase.from("alerts").insert(toUpsert);
+  if (insertError) {
+    throw new Error(`Failed to insert generated alerts: ${insertError.message}`);
   }
 
   return toUpsert;
@@ -284,22 +353,7 @@ export async function generateContractAlertsFromRules(
         .filter((id): id is string => Boolean(id))
     ),
   ];
-  let employeeNamesById = new Map<string, string>();
-  if (employeeIds.length > 0) {
-    const { data: employees, error: employeeError } = await supabase
-      .from("employees")
-      .select("id, first_name, last_name")
-      .in("id", employeeIds);
-    if (employeeError) {
-      throw new Error(`Failed to load employee names for contract alerts: ${employeeError.message}`);
-    }
-    employeeNamesById = new Map(
-      ((employees ?? []) as EmployeeNameRow[]).map((employee) => {
-        const fullName = `${employee.first_name ?? ""} ${employee.last_name ?? ""}`.trim();
-        return [employee.id, fullName || "Unknown employee"];
-      })
-    );
-  }
+  const employeeContextById = await getEmployeeContextByIds(supabase, employeeIds);
 
   function toLocalDate(dateText: string): Date {
     const [yearText, monthText, dayText] = dateText.split("-");
@@ -321,9 +375,11 @@ export async function generateContractAlertsFromRules(
       end_date: contract.end_date,
     });
     const label = contract.contract_number ?? contract.contract_title ?? contract.id;
-    const employeeName = contract.employee_id
-      ? employeeNamesById.get(contract.employee_id) ?? "Unknown employee"
-      : "Unknown employee";
+    const employee = contract.employee_id
+      ? employeeContextById.get(contract.employee_id)
+      : undefined;
+    const employeeName = formatEmployeeDisplay(employee);
+    const fileNumber = formatEmployeeFileNumber(employee);
     const daysUntilExpiry = dayDiff(today, contract.end_date);
 
     if (contract.end_date < today && effectiveStatus === "expired") {
@@ -332,13 +388,13 @@ export async function generateContractAlertsFromRules(
         const daysExpired = Math.abs(daysUntilExpiry);
         alerts.push(buildAlert(rule, {
           alert_title: rule.rule_name?.trim() || "Contract Expired",
-          alert_message: `Contract ${label} (${employeeName}) ended on ${contract.end_date} and is ${daysExpired} day(s) expired.`,
           module_name: "Contracts",
           entity_type: "contract",
           entity_id: contract.id,
           employee_id: contract.employee_id,
           correlationEntityId: contract.id,
-          correlationPrefix: `expired_contracts-${(rule.rule_code ?? "expired_contracts").trim().toLowerCase()}`,
+          alert_message: `${employeeName} (File #${fileNumber}) • Contract ${label} ended on ${contract.end_date} and is ${daysExpired} day(s) expired.`,
+          correlationPrefix: "expired_contracts",
           fallbackSeverity: "critical",
         }));
       }
@@ -351,7 +407,7 @@ export async function generateContractAlertsFromRules(
       if (effectiveStatus === "active" && withinThreshold && statusApplies(effectiveStatus, rule)) {
         alerts.push(buildAlert(rule, {
           alert_title: rule.rule_name?.trim() || "Contract Expiring Soon",
-          alert_message: `Contract ${label} (${employeeName}) ends on ${contract.end_date} in ${Math.max(0, daysUntilExpiry)} day(s).`,
+          alert_message: `${employeeName} (File #${fileNumber}) • Contract ${label} ends on ${contract.end_date} in ${Math.max(0, daysUntilExpiry)} day(s).`,
           module_name: "Contracts",
           entity_type: "contract",
           entity_id: contract.id,
@@ -532,24 +588,58 @@ export async function generateLeaveAlertsFromRules(
 
   const supabase = await createClient();
   const alerts: AlertPayload[] = [];
+  const today = todayDateString();
+
+  const { data: currentlyOnLeaveRows, error: currentlyOnLeaveError } = await supabase
+    .from("leave_transactions")
+    .select("employee_id")
+    .eq("status", "approved")
+    .lte("start_date", today)
+    .gte("end_date", today);
+  if (currentlyOnLeaveError) {
+    throw new Error(`Failed to evaluate employees currently on leave: ${currentlyOnLeaveError.message}`);
+  }
+  const currentlyOnLeaveEmployeeIds = new Set(
+    (currentlyOnLeaveRows ?? [])
+      .map((row) => row.employee_id as string | null)
+      .filter((id): id is string => Boolean(id))
+  );
 
   if (sickRules.length || vacationRules.length || vacationDueRules.length || exhaustedSickRules.length) {
     const { data, error } = await supabase
       .from("leave_balances")
-      .select("id, employee_id, leave_type, remaining_days, effective_to");
+      .select("id, employee_id, leave_type, remaining_days, effective_from, effective_to")
+      .lte("effective_from", today)
+      .gte("effective_to", today);
 
     if (error) throw new Error(`Failed to load leave balances for notifications: ${error.message}`);
 
-    for (const balance of (data ?? []) as LeaveBalanceRow[]) {
+    const balanceRows = (data ?? []) as LeaveBalanceRow[];
+    const employeeIds = [
+      ...new Set(
+        balanceRows
+          .map((balance) => balance.employee_id)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    const employeeContextById = await getEmployeeContextByIds(supabase, employeeIds);
+
+    for (const balance of balanceRows) {
       const type = normalizedLeaveType(balance.leave_type);
       const remaining = Number(balance.remaining_days ?? 0);
+      const employee = balance.employee_id ? employeeContextById.get(balance.employee_id) : undefined;
+      const employeeName = formatEmployeeDisplay(employee);
+      const fileNumber = formatEmployeeFileNumber(employee);
       if (type === "vacation_leave") {
+        if (balance.employee_id && currentlyOnLeaveEmployeeIds.has(balance.employee_id)) {
+          continue;
+        }
         for (const rule of vacationRules) {
-          const threshold = ruleValue(rule, 3);
+          const threshold = ruleValue(rule, 5);
           if (remaining <= threshold) {
             alerts.push(buildAlert(rule, {
               alert_title: "Low Vacation Leave Balance",
-              alert_message: `Remaining vacation leave is ${remaining} day(s), at or below threshold ${threshold}.`,
+              alert_message: `${employeeName} (File #${fileNumber}) has ${remaining} vacation day(s) remaining. Effective period ends ${balance.effective_to ?? "—"}.`,
               module_name: "Leave",
               entity_type: "leave_balance",
               entity_id: balance.id,
@@ -581,14 +671,11 @@ export async function generateLeaveAlertsFromRules(
 
       if (type === "sick_leave") {
         for (const rule of sickRules) {
-          const threshold = ruleValue(rule, 3);
+          const threshold = ruleValue(rule, 5);
           if (remaining <= threshold) {
             alerts.push(buildAlert(rule, {
-              alert_title: remaining <= 1 ? "Sick Leave Nearly Finished" : "Low Sick Leave Balance",
-              alert_message:
-                remaining <= 1
-                  ? `Sick leave is nearly finished with ${remaining} day(s) remaining.`
-                  : `Remaining sick leave is ${remaining} day(s), at or below threshold ${threshold}.`,
+              alert_title: "Low Sick Leave Balance",
+              alert_message: `${employeeName} (File #${fileNumber}) has ${remaining} sick day(s) remaining. Effective period ends ${balance.effective_to ?? "—"}.`,
               module_name: "Leave",
               entity_type: "leave_balance",
               entity_id: balance.id,
@@ -725,21 +812,30 @@ export async function generatePhysicalFileAlertsFromRules(
   const { rows, hasExpectedReturnDate } = await loadFileMovementsForAlerts();
   const today = todayDateString();
   const alerts: AlertPayload[] = [];
+  const supabase = await createClient();
+  const movementEmployeeIds = [
+    ...new Set(rows.map((row) => row.employee_id).filter((id): id is string => Boolean(id))),
+  ];
+  const employeeContextById = await getEmployeeContextByIds(supabase, movementEmployeeIds);
 
   for (const movement of rows) {
     const label = movement.file_number ?? movement.id;
     const status = normalized(movement.movement_status);
+    const employee = movement.employee_id ? employeeContextById.get(movement.employee_id) : undefined;
+    const employeeName = formatEmployeeDisplay(employee);
+    const fileNumber = movement.file_number ?? formatEmployeeFileNumber(employee);
 
     if (status === "missing") {
       for (const rule of missingRules) {
         alerts.push(buildAlert(rule, {
           alert_title: "Missing Physical File",
-          alert_message: `Physical file ${label} is marked missing.`,
+          alert_message: `${employeeName} (File #${fileNumber}) physical file is marked missing.${employee?.file_location ? ` Last known location: ${employee.file_location}.` : ""}`,
           module_name: "Physical Files",
           entity_type: "file_movement",
           entity_id: movement.id,
           employee_id: movement.employee_id,
-          correlationEntityId: movement.id,
+          correlationEntityId: movement.employee_id ?? movement.id,
+          correlationPrefix: "missing_file",
           fallbackSeverity: "critical",
         }));
       }
@@ -750,12 +846,13 @@ export async function generatePhysicalFileAlertsFromRules(
         if (!movement.expected_return_date || movement.expected_return_date >= today) continue;
         alerts.push(buildAlert(rule, {
           alert_title: "Overdue Physical File Return",
-          alert_message: `Physical file ${label} was expected back on ${movement.expected_return_date}.`,
+          alert_message: `${employeeName} (File #${fileNumber}) file moved/checked out on ${movement.date_sent ?? "—"} and expected return was ${movement.expected_return_date}.`,
           module_name: "Physical Files",
           entity_type: "file_movement",
           entity_id: movement.id,
           employee_id: movement.employee_id,
           correlationEntityId: movement.id,
+          correlationPrefix: "overdue_file_return",
           fallbackSeverity: "critical",
         }));
       }
@@ -767,17 +864,43 @@ export async function generatePhysicalFileAlertsFromRules(
         if (movement.date_sent && movement.date_sent <= dateDaysAgo(threshold)) {
           alerts.push(buildAlert(rule, {
             alert_title: "Physical File In Transit Too Long",
-            alert_message: `Physical file ${label} has been in transit for more than ${threshold} days.`,
+            alert_message: `${employeeName} (File #${fileNumber}) file has been in transit since ${movement.date_sent ?? "—"} for more than ${threshold} days.${movement.expected_return_date ? ` Expected return: ${movement.expected_return_date}.` : ""}`,
             module_name: "Physical Files",
             entity_type: "file_movement",
             entity_id: movement.id,
             employee_id: movement.employee_id,
             correlationEntityId: movement.id,
+            correlationPrefix: "files_in_transit_too_long",
             fallbackSeverity: "warning",
           }));
         }
       }
     }
+
+  const { data: employeeRows, error: employeeRowsError } = await supabase
+    .from("employees")
+    .select("id, first_name, last_name, file_number, file_status, file_location")
+    .eq("file_status", "missing");
+  if (employeeRowsError) {
+    throw new Error(`Failed to load employees with missing files: ${employeeRowsError.message}`);
+  }
+  for (const employee of (employeeRows ?? []) as EmployeeNameRow[]) {
+    const employeeName = formatEmployeeDisplay(employee);
+    const fileNumber = formatEmployeeFileNumber(employee);
+    for (const rule of missingRules) {
+      alerts.push(buildAlert(rule, {
+        alert_title: "Missing Physical File",
+        alert_message: `${employeeName} (File #${fileNumber}) physical file is marked missing.${employee.file_location ? ` Last known location: ${employee.file_location}.` : ""}`,
+        module_name: "Physical Files",
+        entity_type: "employee",
+        entity_id: employee.id,
+        employee_id: employee.id,
+        correlationEntityId: employee.id,
+        correlationPrefix: "missing_file",
+        fallbackSeverity: "critical",
+      }));
+    }
+  }
   }
 
   return alerts;
@@ -885,7 +1008,7 @@ export async function generateAllSystemAlerts(): Promise<NotificationGenerationC
   const rules = (await listAlertRules()).filter((rule) => {
     if (rule.is_active === false) return false;
     const moduleName = (rule.module_name ?? "").trim().toLowerCase();
-    return moduleName !== "documents" && moduleName !== "compensation";
+    return moduleName !== "documents" && moduleName !== "compensation" && moduleName !== "records";
   });
   const alertGroups = await Promise.all([
     generateContractAlertsFromRules(rules),

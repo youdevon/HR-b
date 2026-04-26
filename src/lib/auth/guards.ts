@@ -5,8 +5,14 @@ import {
   ACTIVE_NAV_PERMISSION_KEYS,
   fetchPermissionsForProfile,
   fetchUserProfileForAuthUser,
+  getCurrentUserPermissions,
+  getCurrentUserProfile,
   hasAnyPermissionForContext,
+  hasOnlyProfilePermissions,
+  hasPermissionForContext,
+  isOfficer,
   isProfileActive,
+  isSuperUser,
   type CurrentUserProfile,
 } from "@/lib/auth/permissions";
 import { getUser } from "@/lib/auth/session";
@@ -38,7 +44,7 @@ type RequireGuestOptions = {
 };
 
 export async function requireGuest(options: RequireGuestOptions = {}): Promise<void> {
-  const { redirectTo = "/dashboard" } = options;
+  const { redirectTo = "/" } = options;
   const user = await getUser();
 
   if (user) {
@@ -100,12 +106,45 @@ export function canViewNavItem(
   ]);
 }
 
+/**
+ * Returns true when a user should be confined to the self-service profile area.
+ * Officer users with only profile.* permissions get profile-only routing.
+ * SUPER_USER is never treated as profile-only.
+ */
+export function isProfileOnlyUser(
+  profile: CurrentUserProfile | null,
+  permissions: string[]
+): boolean {
+  if (isSuperUser(profile)) return false;
+  if (!isOfficer(profile)) return false;
+  return hasOnlyProfilePermissions(profile, permissions);
+}
+
+/**
+ * Determines the landing page for a user after login.
+ * - OFFICER → /profile (unless explicitly granted HR module permissions)
+ * - SUPER_USER / ADMIN / INTAKE_CLERK → /dashboard
+ * - Unknown role → first accessible module based on permissions
+ */
 export function getFirstAccessibleModuleHref(
   profile: CurrentUserProfile | null,
   permissions: string[]
 ): string | null {
+  if (isProfileOnlyUser(profile, permissions)) return "/profile";
+
+  const roleCode = (profile?.role_code ?? "").toUpperCase();
+  if (roleCode === "OFFICER" && !hasAnyPermissionForContext(profile, permissions, [...ACTIVE_NAV_PERMISSION_KEYS.dashboard])) {
+    return "/profile";
+  }
+  if (roleCode === "SUPER_USER" || roleCode === "ADMIN" || roleCode === "INTAKE" || roleCode === "INTAKE_CLERK") {
+    if (hasAnyPermissionForContext(profile, permissions, [...ACTIVE_NAV_PERMISSION_KEYS.dashboard])) {
+      return "/dashboard";
+    }
+  }
+
   const candidates: Array<{ key: keyof typeof ACTIVE_NAV_PERMISSION_KEYS; href: string }> = [
     { key: "dashboard", href: "/dashboard" },
+    { key: "profile", href: "/profile" },
     { key: "employees", href: "/employees" },
     { key: "contracts", href: "/contracts" },
     { key: "leave", href: "/leave" },
@@ -138,17 +177,16 @@ export async function requireDashboardAuth(
 }
 
 export async function assertPermission(permissionKey: string): Promise<void> {
-  const { hasPermission } = await import("@/lib/auth/permissions");
-  const allowed = await hasPermission(permissionKey);
-  if (!allowed) {
+  const [profile, permissions] = await Promise.all([
+    getCurrentUserProfile(),
+    getCurrentUserPermissions(),
+  ]);
+  if (!hasPermissionForContext(profile, permissions, permissionKey)) {
     throw new Error("Access denied. You do not have permission to perform this action.");
   }
 }
 
 export async function assertAnyPermission(permissionKeys: string[]): Promise<void> {
-  const { getCurrentUserProfile, getCurrentUserPermissions, hasAnyPermissionForContext } = await import(
-    "@/lib/auth/permissions"
-  );
   const [profile, permissions] = await Promise.all([
     getCurrentUserProfile(),
     getCurrentUserPermissions(),

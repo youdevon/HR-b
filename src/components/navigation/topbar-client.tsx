@@ -117,6 +117,14 @@ export default function TopbarClient({ user, onOpenMobileNav }: TopbarClientProp
             >
               <p className="block px-3 py-1 text-xs text-neutral-500 md:hidden">{displayName}</p>
               <Link
+                href="/profile"
+                onClick={() => setMenuOpen(false)}
+                className="block rounded-xl px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
+                role="menuitem"
+              >
+                My Profile
+              </Link>
+              <Link
                 href="/profile/change-password"
                 onClick={() => setMenuOpen(false)}
                 className="block rounded-xl px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
