@@ -9,7 +9,7 @@ import {
 import { isAuthRateLimitError, requireDashboardAuth } from "@/lib/auth/guards";
 import type { DashboardAuthContext } from "@/lib/auth/guards";
 import { getDashboardMetrics } from "@/lib/queries/dashboard";
-import { dashboardAlertErrorClass, dashboardEmptyCardClass } from "@/lib/ui/dashboard-styles";
+import { dashboardAlertErrorClass } from "@/lib/ui/dashboard-styles";
 
 type MetricTone = "critical" | "warning" | "normal" | "success";
 
@@ -88,13 +88,6 @@ function dashboardSections(metrics: Awaited<ReturnType<typeof getDashboardMetric
       description: "Approval workload, attendance today, and leave balance pressure.",
       cards: [
         {
-          label: "Pending Leave Approvals",
-          value: metrics.pendingLeaveApprovalsCount,
-          hint: "Leave requests awaiting action",
-          href: "/leave/transactions?q=pending",
-          tone: metrics.pendingLeaveApprovalsCount > 0 ? "warning" : "normal",
-        },
-        {
           label: "Employees Currently On Leave",
           value: metrics.employeesOnLeaveCount,
           hint: "Approved leave active today",
@@ -117,26 +110,6 @@ function dashboardSections(metrics: Awaited<ReturnType<typeof getDashboardMetric
         },
       ],
     },
-    {
-      title: "Physical Files",
-      description: "Physical file movement and custody risk.",
-      cards: [
-        {
-          label: "Files In Transit",
-          value: metrics.filesInTransitCount,
-          hint: "Physical files moving between locations",
-          href: "/files/in-transit",
-          tone: metrics.filesInTransitCount > 0 ? "warning" : "normal",
-        },
-        {
-          label: "Missing Files",
-          value: metrics.missingFilesCount,
-          hint: "Physical files marked missing",
-          href: "/files/missing",
-          tone: metrics.missingFilesCount > 0 ? "critical" : "normal",
-        },
-      ],
-    },
   ];
 }
 
@@ -144,7 +117,6 @@ type DashboardCardVisibility = {
   workforce: boolean;
   contracts: boolean;
   leave: boolean;
-  files: boolean;
 };
 
 function filterSectionsByPermissions(
@@ -156,7 +128,6 @@ function filterSectionsByPermissions(
       if (section.title === "Employees" && !visibility.workforce) return null;
       if (section.title === "Contracts" && !visibility.contracts) return null;
       if (section.title === "Leave" && !visibility.leave) return null;
-      if (section.title === "Physical Files" && !visibility.files) return null;
       return section;
     })
     .filter((section): section is DashboardSection => Boolean(section));
@@ -206,7 +177,7 @@ export default async function DashboardPage() {
         <main className="space-y-6">
           <PageHeader
             title="Dashboard"
-            description="Monitor employee coverage, contract exposure, leave pressure, and file movement from one dashboard."
+            description="Monitor employee coverage, contract exposure, and leave pressure from one dashboard."
           />
           <section className={dashboardAlertErrorClass} role="alert">
             Authentication is temporarily rate-limited. Please wait a moment and refresh this page.
@@ -224,7 +195,7 @@ export default async function DashboardPage() {
       <main className="space-y-6">
         <PageHeader
           title="Dashboard"
-          description="Monitor employee coverage, contract exposure, leave pressure, and file movement from one dashboard."
+          description="Monitor employee coverage, contract exposure, and leave pressure from one dashboard."
         />
         <section className={dashboardAlertErrorClass} role="alert">
           Access denied. You do not have permission to view the dashboard.
@@ -237,7 +208,6 @@ export default async function DashboardPage() {
     workforce: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.workforce]),
     contracts: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.contracts]),
     leave: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.leave]),
-    files: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.files]),
   };
 
   const hasAnyCards = Object.values(visibility).some(Boolean);
@@ -260,7 +230,7 @@ export default async function DashboardPage() {
     <main className="space-y-6">
       <PageHeader
         title="Dashboard"
-        description="Monitor employee coverage, contract exposure, leave pressure, and file movement from one dashboard."
+        description="Monitor employee coverage, contract exposure, and leave pressure from one dashboard."
       />
 
       {metricsError ? (
