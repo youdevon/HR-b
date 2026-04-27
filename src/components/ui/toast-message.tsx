@@ -10,7 +10,7 @@ type ToastMessageProps = {
 
 export default function ToastMessage({
   message,
-  autoHideMs = 4500,
+  autoHideMs = 5000,
   className = "border-emerald-200 bg-emerald-50 text-emerald-800",
 }: ToastMessageProps) {
   const [visible, setVisible] = useState(true);

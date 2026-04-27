@@ -40,6 +40,16 @@ function redirectWithMessage(
   redirect(`/admin/users/${id}/edit?${qs.toString()}`);
 }
 
+function redirectUsersWithMessage(
+  status: "success" | "error",
+  message: string
+): never {
+  const qs = new URLSearchParams();
+  qs.set("status", status);
+  qs.set("message", message);
+  redirect(`/admin/users?${qs.toString()}`);
+}
+
 export default async function EditAdminUserPage({
   params,
   searchParams,
@@ -124,12 +134,12 @@ export default async function EditAdminUserPage({
     try {
       await deleteAdminUserAccount(id, currentUserId);
       revalidatePath("/admin/users");
-      redirect("/admin/users?deleted=1");
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to delete user account.";
-      redirectWithMessage(id, "error", errorMessage);
+      redirectUsersWithMessage("error", errorMessage);
     }
+    redirectUsersWithMessage("success", "Account deleted successfully.");
   }
 
   async function deactivateUserAction(formData: FormData) {
