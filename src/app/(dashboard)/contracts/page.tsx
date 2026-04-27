@@ -11,8 +11,7 @@ import {
 import {
   calculateContractMonths,
   calculateGratuityPayment,
-  DEFAULT_GOVERNMENT_TAX_PERCENT,
-  DEFAULT_GRATUITY_RATE_PERCENT,
+  getGlobalGratuityRateSettings,
 } from "@/lib/queries/gratuity";
 import { getEmployeeById } from "@/lib/queries/employees";
 import {
@@ -113,6 +112,7 @@ export default async function ContractsPage({
   const selectedEmployeeName = selectedEmployee
     ? `${selectedEmployee.first_name ?? ""} ${selectedEmployee.last_name ?? ""}`.trim()
     : "";
+  const gratuityRates = await getGlobalGratuityRateSettings();
 
   const contracts = employeeId || hasAnyExplicitFilter
     ? await listContracts({
@@ -272,8 +272,8 @@ export default async function ContractsPage({
                     monthlySalary: Number(contract.salary_amount ?? 0),
                     contractMonths,
                     isGratuityEligible: contract.is_gratuity_eligible === true,
-                    gratuityRatePercent: DEFAULT_GRATUITY_RATE_PERCENT,
-                    governmentTaxPercent: DEFAULT_GOVERNMENT_TAX_PERCENT,
+                    gratuityRatePercent: gratuityRates.gratuity_rate_percent,
+                    governmentTaxPercent: gratuityRates.government_tax_percent,
                   });
                   const gratuityDisplay = contract.is_gratuity_eligible === true
                     ? gratuityEstimate.is_eligible

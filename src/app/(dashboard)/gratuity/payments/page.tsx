@@ -12,13 +12,13 @@ export default async function GratuityPaymentsPage() {
         <PageHeader
           title="Gratuity payments"
           description="Payment records linked to gratuity calculations."
-          backHref="/gratuity/calculations"
+          backHref="/settings/gratuity-rules"
           actions={
           <Link
-            href="/gratuity/calculations"
+            href="/settings/gratuity-rules"
             className="inline-flex shrink-0 items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
           >
-            Calculations
+            Gratuity Rules
           </Link>
           }
         />

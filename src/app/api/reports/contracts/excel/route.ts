@@ -1,7 +1,11 @@
 import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
 import { hasPermission } from "@/lib/auth/permissions";
-import { calculateContractMonths, calculateGratuityPayment } from "@/lib/queries/gratuity";
+import {
+  calculateContractMonths,
+  calculateGratuityPayment,
+  getGlobalGratuityRateSettings,
+} from "@/lib/queries/gratuity";
 import {
   CONTRACT_REPORT_DEFAULT_FIELDS,
   CONTRACT_REPORT_FIELD_OPTIONS,
@@ -103,6 +107,7 @@ export async function GET(request: Request) {
   }
 
   const rows = await getContractsReport(filters);
+  const gratuityRates = await getGlobalGratuityRateSettings();
   const selectedFields = normalizeContractReportFields(filters.fields);
   const fields = selectedFields.length ? selectedFields : CONTRACT_REPORT_DEFAULT_FIELDS;
   const workbook = new ExcelJS.Workbook();
@@ -151,6 +156,8 @@ export async function GET(request: Request) {
             monthlySalary: row.salary_amount,
             contractMonths: months,
             isGratuityEligible: true,
+            gratuityRatePercent: gratuityRates.gratuity_rate_percent,
+            governmentTaxPercent: gratuityRates.government_tax_percent,
           }).net_gratuity_payable
         : null;
     sheet.addRow(

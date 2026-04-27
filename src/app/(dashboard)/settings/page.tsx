@@ -54,8 +54,8 @@ export default async function SettingsLandingPage() {
     },
     {
       title: "Gratuity Rules",
-      description: "Review gratuity policy guidance and rule configuration.",
-      href: "/gratuity/rules",
+      description: "Manage global gratuity calculation rates used across the system.",
+      href: "/settings/gratuity-rules",
       enabled: canGratuityRules,
     },
     {

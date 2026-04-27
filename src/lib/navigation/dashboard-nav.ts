@@ -34,7 +34,6 @@ export const DASHBOARD_NAV_DEFS: DashboardNavItemDef[] = [
   { label: "Leave", shortLabel: "Lv", href: "/leave", active: true, permissions: [...ACTIVE_NAV_PERMISSION_KEYS.leave], icon: "calendar" },
   { label: "Physical Files", shortLabel: "PF", href: "/file-movements", active: true, permissions: [...ACTIVE_NAV_PERMISSION_KEYS.physicalFiles], icon: "fileStack" },
   { label: "Records", shortLabel: "Rc", href: "/records", active: true, permissions: [...ACTIVE_NAV_PERMISSION_KEYS.records], icon: "folderOpen" },
-  { label: "Gratuity", shortLabel: "Gr", href: "/gratuity/calculations", active: true, permissions: [...ACTIVE_NAV_PERMISSION_KEYS.gratuity], icon: "landmark" },
   { label: "Reports", shortLabel: "Re", href: "/reports", active: true, permissions: [...ACTIVE_NAV_PERMISSION_KEYS.reports], icon: "barChart2" },
   { label: "Audit", shortLabel: "Au", href: "/audit/activity", active: true, permissions: [...ACTIVE_NAV_PERMISSION_KEYS.audit], icon: "listTree" },
   {

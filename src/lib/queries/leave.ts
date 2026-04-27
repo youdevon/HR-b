@@ -546,6 +546,31 @@ function todayDateString(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function startOfDay(value: Date): Date {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function isCurrentlyOnLeave(transaction: LeaveTransactionRecord): boolean {
+  if ((transaction.status ?? "").trim().toLowerCase() !== "approved") {
+    return false;
+  }
+
+  const startDateValue = (transaction.start_date ?? "").trim();
+  const endDateValue = (transaction.end_date ?? "").trim();
+  const parsedStartDate = parseDateOnly(startDateValue);
+  const parsedEndDate = parseDateOnly(endDateValue);
+  if (!parsedStartDate || !parsedEndDate) {
+    return false;
+  }
+
+  const today = startOfDay(new Date());
+  const startDate = startOfDay(parsedStartDate);
+  const endDate = startOfDay(parsedEndDate);
+  return startDate <= today && endDate >= today;
+}
+
 function buildEmployeeFullName(firstName?: string | null, lastName?: string | null): string | null {
   const full = `${firstName ?? ""} ${lastName ?? ""}`.trim();
   return full || null;
@@ -952,6 +977,9 @@ export async function listLeaveTransactions(
   const enriched = await enrichLeaveTransactions((data ?? []) as LeaveTransactionRow[]);
 
   if (!queryText) return enriched;
+  if (queryText === "approved") {
+    return enriched.filter((row) => isCurrentlyOnLeave(row));
+  }
 
   return enriched.filter((row) => {
     return (

@@ -6,6 +6,8 @@ export const GOVERNMENT_TAX_RATE = 0.25;
 export const NET_GRATUITY_RATE = 0.75;
 export const DEFAULT_GRATUITY_RATE_PERCENT = 20;
 export const DEFAULT_GOVERNMENT_TAX_PERCENT = 25;
+const GRATUITY_RATE_RULE_CODE = "global_gratuity_rate_percent";
+const GOVERNMENT_TAX_RULE_CODE = "global_government_tax_percent";
 
 export type GratuityRuleRecord = {
   id: string;
@@ -85,6 +87,11 @@ export type GratuityCalculationBreakdown = {
   service_end_date: string | null;
   source: "contract" | "calculation_record";
 } & GratuityPaymentBreakdown;
+
+export type GlobalGratuityRateSettings = {
+  gratuity_rate_percent: number;
+  government_tax_percent: number;
+};
 
 export function calculateContractGratuityEstimate(input: {
   monthlySalary: number | null | undefined;
@@ -351,6 +358,114 @@ export async function listGratuityRules(): Promise<GratuityRuleRecord[]> {
   }
 
   return data ?? [];
+}
+
+export async function getGlobalGratuityRateSettings(): Promise<GlobalGratuityRateSettings> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("gratuity_rules")
+    .select("rule_code, percentage_value, is_active, created_at")
+    .in("rule_code", [GRATUITY_RATE_RULE_CODE, GOVERNMENT_TAX_RULE_CODE])
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("getGlobalGratuityRateSettings error:", JSON.stringify(error, null, 2));
+    return {
+      gratuity_rate_percent: DEFAULT_GRATUITY_RATE_PERCENT,
+      government_tax_percent: DEFAULT_GOVERNMENT_TAX_PERCENT,
+    };
+  }
+
+  const rows = (data ?? []) as Array<{
+    rule_code: string | null;
+    percentage_value: number | null;
+    is_active: boolean | null;
+  }>;
+  const activeRows = rows.filter((row) => row.is_active !== false);
+  const gratuityRule = activeRows.find((row) => row.rule_code === GRATUITY_RATE_RULE_CODE);
+  const taxRule = activeRows.find((row) => row.rule_code === GOVERNMENT_TAX_RULE_CODE);
+
+  return {
+    gratuity_rate_percent: clampPercent(
+      safeNumber(gratuityRule?.percentage_value ?? DEFAULT_GRATUITY_RATE_PERCENT)
+    ),
+    government_tax_percent: clampPercent(
+      safeNumber(taxRule?.percentage_value ?? DEFAULT_GOVERNMENT_TAX_PERCENT)
+    ),
+  };
+}
+
+export async function saveGlobalGratuityRateSettings(
+  input: GlobalGratuityRateSettings
+): Promise<void> {
+  const supabase = await createClient();
+  const gratuityRatePercent = clampPercent(safeNumber(input.gratuity_rate_percent));
+  const governmentTaxPercent = clampPercent(safeNumber(input.government_tax_percent));
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from("gratuity_rules")
+    .select("id, rule_code")
+    .in("rule_code", [GRATUITY_RATE_RULE_CODE, GOVERNMENT_TAX_RULE_CODE])
+    .order("created_at", { ascending: false });
+
+  if (existingError) {
+    throw new Error(`Failed to load existing gratuity rules: ${getErrorMessage(existingError)}`);
+  }
+
+  const existingByCode = new Map<string, { id: string }>();
+  for (const row of (existingRows ?? []) as Array<{ id: string; rule_code: string | null }>) {
+    const ruleCode = (row.rule_code ?? "").trim();
+    if (!ruleCode || existingByCode.has(ruleCode)) continue;
+    existingByCode.set(ruleCode, { id: row.id });
+  }
+
+  const upsertRule = async (
+    ruleCode: string,
+    ruleName: string,
+    percentageValue: number,
+    description: string
+  ) => {
+    const existing = existingByCode.get(ruleCode);
+    if (existing?.id) {
+      const { error: updateError } = await supabase
+        .from("gratuity_rules")
+        .update({
+          rule_name: ruleName,
+          description,
+          percentage_value: percentageValue,
+          is_active: true,
+        })
+        .eq("id", existing.id);
+      if (updateError) {
+        throw new Error(`Failed to update gratuity rule (${ruleCode}): ${getErrorMessage(updateError)}`);
+      }
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("gratuity_rules").insert({
+      rule_name: ruleName,
+      rule_code: ruleCode,
+      description,
+      percentage_value: percentageValue,
+      is_active: true,
+    });
+    if (insertError) {
+      throw new Error(`Failed to create gratuity rule (${ruleCode}): ${getErrorMessage(insertError)}`);
+    }
+  };
+
+  await upsertRule(
+    GRATUITY_RATE_RULE_CODE,
+    "Global Gratuity Rate (%)",
+    gratuityRatePercent,
+    "System-wide gratuity rate used in gratuity calculations."
+  );
+  await upsertRule(
+    GOVERNMENT_TAX_RULE_CODE,
+    "Global Government Tax (%)",
+    governmentTaxPercent,
+    "System-wide government tax deduction used in gratuity calculations."
+  );
 }
 
 export async function listGratuityCalculations(): Promise<

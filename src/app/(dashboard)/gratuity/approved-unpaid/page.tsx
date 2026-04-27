@@ -11,7 +11,7 @@ export default async function GratuityApprovedUnpaidPage() {
       <PageHeader
         title="Approved Unpaid Gratuity"
         description="Approved gratuity calculations pending payment."
-        backHref="/gratuity/calculations"
+        backHref="/settings/gratuity-rules"
       />
 
       {rows.length === 0 ? (

@@ -1,6 +1,10 @@
 import Link from "next/link";
 import PageHeader from "@/components/layout/page-header";
-import { calculateContractMonths, calculateGratuityPayment } from "@/lib/queries/gratuity";
+import {
+  calculateContractMonths,
+  calculateGratuityPayment,
+  getGlobalGratuityRateSettings,
+} from "@/lib/queries/gratuity";
 import {
   CONTRACT_REPORT_DEFAULT_FIELDS,
   CONTRACT_REPORT_FIELD_OPTIONS,
@@ -126,6 +130,7 @@ export default async function Page({ searchParams }: PageProps) {
 
   const shouldGenerate = hasCriteria(filters);
   const rows = shouldGenerate ? await getContractsReport(filters) : [];
+  const gratuityRates = await getGlobalGratuityRateSettings();
   const selectedFields = normalizeContractReportFields(filters.fields);
 
   const queryString = buildSearchParams(filters).toString();
@@ -287,6 +292,8 @@ export default async function Page({ searchParams }: PageProps) {
                           monthlySalary: row.salary_amount,
                           contractMonths: months,
                           isGratuityEligible: true,
+                          gratuityRatePercent: gratuityRates.gratuity_rate_percent,
+                          governmentTaxPercent: gratuityRates.government_tax_percent,
                         }).net_gratuity_payable
                       : null;
                   return (

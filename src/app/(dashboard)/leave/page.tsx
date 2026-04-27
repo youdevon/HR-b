@@ -79,7 +79,6 @@ export default async function LeavePage() {
           <MetricCard label="Employees Currently On Leave" value={onLeaveCount} href="/leave/transactions?q=approved" emptyText="No current records." />
           <MetricCard label="Low Vacation Leave" value={lowVacationCount} href="/leave/low-vacation" detail={lowVacationMessage} emptyText="No current records." />
           <MetricCard label="Low Sick Leave" value={lowSickCount} href="/leave/low-sick" detail={lowSickMessage} emptyText="No current records." />
-          <MetricCard label="Recent Leave Transactions" value={transactionsCount} href="/leave/transactions" emptyText="No current records." />
           <MetricCard label="Leave Balances" value={balancesCount} href="/leave/balances" emptyText="No current records." />
           <MetricCard label="Leave Transactions" value={transactionsCount} href="/leave/transactions" emptyText="No current records." />
       </section>

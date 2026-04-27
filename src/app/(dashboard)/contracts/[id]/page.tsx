@@ -15,8 +15,7 @@ import { notFound, redirect } from "next/navigation";
 import {
   calculateContractMonths,
   calculateGratuityPayment,
-  DEFAULT_GOVERNMENT_TAX_PERCENT,
-  DEFAULT_GRATUITY_RATE_PERCENT,
+  getGlobalGratuityRateSettings,
 } from "@/lib/queries/gratuity";
 import {
   formatLeaveType,
@@ -118,12 +117,13 @@ export default async function ContractDetailPage({
   const annualSickEntitlement = Number(contract.sick_leave_days ?? 0);
   const totalVacationPlanningEntitlement = annualVacationEntitlement * contractYears;
   const contractMonths = calculateContractMonths(contract.start_date, contract.end_date);
+  const gratuityRates = await getGlobalGratuityRateSettings();
   const gratuityEstimate = calculateGratuityPayment({
     monthlySalary: Number(contract.salary_amount ?? 0),
     contractMonths,
     isGratuityEligible: contract.is_gratuity_eligible === true,
-    gratuityRatePercent: DEFAULT_GRATUITY_RATE_PERCENT,
-    governmentTaxPercent: DEFAULT_GOVERNMENT_TAX_PERCENT,
+    gratuityRatePercent: gratuityRates.gratuity_rate_percent,
+    governmentTaxPercent: gratuityRates.government_tax_percent,
   });
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("en-US", {

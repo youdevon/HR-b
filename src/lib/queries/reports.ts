@@ -14,6 +14,7 @@ import { getEffectiveContractStatus } from "@/lib/queries/contracts";
 import {
   calculateContractMonths,
   calculateGratuityPayment,
+  getGlobalGratuityRateSettings,
   listGratuityCalculations,
 } from "@/lib/queries/gratuity";
 import { createClient } from "@/lib/supabase/server";
@@ -646,6 +647,7 @@ export async function getEmployeeReport(filters: EmployeeReportFilters): Promise
   const normalizedJobTitle = clean(filters.jobTitle).toLowerCase();
   const normalizedStatus = clean(filters.status).toLowerCase();
   const normalizedAllowanceName = clean(filters.allowanceName).toLowerCase();
+  const gratuityRates = await getGlobalGratuityRateSettings();
   const hasAllowancesOnly = clean(filters.hasAllowances).toLowerCase() === "true";
   const { restrictToHasContractsOnly, restrictToNoContractsOnly } =
     getContractAvailabilityMode(filters);
@@ -707,6 +709,8 @@ export async function getEmployeeReport(filters: EmployeeReportFilters): Promise
               monthlySalary: salaryAmount,
               contractMonths,
               isGratuityEligible: true,
+              gratuityRatePercent: gratuityRates.gratuity_rate_percent,
+              governmentTaxPercent: gratuityRates.government_tax_percent,
             });
             estimatedGratuityAmount = breakdown.net_gratuity_payable;
             estimatedGratuityDisplay = String(breakdown.net_gratuity_payable);

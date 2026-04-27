@@ -165,7 +165,6 @@ export function getFirstAccessibleModuleHref(
     { key: "records", href: "/records" },
     { key: "reports", href: "/reports" },
     { key: "audit", href: "/audit/activity" },
-    { key: "gratuity", href: "/gratuity/calculations" },
     { key: "settings", href: "/settings" },
   ];
 

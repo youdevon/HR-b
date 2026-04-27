@@ -11,7 +11,7 @@ export default async function GratuityPendingReviewPage() {
       <PageHeader
         title="Pending Review Gratuity"
         description="Gratuity calculations waiting for review and approval."
-        backHref="/gratuity/calculations"
+        backHref="/settings/gratuity-rules"
       />
 
       {rows.length === 0 ? (

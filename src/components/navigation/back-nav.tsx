@@ -17,7 +17,7 @@ const exactBackHrefs: Record<string, string | null> = {
   "/admin/roles": "/dashboard",
   "/admin/permissions": "/dashboard",
   "/audit/activity": "/dashboard",
-  "/gratuity/calculations": "/dashboard",
+  "/gratuity/calculations": "/settings",
   "/employees/new": "/employees",
   "/contracts/new": "/contracts",
   "/contracts/expiring": "/contracts",
@@ -42,10 +42,11 @@ const exactBackHrefs: Record<string, string | null> = {
   "/admin/document-types": "/admin",
   "/admin/custom-fields": "/admin",
   "/admin/settings": "/admin",
-  "/gratuity/payments": "/gratuity/calculations",
-  "/gratuity/rules": "/gratuity/calculations",
-  "/gratuity/pending-review": "/gratuity/calculations",
-  "/gratuity/approved-unpaid": "/gratuity/calculations",
+  "/settings/gratuity-rules": "/settings",
+  "/gratuity/payments": "/settings/gratuity-rules",
+  "/gratuity/rules": "/settings/gratuity-rules",
+  "/gratuity/pending-review": "/settings/gratuity-rules",
+  "/gratuity/approved-unpaid": "/settings/gratuity-rules",
   "/audit/sensitive": "/audit/activity",
   "/profile/change-password": "/dashboard",
 };
@@ -107,7 +108,7 @@ function parentFromPath(pathname: string): string | null {
     return "/audit/activity";
   }
   if (segments[0] === "gratuity" && segments.length === 2) {
-    return "/gratuity/calculations";
+    return "/settings/gratuity-rules";
   }
   if (segments[0] === "files" && segments.length === 2) {
     return "/file-movements";

@@ -137,26 +137,6 @@ function dashboardSections(metrics: Awaited<ReturnType<typeof getDashboardMetric
         },
       ],
     },
-    {
-      title: "Gratuity",
-      description: "Calculation review and payout readiness.",
-      cards: [
-        {
-          label: "Pending Review",
-          value: metrics.pendingGratuityCalculationsCount,
-          hint: "Calculations awaiting review",
-          href: "/gratuity/pending-review",
-          tone: metrics.pendingGratuityCalculationsCount > 0 ? "warning" : "normal",
-        },
-        {
-          label: "Approved Unpaid",
-          value: metrics.approvedUnpaidGratuityCount,
-          hint: "Approved gratuity awaiting payout",
-          href: "/gratuity/approved-unpaid",
-          tone: metrics.approvedUnpaidGratuityCount > 0 ? "critical" : "normal",
-        },
-      ],
-    },
   ];
 }
 
@@ -165,7 +145,6 @@ type DashboardCardVisibility = {
   contracts: boolean;
   leave: boolean;
   files: boolean;
-  gratuity: boolean;
 };
 
 function filterSectionsByPermissions(
@@ -178,7 +157,6 @@ function filterSectionsByPermissions(
       if (section.title === "Contracts" && !visibility.contracts) return null;
       if (section.title === "Leave" && !visibility.leave) return null;
       if (section.title === "Physical Files" && !visibility.files) return null;
-      if (section.title === "Gratuity" && !visibility.gratuity) return null;
       return section;
     })
     .filter((section): section is DashboardSection => Boolean(section));
@@ -228,7 +206,7 @@ export default async function DashboardPage() {
         <main className="space-y-6">
           <PageHeader
             title="Dashboard"
-            description="Monitor employee coverage, contract exposure, leave pressure, files, and gratuity from one dashboard."
+            description="Monitor employee coverage, contract exposure, leave pressure, and file movement from one dashboard."
           />
           <section className={dashboardAlertErrorClass} role="alert">
             Authentication is temporarily rate-limited. Please wait a moment and refresh this page.
@@ -246,7 +224,7 @@ export default async function DashboardPage() {
       <main className="space-y-6">
         <PageHeader
           title="Dashboard"
-          description="Monitor employee coverage, contract exposure, leave pressure, files, and gratuity from one dashboard."
+          description="Monitor employee coverage, contract exposure, leave pressure, and file movement from one dashboard."
         />
         <section className={dashboardAlertErrorClass} role="alert">
           Access denied. You do not have permission to view the dashboard.
@@ -260,7 +238,6 @@ export default async function DashboardPage() {
     contracts: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.contracts]),
     leave: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.leave]),
     files: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.files]),
-    gratuity: hasAnyPermissionForContext(profile, permissions, [...DASHBOARD_CARD_PERMISSION_KEYS.gratuity]),
   };
 
   const hasAnyCards = Object.values(visibility).some(Boolean);
@@ -283,7 +260,7 @@ export default async function DashboardPage() {
     <main className="space-y-6">
       <PageHeader
         title="Dashboard"
-        description="Monitor employee coverage, contract exposure, leave pressure, files, and gratuity from one dashboard."
+        description="Monitor employee coverage, contract exposure, leave pressure, and file movement from one dashboard."
       />
 
       {metricsError ? (
