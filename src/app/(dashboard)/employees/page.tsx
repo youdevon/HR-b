@@ -48,6 +48,7 @@ export default async function EmployeesPage({
   );
   const params = await searchParams;
   const query = params?.q?.trim() ?? "";
+  const normalizedQuery = query.replace(/\s+/g, " ").trim();
   const showAll = params?.show === "all";
   const created = params?.created === "1";
   const shouldShowEmployees = Boolean(query) || showAll;
@@ -108,6 +109,16 @@ export default async function EmployeesPage({
         </EmptyStateCard>
       ) : (
         <div className={dashboardPanelClass}>
+          {normalizedQuery ? (
+            <p className="mb-3 text-sm text-neutral-600">
+              Showing {employees.length} result{employees.length === 1 ? "" : "s"} for "
+              {normalizedQuery}"
+            </p>
+          ) : (
+            <p className="mb-3 text-sm text-neutral-600">
+              Showing {employees.length} employee{employees.length === 1 ? "" : "s"}.
+            </p>
+          )}
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>

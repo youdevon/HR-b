@@ -61,6 +61,36 @@ export type EmployeeLookupRecord = {
   job_title: string | null;
 };
 
+function normalizeSearchValue(value: string | number | null | undefined): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function matchesEmployeeSearch(
+  employee: EmployeeListRecord,
+  queryTerms: string[]
+): boolean {
+  if (queryTerms.length === 0) return true;
+
+  const searchableText = normalizeSearchValue(
+    [
+      employee.first_name,
+      employee.last_name,
+      `${employee.first_name ?? ""} ${employee.last_name ?? ""}`,
+      employee.file_number,
+      employee.employee_number,
+      employee.department,
+      employee.job_title,
+      employee.employment_status,
+      employee.file_status,
+    ].join(" ")
+  );
+
+  return queryTerms.every((term) => searchableText.includes(term));
+}
+
 const EMPLOYEE_LIST_SELECT = `
   id,
   employee_number,
@@ -256,27 +286,13 @@ export async function listEmployees(
   params?: EmployeeSearchParams
 ): Promise<EmployeeListRecord[]> {
   const supabase = await createClient();
-  const queryText = params?.query?.trim();
+  const queryText = normalizeSearchValue(params?.query);
+  const queryTerms = queryText ? queryText.split(" ") : [];
 
   let query = supabase
     .from("employees")
     .select(EMPLOYEE_LIST_SELECT)
     .order("created_at", { ascending: false });
-
-  if (queryText) {
-    query = query.or(
-      [
-        `employee_number.ilike.%${queryText}%`,
-        `file_number.ilike.%${queryText}%`,
-        `first_name.ilike.%${queryText}%`,
-        `last_name.ilike.%${queryText}%`,
-        `department.ilike.%${queryText}%`,
-        `job_title.ilike.%${queryText}%`,
-        `employment_status.ilike.%${queryText}%`,
-        `file_status.ilike.%${queryText}%`,
-      ].join(",")
-    );
-  }
 
   const { data, error } = await query;
 
@@ -285,7 +301,9 @@ export async function listEmployees(
     throw new Error(`Failed to load employees: ${error.message}`);
   }
 
-  return data ?? [];
+  const employees = data ?? [];
+  if (!queryText) return employees;
+  return employees.filter((employee) => matchesEmployeeSearch(employee, queryTerms));
 }
 
 export async function getEmployeeById(
