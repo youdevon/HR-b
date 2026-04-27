@@ -17,6 +17,7 @@ export type EmployeeListRecord = {
   job_title: string | null;
   employment_status: string | null;
   file_status: string | null;
+  contract_end_date: string | null;
   created_at: string | null;
 };
 
@@ -103,6 +104,11 @@ const EMPLOYEE_LIST_SELECT = `
   file_status,
   created_at
 `;
+
+type ContractEndDateRow = {
+  employee_id: string | null;
+  end_date: string | null;
+};
 
 const EMPLOYEE_DETAIL_SELECT = `
   id,
@@ -301,7 +307,46 @@ export async function listEmployees(
     throw new Error(`Failed to load employees: ${error.message}`);
   }
 
-  const employees = data ?? [];
+  const employees = (data ?? []).map((employee) => ({
+    ...employee,
+    contract_end_date: null,
+  })) as EmployeeListRecord[];
+  const employeeIds = [
+    ...new Set(
+      employees
+        .map((employee) => employee.id)
+        .filter((employeeId): employeeId is string => Boolean(employeeId))
+    ),
+  ];
+
+  if (employeeIds.length > 0) {
+    const { data: contractRows, error: contractError } = await supabase
+      .from("contracts")
+      .select("employee_id, end_date")
+      .in("employee_id", employeeIds)
+      .not("end_date", "is", null)
+      .order("end_date", { ascending: false });
+
+    if (contractError) {
+      console.error("listEmployees contract lookup error:", JSON.stringify(contractError, null, 2));
+      throw new Error(`Failed to load employee contracts: ${contractError.message}`);
+    }
+
+    const latestContractEndByEmployeeId = new Map<string, string>();
+    for (const row of (contractRows ?? []) as ContractEndDateRow[]) {
+      const employeeId = row.employee_id ?? "";
+      const endDate = (row.end_date ?? "").trim();
+      if (!employeeId || !endDate || latestContractEndByEmployeeId.has(employeeId)) {
+        continue;
+      }
+      latestContractEndByEmployeeId.set(employeeId, endDate);
+    }
+
+    for (const employee of employees) {
+      employee.contract_end_date = latestContractEndByEmployeeId.get(employee.id) ?? null;
+    }
+  }
+
   if (!queryText) return employees;
   return employees.filter((employee) => matchesEmployeeSearch(employee, queryTerms));
 }
@@ -467,7 +512,10 @@ export async function createEmployee(
       : null,
   });
 
-  return data;
+  return {
+    ...data,
+    contract_end_date: null,
+  };
 }
 
 export async function updateEmployee(
@@ -571,7 +619,10 @@ export async function updateEmployee(
       : null,
   });
 
-  return data;
+  return {
+    ...data,
+    contract_end_date: null,
+  };
 }
 
 export async function archiveEmployeeFile(

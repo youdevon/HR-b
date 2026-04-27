@@ -28,12 +28,48 @@ type EmployeesPageProps = {
 function statusBadgeClass(status: string | null | undefined): string {
   const normalized = (status ?? "").trim().toLowerCase();
   if (normalized === "active") return "bg-emerald-100 text-emerald-800";
-  if (normalized === "pending" || normalized === "warning") return "bg-amber-100 text-amber-800";
-  if (normalized === "expired" || normalized === "critical") return "bg-red-100 text-red-800";
-  if (normalized === "inactive" || normalized === "resolved" || normalized === "archived") {
-    return "bg-neutral-100 text-neutral-700";
-  }
+  if (normalized === "expiring soon") return "bg-amber-100 text-amber-800";
+  if (normalized === "expired") return "bg-red-100 text-red-800";
   return "bg-neutral-100 text-neutral-700";
+}
+
+function getContractStatus(contractEndDate: string | null | undefined): "Active" | "Expiring Soon" | "Expired" | "Unknown" {
+  if (!contractEndDate) return "Unknown";
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const endDate = new Date(contractEndDate);
+  if (Number.isNaN(endDate.getTime())) return "Unknown";
+  endDate.setHours(0, 0, 0, 0);
+
+  const ninetyDaysFromToday = new Date(today);
+  ninetyDaysFromToday.setDate(today.getDate() + 90);
+
+  if (endDate < today) {
+    return "Expired";
+  }
+
+  if (endDate <= ninetyDaysFromToday) {
+    return "Expiring Soon";
+  }
+
+  return "Active";
+}
+
+function formatLongDateNoComma(dateValue: string | Date | null | undefined): string {
+  if (!dateValue) return "Not Available";
+
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "Not Available";
+
+  return date
+    .toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    })
+    .replace(",", "");
 }
 
 export default async function EmployeesPage({
@@ -123,41 +159,41 @@ export default async function EmployeesPage({
             <table className="min-w-full text-sm">
               <thead>
                 <tr className={dashboardTableHeadRowClass}>
-                  <th className={dashboardTableHeadCellClass}>Employee #</th>
-                  <th className={dashboardTableHeadCellClass}>File #</th>
                   <th className={dashboardTableHeadCellClass}>Name</th>
+                  <th className={dashboardTableHeadCellClass}>File #</th>
                   <th className={dashboardTableHeadCellClass}>Department</th>
                   <th className={dashboardTableHeadCellClass}>Job Title</th>
-                  <th className={dashboardTableHeadCellClass}>Status</th>
-                  <th className={dashboardTableHeadCellClass}>File Status</th>
+                  <th className={dashboardTableHeadCellClass}>Contract Status</th>
+                  <th className={dashboardTableHeadCellClass}>End Date</th>
                 </tr>
               </thead>
 
               <tbody>
-                {employees.map((employee) => (
-                  <ClickableTableRow
-                    key={employee.id}
-                    href={`/employees/${employee.id}`}
-                  >
-                    <td className={dashboardTableCellClass}>{employee.employee_number ?? "—"}</td>
-                    <td className={dashboardTableCellClass}>{employee.file_number ?? "—"}</td>
-                    <td className={dashboardTableCellClass}>
-                      {employee.first_name ?? ""} {employee.last_name ?? ""}
-                    </td>
-                    <td className={dashboardTableCellClass}>{employee.department ?? "—"}</td>
-                    <td className={dashboardTableCellClass}>{employee.job_title ?? "—"}</td>
-                    <td className={dashboardTableCellClass}>
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(employee.employment_status)}`}>
-                        {employee.employment_status ?? "—"}
-                      </span>
-                    </td>
-                    <td className={dashboardTableCellClass}>
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(employee.file_status)}`}>
-                        {employee.file_status ?? "—"}
-                      </span>
-                    </td>
-                  </ClickableTableRow>
-                ))}
+                {employees.map((employee) => {
+                  const contractStatus = getContractStatus(employee.contract_end_date);
+
+                  return (
+                    <ClickableTableRow
+                      key={employee.id}
+                      href={`/employees/${employee.id}`}
+                    >
+                      <td className={dashboardTableCellClass}>
+                        {employee.first_name ?? ""} {employee.last_name ?? ""}
+                      </td>
+                      <td className={dashboardTableCellClass}>{employee.file_number ?? "—"}</td>
+                      <td className={dashboardTableCellClass}>{employee.department ?? "—"}</td>
+                      <td className={dashboardTableCellClass}>{employee.job_title ?? "—"}</td>
+                      <td className={dashboardTableCellClass}>
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(contractStatus)}`}>
+                          {contractStatus}
+                        </span>
+                      </td>
+                      <td className={dashboardTableCellClass}>
+                        {formatLongDateNoComma(employee.contract_end_date)}
+                      </td>
+                    </ClickableTableRow>
+                  );
+                })}
               </tbody>
             </table>
           </div>
