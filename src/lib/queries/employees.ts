@@ -13,6 +13,7 @@ export type EmployeeListRecord = {
   file_number: string | null;
   first_name: string | null;
   last_name: string | null;
+  date_of_birth: string | null;
   department: string | null;
   job_title: string | null;
   employment_status: string | null;
@@ -98,6 +99,7 @@ const EMPLOYEE_LIST_SELECT = `
   file_number,
   first_name,
   last_name,
+  date_of_birth,
   department,
   job_title,
   employment_status,

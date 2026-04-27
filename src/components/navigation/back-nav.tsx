@@ -18,6 +18,7 @@ const exactBackHrefs: Record<string, string | null> = {
   "/admin/permissions": "/dashboard",
   "/audit/activity": "/dashboard",
   "/gratuity/calculations": "/settings",
+  "/employees/age-limit-monitoring": "/employees",
   "/employees/new": "/employees",
   "/contracts/new": "/contracts",
   "/contracts/expiring": "/contracts",

@@ -48,6 +48,41 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
+function formatReadableDateNoComma(value: string | null | undefined): string {
+  const dateText = (value ?? "").trim();
+  if (!dateText) return "—";
+  const parsed = new Date(`${dateText}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dateText;
+  return parsed
+    .toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    })
+    .replace(",", "");
+}
+
+function calculateAge(
+  dateOfBirth: string | Date | null | undefined,
+  referenceDate = new Date()
+): number | null {
+  if (!dateOfBirth) return null;
+  const dob = typeof dateOfBirth === "string"
+    ? new Date(`${dateOfBirth}T00:00:00`)
+    : new Date(dateOfBirth);
+  if (Number.isNaN(dob.getTime())) return null;
+
+  let age = referenceDate.getFullYear() - dob.getFullYear();
+  const hasBirthdayPassedThisYear =
+    referenceDate.getMonth() > dob.getMonth() ||
+    (referenceDate.getMonth() === dob.getMonth() &&
+      referenceDate.getDate() >= dob.getDate());
+  if (!hasBirthdayPassedThisYear) {
+    age -= 1;
+  }
+  return age;
+}
+
 function dateScore(value: string | null | undefined): number {
   if (!value) return Number.NEGATIVE_INFINITY;
   const parsed = new Date(value).getTime();
@@ -110,6 +145,7 @@ export default async function EmployeeDetailPage({
   const fullName = `${employee.first_name ?? ""} ${
     employee.last_name ?? ""
   }`.trim();
+  const currentAge = calculateAge(employee.date_of_birth);
   const pendingLeaveCount = leaveTransactions.filter(
     (leave) => leave.approval_status === "pending"
   ).length;
@@ -258,7 +294,8 @@ export default async function EmployeeDetailPage({
         <InfoCard title="Personal Info">
           <InfoRow label="First Name" value={employee.first_name} />
           <InfoRow label="Last Name" value={employee.last_name} />
-          <InfoRow label="Date of Birth" value={employee.date_of_birth} />
+          <InfoRow label="Date of Birth" value={formatReadableDateNoComma(employee.date_of_birth)} />
+          <InfoRow label="Current Age" value={currentAge === null ? "—" : `${currentAge}`} />
           <InfoRow label="Personal Email" value={employee.personal_email} />
           <InfoRow label="Mobile Number" value={employee.mobile_number} />
         </InfoCard>

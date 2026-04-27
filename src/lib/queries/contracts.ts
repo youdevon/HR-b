@@ -203,6 +203,7 @@ type EmployeeNameRow = {
   employee_number: string | null;
   first_name: string | null;
   last_name: string | null;
+  date_of_birth?: string | null;
 };
 
 function todayDateString(): string {
@@ -233,6 +234,67 @@ function parseLocalDate(dateText: string | null): Date | null {
   if (!year || !month || !day) return null;
 
   return new Date(year, month - 1, day);
+}
+
+function formatReadableDateNoComma(dateText: string): string {
+  const parsed = parseLocalDate(dateText);
+  if (!parsed) return dateText;
+  return parsed
+    .toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    })
+    .replace(",", "");
+}
+
+function calculateAgeOnDate(
+  dateOfBirth: string | null | undefined,
+  referenceDate: Date
+): number | null {
+  const dob = parseLocalDate(dateOfBirth ?? null);
+  if (!dob) return null;
+  let age = referenceDate.getFullYear() - dob.getFullYear();
+  const hasBirthdayPassedThisYear =
+    referenceDate.getMonth() > dob.getMonth() ||
+    (referenceDate.getMonth() === dob.getMonth() &&
+      referenceDate.getDate() >= dob.getDate());
+  if (!hasBirthdayPassedThisYear) age -= 1;
+  return age;
+}
+
+function getSixtiethBirthday(dateOfBirth: string | null | undefined): Date | null {
+  const dob = parseLocalDate(dateOfBirth ?? null);
+  if (!dob) return null;
+  return new Date(dob.getFullYear() + 60, dob.getMonth(), dob.getDate());
+}
+
+function assertContractAgeLimit(input: {
+  employeeName: string | null;
+  dateOfBirth: string | null | undefined;
+  contractStartDate: string;
+  contractEndDate: string;
+}): void {
+  const startDate = parseLocalDate(input.contractStartDate);
+  const endDate = parseLocalDate(input.contractEndDate);
+  if (!startDate || !endDate) return;
+
+  const sixtiethBirthday = getSixtiethBirthday(input.dateOfBirth);
+  if (!sixtiethBirthday) return;
+  const ageAtStart = calculateAgeOnDate(input.dateOfBirth, startDate);
+  const employeeLabel = input.employeeName?.trim() || "Employee";
+  if (ageAtStart !== null && ageAtStart >= 60) {
+    throw new Error(
+      `${employeeLabel} is age ${ageAtStart} at the proposed contract start date. Contracts cannot start at or beyond age 60.`
+    );
+  }
+  if (sixtiethBirthday >= startDate && sixtiethBirthday <= endDate) {
+    throw new Error(
+      `${employeeLabel} reaches age 60 on ${formatReadableDateNoComma(
+        formatIsoDateOnly(sixtiethBirthday)
+      )}. Adjust contract dates to avoid overlap with the age limit.`
+    );
+  }
 }
 
 export function calculateContractYearCount(
@@ -473,7 +535,7 @@ export async function createContractRecord(
   const supabase = await createClient();
   const { data: employee, error: employeeError } = await supabase
     .from("employees")
-    .select("id, first_name, last_name")
+    .select("id, first_name, last_name, date_of_birth")
     .eq("id", employeeId)
     .maybeSingle();
   if (employeeError || !employee) {
@@ -484,6 +546,12 @@ export async function createContractRecord(
   const contractTitle = assertContractTitleFromEmployeeName({
     employee_first_name: employee.first_name,
     employee_last_name: employee.last_name,
+  });
+  assertContractAgeLimit({
+    employeeName: buildEmployeeName(employee.first_name, employee.last_name),
+    dateOfBirth: employee.date_of_birth,
+    contractStartDate: input.start_date,
+    contractEndDate: input.end_date,
   });
 
   await assertNoContractDateOverlap({
@@ -1069,6 +1137,23 @@ export async function applyContractLifecycleAction(input: {
       );
     }
 
+    const { data: employee, error: employeeError } = await supabase
+      .from("employees")
+      .select("id, first_name, last_name, date_of_birth")
+      .eq("id", existing.employee_id)
+      .maybeSingle();
+    if (employeeError || !employee) {
+      throw new Error(
+        `Failed to load selected employee: ${employeeError?.message ?? "Employee not found."}`
+      );
+    }
+    assertContractAgeLimit({
+      employeeName: buildEmployeeName(employee.first_name, employee.last_name),
+      dateOfBirth: employee.date_of_birth,
+      contractStartDate: renewalStartDate,
+      contractEndDate: renewalEndDate,
+    });
+
     await assertNoContractDateOverlap({
       employeeId: existing.employee_id,
       newStartDate: renewalStartDate,
@@ -1217,6 +1302,23 @@ export async function updateContractDetails(
   );
 
   const supabase = await createClient();
+  const { data: employee, error: employeeError } = await supabase
+    .from("employees")
+    .select("id, first_name, last_name, date_of_birth")
+    .eq("id", employeeId)
+    .maybeSingle();
+  if (employeeError || !employee) {
+    throw new Error(
+      `Failed to load selected employee: ${employeeError?.message ?? "Employee not found."}`
+    );
+  }
+  assertContractAgeLimit({
+    employeeName: buildEmployeeName(employee.first_name, employee.last_name),
+    dateOfBirth: employee.date_of_birth,
+    contractStartDate: input.start_date,
+    contractEndDate: input.end_date,
+  });
+
   const { data: existing, error: existingError } = await supabase
     .from("contracts")
     .select("id, employee_id")

@@ -102,6 +102,9 @@ export default async function EmployeesPage({
           <Link href="/employees?show=all" className={dashboardHeaderActionSecondaryClass}>
             Show All
           </Link>
+          <Link href="/employees/age-limit-monitoring" className={dashboardHeaderActionSecondaryClass}>
+            Age Limit Monitoring
+          </Link>
           {canCreateEmployee ? (
             <Link href="/employees/new" className={dashboardHeaderActionPrimaryClass}>
               New Employee
