@@ -16,6 +16,8 @@ function getFilters(searchParams: URLSearchParams): EmployeeReportFilters {
     show: searchParams.get("show") ?? "",
     name: searchParams.get("name") ?? "",
     fileNumber: searchParams.get("fileNumber") ?? "",
+    minAge: searchParams.get("minAge") ?? "",
+    maxAge: searchParams.get("maxAge") ?? "",
     department: searchParams.get("department") ?? "",
     jobTitle: searchParams.get("jobTitle") ?? "",
     status: searchParams.get("status") ?? "",
@@ -57,6 +59,8 @@ function filterSummary(filters: EmployeeReportFilters): string {
   if ((filters.show ?? "").trim().toLowerCase() === "all") items.push("Show: all");
   if ((filters.name ?? "").trim()) items.push(`Name: ${filters.name}`);
   if ((filters.fileNumber ?? "").trim()) items.push(`File Number: ${filters.fileNumber}`);
+  if ((filters.minAge ?? "").trim()) items.push(`Minimum Age: ${filters.minAge}`);
+  if ((filters.maxAge ?? "").trim()) items.push(`Maximum Age: ${filters.maxAge}`);
   if ((filters.department ?? "").trim()) items.push(`Department: ${filters.department}`);
   if ((filters.jobTitle ?? "").trim()) items.push(`Job Title: ${filters.jobTitle}`);
   if ((filters.status ?? "").trim() && !restrictToNoContractsOnly) {

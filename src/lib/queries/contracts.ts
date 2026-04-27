@@ -236,6 +236,18 @@ function parseLocalDate(dateText: string | null): Date | null {
   return new Date(year, month - 1, day);
 }
 
+function formatIsoDateOnly(
+  dateValue: string | Date | null | undefined
+): string {
+  if (!dateValue) return "";
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function formatReadableDateNoComma(dateText: string): string {
   const parsed = parseLocalDate(dateText);
   if (!parsed) return dateText;

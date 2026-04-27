@@ -163,6 +163,8 @@ export type EmployeeReportFilters = {
   show?: string;
   name?: string;
   fileNumber?: string;
+  minAge?: string;
+  maxAge?: string;
   department?: string;
   jobTitle?: string;
   status?: string;
@@ -465,6 +467,8 @@ function hasEmployeeReportCriteria(filters: EmployeeReportFilters): boolean {
     clean(filters.show).toLowerCase() === "all" ||
       clean(filters.name) ||
       clean(filters.fileNumber) ||
+      clean(filters.minAge) ||
+      clean(filters.maxAge) ||
       clean(filters.department) ||
       clean(filters.jobTitle) ||
       clean(filters.status) ||
@@ -512,6 +516,25 @@ function formatAllowanceSummary(allowances: Array<{ allowance_name: string; allo
     .join("; ");
 }
 
+function calculateAge(
+  dateOfBirth: string | Date | null | undefined,
+  referenceDate = new Date()
+): number | null {
+  if (!dateOfBirth) return null;
+  const dob = new Date(dateOfBirth);
+  if (Number.isNaN(dob.getTime())) return null;
+
+  let age = referenceDate.getFullYear() - dob.getFullYear();
+  const hasBirthdayPassedThisYear =
+    referenceDate.getMonth() > dob.getMonth() ||
+    (referenceDate.getMonth() === dob.getMonth() &&
+      referenceDate.getDate() >= dob.getDate());
+  if (!hasBirthdayPassedThisYear) {
+    age -= 1;
+  }
+  return age;
+}
+
 export function calculateFiscalCutoffDate(
   fiscalCutoffYear?: string,
   fiscalCutoffMonth?: string
@@ -531,6 +554,7 @@ type EmployeeBaseRow = {
   file_number: string | null;
   first_name: string | null;
   last_name: string | null;
+  date_of_birth: string | null;
   department: string | null;
   job_title: string | null;
 };
@@ -604,7 +628,7 @@ export async function getEmployeeReport(filters: EmployeeReportFilters): Promise
   const supabase = await createClient();
   const { data: employees, error: employeeError } = await supabase
     .from("employees")
-    .select("id, file_number, first_name, last_name, department, job_title")
+    .select("id, file_number, first_name, last_name, date_of_birth, department, job_title")
     .order("first_name", { ascending: true })
     .order("last_name", { ascending: true });
 
@@ -645,8 +669,15 @@ export async function getEmployeeReport(filters: EmployeeReportFilters): Promise
   const normalizedFileNumber = clean(filters.fileNumber).toLowerCase();
   const normalizedDepartment = clean(filters.department).toLowerCase();
   const normalizedJobTitle = clean(filters.jobTitle).toLowerCase();
+  const minAge = Number(clean(filters.minAge));
+  const maxAge = Number(clean(filters.maxAge));
+  const hasMinAge = Number.isFinite(minAge);
+  const hasMaxAge = Number.isFinite(maxAge);
   const normalizedStatus = clean(filters.status).toLowerCase();
   const normalizedAllowanceName = clean(filters.allowanceName).toLowerCase();
+  const ageByEmployeeId = new Map(
+    employeeRows.map((employee) => [employee.id, calculateAge(employee.date_of_birth)])
+  );
   const gratuityRates = await getGlobalGratuityRateSettings();
   const hasAllowancesOnly = clean(filters.hasAllowances).toLowerCase() === "true";
   const { restrictToHasContractsOnly, restrictToNoContractsOnly } =
@@ -755,6 +786,13 @@ export async function getEmployeeReport(filters: EmployeeReportFilters): Promise
       }
       if (normalizedJobTitle && (row.job_title ?? "").toLowerCase() !== normalizedJobTitle) {
         return false;
+      }
+      const currentAge = ageByEmployeeId.get(row.employee_id) ?? null;
+      if (hasMinAge) {
+        if (currentAge === null || currentAge < minAge) return false;
+      }
+      if (hasMaxAge) {
+        if (currentAge === null || currentAge > maxAge) return false;
       }
       if (
         normalizedStatus &&

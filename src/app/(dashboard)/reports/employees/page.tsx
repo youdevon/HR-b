@@ -63,6 +63,8 @@ function buildSearchParams(filters: EmployeeReportFilters): URLSearchParams {
     ["show", filters.show],
     ["name", filters.name],
     ["fileNumber", filters.fileNumber],
+    ["minAge", filters.minAge],
+    ["maxAge", filters.maxAge],
     ["department", filters.department],
     ["jobTitle", filters.jobTitle],
     ["status", filters.status],
@@ -86,6 +88,8 @@ function hasFiltersOrShow(filters: EmployeeReportFilters): boolean {
     (filters.show ?? "").trim().toLowerCase() === "all" ||
       (filters.name ?? "").trim() ||
       (filters.fileNumber ?? "").trim() ||
+      (filters.minAge ?? "").trim() ||
+      (filters.maxAge ?? "").trim() ||
       (filters.department ?? "").trim() ||
       (filters.jobTitle ?? "").trim() ||
       (filters.status ?? "").trim() ||
@@ -153,6 +157,8 @@ export default async function Page({ searchParams }: PageProps) {
     show: firstString(sp.show),
     name: firstString(sp.name),
     fileNumber: firstString(sp.fileNumber),
+    minAge: firstString(sp.minAge),
+    maxAge: firstString(sp.maxAge),
     department: firstString(sp.department),
     status: firstString(sp.status),
     jobTitle: firstString(sp.jobTitle),
@@ -224,6 +230,30 @@ export default async function Page({ searchParams }: PageProps) {
                 name="department"
                 defaultValue={filters.department}
                 placeholder="Department"
+                className={formInputClass}
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-sm font-medium text-neutral-700">Minimum Age</span>
+              <input
+                type="number"
+                name="minAge"
+                min="0"
+                max="120"
+                defaultValue={filters.minAge}
+                placeholder="e.g. 57"
+                className={formInputClass}
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-sm font-medium text-neutral-700">Maximum Age</span>
+              <input
+                type="number"
+                name="maxAge"
+                min="0"
+                max="120"
+                defaultValue={filters.maxAge}
+                placeholder="e.g. 60"
                 className={formInputClass}
               />
             </label>
